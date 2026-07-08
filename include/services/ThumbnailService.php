@@ -372,9 +372,15 @@ class ThumbnailService
      *   3. Read dimensions and filesize (after any resize)
      *   4. Insert into DB
      *
+     * @param int $uploaded_by ID of the user performing the batch add; recorded
+     *                         in the new image's uploaded_by column so the
+     *                         contributor role's 'edit_own_images' permission
+     *                         can scope access to only images that user
+     *                         uploaded (GalleryService::imageBelongsToUser()).
+     *                         0 = no recorded owner (legacy callers only).
      * Returns the new image ID on success, or false on failure.
      */
-    public static function batchAddImage(string $filename, string $folder, int $album_id): int|false
+    public static function batchAddImage(string $filename, string $folder, int $album_id, int $uploaded_by = 0): int|false
     {
         $original_path = lumora_album_path($folder) . $filename;
         if (!file_exists($original_path)) return false;
@@ -421,15 +427,16 @@ class ThumbnailService
         );
 
         return (int) LumoraDB::insert('images', [
-            'album_id' => $album_id,
-            'filename' => $filename,
-            'title'    => '',
-            'filesize' => $filesize,
-            'width'    => $width,
-            'height'   => $height,
-            'approved' => 1,
-            'pos'      => $max_pos + 1,
-            'added_at' => date('Y-m-d H:i:s'),
+            'album_id'    => $album_id,
+            'uploaded_by' => $uploaded_by,
+            'filename'    => $filename,
+            'title'       => '',
+            'filesize'    => $filesize,
+            'width'       => $width,
+            'height'      => $height,
+            'approved'    => 1,
+            'pos'         => $max_pos + 1,
+            'added_at'    => date('Y-m-d H:i:s'),
         ]);
     }
 }

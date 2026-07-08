@@ -56,7 +56,7 @@ function lumora_scan_new_images(string $folder, int $album_id): array
     return ThumbnailService::scanNewImages($folder, $album_id);
 }
 
-function lumora_batch_add_image(string $filename, string $folder, int $album_id): int|false
+function lumora_batch_add_image(string $filename, string $folder, int $album_id, int $uploaded_by = 0): int|false
 {
-    return ThumbnailService::batchAddImage($filename, $folder, $album_id);
+    return ThumbnailService::batchAddImage($filename, $folder, $album_id, $uploaded_by);
 }

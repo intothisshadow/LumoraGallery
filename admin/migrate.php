@@ -13,7 +13,7 @@ declare(strict_types=1);
 define('LUMORA_ENTRY', true);
 require_once __DIR__ . '/../include/bootstrap.php';
 require_once __DIR__ . '/includes/admin_helpers.php';
-lumora_require_admin();
+lumora_require_permission('site_configuration');
 
 // ── Discover importer plugins ─────────────────────────────────────────────────
 $importers = MigrationService::discoverImporters();
@@ -116,17 +116,6 @@ if (!empty($all_statuses)) {
             . "<td>{$pver}</td></tr>";
     }
     echo '</tbody></table></div>';
-}
-
-// ── DB version notice ─────────────────────────────────────────────────────────
-// Migration tables were added in DB v6; warn on older installs.
-if (LUMORA_DB_VERSION > 5 && MigrationService::getMigrationStatus('__probe') === null
-    && !@(function_exists('\\LumoraDB::pdo') && (function () {
-        try { LumoraDB::pdo()->query('SELECT 1 FROM `' . LumoraDB::prefix() . 'migration_status` LIMIT 0'); return true; }
-        catch (\Throwable) { return false; }
-    })())
-) {
-    // Silently skip — getMigrationStatus already handles missing table gracefully
 }
 
 $content = ob_get_clean();

@@ -254,14 +254,14 @@ class UpdaterService
      *   details: list<string>
      * }
      */
-    public static function runStage(string $stage, string $version = ''): array
+    public static function runStage(string $stage, string $version = '', array $options = []): array
     {
         // Allow long-running stages without hitting PHP's default 30-second limit.
         set_time_limit(180);
 
         try {
             return match ($stage) {
-                self::STAGE_PREFLIGHT   => self::stagePreflight($version),
+                self::STAGE_PREFLIGHT   => self::stagePreflight($version, $options),
                 self::STAGE_DOWNLOAD    => self::stageDownload(),
                 self::STAGE_VERIFY      => self::stageVerify(),
                 self::STAGE_BACKUP      => self::stageBackup(),
@@ -287,7 +287,7 @@ class UpdaterService
      * Verifies prerequisites, acquires the update lock, and fetches release
      * metadata (download URL + optional SHA-256) from the configured provider.
      */
-    private static function stagePreflight(string $version): array
+    private static function stagePreflight(string $version, array $options = []): array
     {
         if ($version === '') {
             return self::fail(self::STAGE_PREFLIGHT, 'Target version not specified.');
@@ -387,9 +387,11 @@ class UpdaterService
 
         // Acquire the lock.
         $acquired = self::acquireLock($version, [
-            'download_url' => $dlUrl,
-            'sha256'       => $sha256,
-            'provider'     => $provider->getName(),
+            'download_url'    => $dlUrl,
+            'sha256'          => $sha256,
+            'provider'        => $provider->getName(),
+            'replace_plugins' => (bool) ($options['replace_plugins'] ?? false),
+            'replace_themes'  => (bool) ($options['replace_themes']  ?? false),
         ]);
 
         if (!$acquired) {
@@ -864,8 +866,14 @@ class UpdaterService
         // Paths (relative to LUMORA_ROOT) that must never be overwritten.
         $preserve = ['config.php', 'albums', 'cache'];
 
-        $preserveThemes  = ((string) LumoraConfig::get('update_preserve_themes',  '1')) !== '0';
-        $preservePlugins = ((string) LumoraConfig::get('update_preserve_plugins', '1')) !== '0';
+        // Per-update options from the lock file override the persistent config flag when the
+        // administrator explicitly requested replacement via the UI checkboxes.  Config values
+        // remain the fallback, keeping behaviour unchanged for API/automated updates.
+        $replacingPlugins = (bool) ($lock['replace_plugins'] ?? false);
+        $replacingThemes  = (bool) ($lock['replace_themes']  ?? false);
+
+        $preserveThemes  = $replacingThemes  ? false : ((string) LumoraConfig::get('update_preserve_themes',  '1')) !== '0';
+        $preservePlugins = $replacingPlugins ? false : ((string) LumoraConfig::get('update_preserve_plugins', '1')) !== '0';
 
         if ($preserveThemes)  $preserve[] = 'themes';
         if ($preservePlugins) $preserve[] = 'plugins';
@@ -892,8 +900,12 @@ class UpdaterService
         $details = [
             '✓ ' . $stats['copied'] . ' files updated',
             '✓ ' . $stats['skipped'] . ' preserved paths left untouched',
-            $preserveThemes  ? '✓ themes/ preserved' : '⚠ themes/ overwritten (update_preserve_themes=0)',
-            $preservePlugins ? '✓ plugins/ preserved' : '⚠ plugins/ overwritten (update_preserve_plugins=0)',
+            $preserveThemes  ? '✓ themes/ preserved'
+                             : ($replacingThemes  ? '✓ themes/ replaced (requested for this update)'
+                                                  : '⚠ themes/ overwritten (update_preserve_themes=0)'),
+            $preservePlugins ? '✓ plugins/ preserved'
+                             : ($replacingPlugins ? '✓ plugins/ replaced (requested for this update)'
+                                                  : '⚠ plugins/ overwritten (update_preserve_plugins=0)'),
         ];
 
         return self::ok(self::STAGE_REPLACE, 'Application files updated.', self::STAGE_MIGRATE, $details);

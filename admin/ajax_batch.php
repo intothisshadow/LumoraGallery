@@ -30,7 +30,9 @@ define('LUMORA_ENTRY', true);
 require_once dirname(__DIR__) . '/include/bootstrap.php';
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
-if (!lumora_is_admin()) {
+// The batch-add page (batch.php) itself requires the 'batch_add' permission;
+// mirror that here since this AJAX handler is invoked directly by its JS.
+if (!lumora_has_permission('batch_add')) {
     http_response_code(403);
     echo json_encode(['error' => 'Not authorised']);
     exit;
@@ -61,6 +63,18 @@ if (!$album) {
     exit;
 }
 
+// A contributor holds 'batch_add' but may only process albums explicitly
+// assigned to them via AlbumAssignmentService — re-checked here since this
+// endpoint is called directly by batch.php's JS, not just reached via a
+// filtered dropdown.
+$current_user    = lumora_current_user();
+$current_user_id = (int) ($current_user['user_id'] ?? 0);
+if (!AlbumAssignmentService::userCanAccessAlbum($current_user_id, $album_id)) {
+    http_response_code(403);
+    echo json_encode(['error' => 'Not authorised for this album']);
+    exit;
+}
+
 // ── Scan for new images ───────────────────────────────────────────────────────
 // lumora_scan_new_images() filters out files already in the DB, so the list
 // shrinks naturally as each chunk is processed.  We always slice from index 0.
@@ -76,7 +90,7 @@ $errors    = [];
 set_time_limit(180);
 
 foreach ($chunk as $filename) {
-    $result = lumora_batch_add_image($filename, $album['folder'], $album_id);
+    $result = lumora_batch_add_image($filename, $album['folder'], $album_id, $current_user_id);
     if ($result !== false) {
         $processed++;
     } else {

@@ -4,9 +4,12 @@ declare(strict_types=1);
  * Lumora Gallery — Authentication
  *
  * Multi-user authentication with roles: admin, moderator, contributor.
- * Admin panel access still requires the 'admin' role; role-gated access for
- * moderators and contributors is enabled per-page as those roles gain panel
- * access in future phases.
+ * All three roles may log in to the admin panel; page-level access within
+ * the panel is enforced per-permission via lumora_require_permission() /
+ * lumora_require_any_permission(), using the role→permission mapping in
+ * UserService::ROLE_PERMISSIONS. lumora_require_admin() remains available
+ * for pages that are strictly admin-only (site configuration, user
+ * management, updates, installation, import).
  * Sessions are started by bootstrap.php before these functions are called.
  *
  * Persistent "Remember Me" uses a split-token scheme:
@@ -163,6 +166,93 @@ function lumora_require_admin(): void
     }
 }
 
+/**
+ * Enforce that a user is logged in, regardless of role.
+ * Redirects to the login page if the check fails.
+ * Call at the top of admin pages that any staff role (admin, moderator,
+ * contributor) may access — e.g. dashboard.php, account.php.
+ */
+function lumora_require_login(): void
+{
+    if (!lumora_is_logged_in()) {
+        lumora_redirect(
+            lumora_base_url() . 'admin/login.php?redirect=' . urlencode($_SERVER['REQUEST_URI'] ?? '')
+        );
+    }
+}
+
+/**
+ * Enforce that the logged-in user holds the named permission.
+ *
+ * Redirects to the login page when not authenticated at all; shows a 403
+ * page when authenticated but lacking the required permission. Call at the
+ * top of admin pages that are gated by a single permission (see
+ * UserService::ROLE_PERMISSIONS).
+ */
+function lumora_require_permission(string $permission): void
+{
+    lumora_require_login();
+    if (!lumora_has_permission($permission)) {
+        lumora_forbidden();
+    }
+}
+
+/**
+ * Enforce that the logged-in user holds at least one of the named
+ * permissions. Useful for pages shared by roles with different, but
+ * overlapping, capabilities (e.g. images.php: 'manage_images' for
+ * admin/moderator, 'edit_own_images' for contributor).
+ *
+ * @param list<string> $permissions
+ */
+function lumora_require_any_permission(array $permissions): void
+{
+    lumora_require_login();
+    foreach ($permissions as $permission) {
+        if (lumora_has_permission($permission)) {
+            return;
+        }
+    }
+    lumora_forbidden();
+}
+
+/**
+ * Send a 403 Forbidden response and terminate the request.
+ *
+ * Used when a logged-in user's role does not grant the permission required
+ * by the current page or AJAX action. Distinct from lumora_require_admin()'s
+ * redirect-to-login behaviour, which is only appropriate for unauthenticated
+ * requests.
+ */
+function lumora_forbidden(): never
+{
+    http_response_code(403);
+    $base = h(lumora_base_url() . 'admin/');
+    echo <<<HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Denied</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+</head>
+<body class="bg-light">
+<div class="container" style="max-width:480px;margin-top:5rem">
+  <div class="card shadow-sm">
+    <div class="card-body p-4 text-center">
+      <h1 class="h4 mb-3">🚫 Access Denied</h1>
+      <p class="text-muted mb-4">Your account does not have permission to view this page.</p>
+      <a href="{$base}dashboard.php" class="btn btn-primary btn-sm">← Back to Dashboard</a>
+    </div>
+  </div>
+</div>
+</body>
+</html>
+HTML;
+    exit;
+}
+
 // ── Permission check ────────────────────────────────────────────────────────────
 
 /**
@@ -173,6 +263,67 @@ function lumora_require_admin(): void
 function lumora_has_permission(string $permission): bool
 {
     return UserService::currentUserHasPermission($permission);
+}
+
+/**
+ * Enforce that the logged-in user may access a specific album — either
+ * because their role holds 'manage_albums' (full access to every album) or
+ * because the album has been explicitly assigned to them via
+ * AlbumAssignmentService (contributor role with 'manage_assigned_albums').
+ *
+ * Redirects to the login page when not authenticated; shows a 403 page when
+ * authenticated but lacking access to this specific album. Call this in
+ * addition to the page-level lumora_require_any_permission() gate wherever a
+ * specific album ID is being read or written (admin/albums.php's edit/save
+ * handlers, admin/batch.php, admin/ajax_batch.php) so a contributor cannot
+ * bypass their assignment by guessing another album's ID in the URL.
+ */
+function lumora_require_album_access(int $albumId): void
+{
+    lumora_require_login();
+    $user   = lumora_current_user();
+    $userId = (int) ($user['user_id'] ?? 0);
+    if ($userId > 0 && AlbumAssignmentService::userCanAccessAlbum($userId, $albumId)) {
+        return;
+    }
+    lumora_forbidden();
+}
+
+/**
+ * Enforce that the logged-in user may access (view/edit/delete) a specific
+ * image — either because their role holds 'manage_images' (full access to
+ * every image) or because the image's uploaded_by matches their own user ID
+ * and their role holds 'edit_own_images' (the contributor role).
+ *
+ * Redirects to the login page when not authenticated; shows a 403 page when
+ * authenticated but lacking access to this specific image. Mirrors
+ * lumora_require_album_access(). Call this wherever a specific image ID is
+ * being read or written by a page whose top-of-file gate is the shared
+ * ['manage_images', 'edit_own_images'] pair (admin/images.php's edit/save/
+ * delete handlers) so a contributor cannot bypass ownership scoping by
+ * guessing another user's image ID in the URL.
+ *
+ * AJAX handlers that process many IDs per call (ajax_image_delete.php,
+ * ajax_image_move.php) perform the equivalent per-ID check inline instead of
+ * calling this function, since a single unauthorised ID in a bulk request
+ * should be skipped with a per-item error, not abort the whole call.
+ */
+function lumora_require_image_access(int $imageId): void
+{
+    lumora_require_login();
+    if (lumora_has_permission('manage_images')) {
+        return;
+    }
+    $user   = lumora_current_user();
+    $userId = (int) ($user['user_id'] ?? 0);
+    if (
+        $userId > 0
+        && lumora_has_permission('edit_own_images')
+        && GalleryService::imageBelongsToUser($imageId, $userId)
+    ) {
+        return;
+    }
+    lumora_forbidden();
 }
 
 // ── CSRF ──────────────────────────────────────────────────────────────────────
@@ -320,7 +471,7 @@ function lumora_check_remember_cookie(): bool
         [(int) $token['user_id']]
     );
 
-    if (!$user || $user['role'] !== 'admin' || (isset($user['is_active']) && !(bool) $user['is_active'])) {
+    if (!$user || !GroupService::groupExists($user['role']) || (isset($user['is_active']) && !(bool) $user['is_active'])) {
         try { LumoraDB::delete('remember_tokens', 'selector = ?', [$selector]); } catch (\Throwable) {}
         lumora_clear_remember_cookie();
         return false;

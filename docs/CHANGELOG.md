@@ -6,7 +6,425 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
 
+## [1.10.0] — 2026-07-08
+
+### Fixed
+
+- **`LUMORA_DB_VERSION` was stale at `9`** (`version.php`) despite the schema
+  having reached version 13 as of `Migration0007_CreateGroupsTables`
+  (matching `install/schema.sql`'s own "Version: 13" header) — the constant
+  was simply never incremented across Migrations 0004–0007. Doesn't affect
+  `SchemaService`, which determines pending migrations purely from
+  discovered migration files vs. the `{PREFIX}migrations` tracking table
+  and never reads this constant, but it is included verbatim in
+  `InstallationService::exportSettings()`'s diagnostic JSON snapshot, where
+  it would have misreported the database version to anyone using that
+  export. Bumped to `13` to match reality; found while bumping the version
+  for this release.
+
+- **`GalleryService::getImageNeighbours()` was broken for every call, on any
+  sort order** (`include/services/GalleryService.php`): its query selected
+  from `{PREFIX}images` with no table alias, while every `$sort` branch's
+  `ORDER BY` clause referenced an `i.` alias that didn't exist — producing
+  `SQLSTATE[42S22]: Column not found: 'i.pos'` (or `i.added_at`/`i.hits`/
+  `i.filename` for the other sort options) on every single invocation.
+  Found only once the full test suite was actually executed end-to-end for
+  the first time; the existing prev/next-neighbour tests had apparently
+  never been run to completion before. Fixed by adding the missing alias.
+- **`LumoraDB::commit()`/`rollBack()` could throw "There is no active
+  transaction"** (`include/db.php`) when a DDL statement (`CREATE`/`ALTER`/
+  `DROP TABLE`) executed anywhere inside an open transaction — MySQL/MariaDB
+  implicitly commits on DDL, which PDO's own `inTransaction()` correctly
+  reflects, but the wrapper's outermost `commit()`/`rollBack()` call didn't
+  check for that before calling the real PDO method, and PDO throws when
+  asked to commit/roll back a transaction it no longer considers active.
+  Both methods now guard with `inTransaction()` first. Most visible in any
+  workflow that runs schema migrations (which are inherently DDL-heavy)
+  inside a wrapping transaction.
+- **Coppermine config parser silently failed on double-quoted array keys**
+  (`plugins/coppermine-importer/CoppermineConfigDetector.php`): the
+  extraction regex only matched `$CONFIG['key']` (single-quoted key), never
+  `$CONFIG["key"]` (double-quoted key), even though it already correctly
+  handled either quote style for the *value*. A real Coppermine
+  `config.inc.php` using double-quoted keys — valid, if less common, PHP
+  syntax — would be rejected entirely as "not a valid Coppermine config"
+  despite containing every required setting. The key delimiter now accepts
+  either quote character (backreferenced so the closing bracket must match
+  the opening one).
+- **`lumora_sanitize_folder()` could leave a `..` substring in its output**
+  (`include/functions.php`) when a disallowed character (e.g. a null byte)
+  sat directly between two segments with no slash separator — stripping it
+  by deletion could fuse the segments together (e.g. `"albums\0../../etc"`
+  collapsing to `"albums../etc"`), and `"albums.."` isn't caught by the
+  segment-level `!== '..'` filter since it's a different string, even though
+  it still contains `..` as a substring. Disallowed characters are now
+  replaced with a path separator instead of deleted, guaranteeing every
+  stripped character still produces a segment boundary so a `..` segment is
+  always seen as its own complete segment when one was present. Not
+  independently exploitable as a real traversal (a segment like `"albums.."`
+  is just an ordinary directory name to the filesystem, not a parent-
+  directory reference), but worth closing given how security-sensitive this
+  function is.
+
+- **`Migration0003_UpdateUsersTableForRoles` no longer unconditionally
+  re-narrows `users`.`role` to a fixed ENUM** (`include/migrations/Migration0003_UpdateUsersTableForRoles.php`):
+  the legacy-role-rename and ENUM-redefinition steps previously ran on every
+  invocation with no guard, unlike the migration's own `is_active` column
+  step. On an install where `role` has already been widened to `varchar(50)`
+  by `Migration0007_CreateGroupsTables` (to hold any custom group slug, not
+  just the three original system roles), re-running or replaying
+  `Migration0003` would silently convert `role` back to
+  `enum('admin','moderator','contributor')`, which would reject or truncate
+  any custom group slug. Found while exercising every migration in numeric
+  order against an already-fully-migrated schema. The steps now only run
+  when `role` is still detected in its pre-v9 shape (an `enum` containing
+  `'editor'`); already-migrated or already-widened installs are left
+  untouched.
+- **`LumoraDB` transactions are now nesting-safe** (`include/db.php`):
+  `beginTransaction()`/`commit()`/`rollBack()` previously called the
+  underlying `PDO` methods directly, which throws a `PDOException` ("There
+  is already an active transaction") on PHP 8+ if a second
+  `beginTransaction()` is called while one is already open — for example, a
+  service method that wraps its own writes in a transaction
+  (`GroupService::createGroup()`, `AlbumAssignmentService::setAssignedAlbums()`,
+  etc.) being called from another context that has already opened one. The
+  three methods now track a nesting depth: only the outermost
+  `beginTransaction()`/`commit()`/`rollBack()` touches the real PDO
+  transaction, and any inner calls use named `SAVEPOINT`/`RELEASE
+  SAVEPOINT`/`ROLLBACK TO SAVEPOINT` statements instead (supported by
+  InnoDB), so nested calls compose safely rather than throwing.
+- **Bulk image move now scoped to a contributor's assigned albums**
+  (`admin/images.php`, `admin/ajax_image_move.php`): a contributor with
+  `edit_own_images` (not `manage_albums`) previously saw every album in the
+  bulk "Move Selected" target dropdown, even though ownership already
+  restricted *which images* they could select. The move-target dropdown is
+  now filtered to `AlbumAssignmentService::getAssignedAlbumIds()` (mirroring
+  the existing batch-add album scoping in `admin/batch.php`), with a clear
+  empty-state notice and a disabled control when no other assigned album
+  exists. `ajax_image_move.php` re-validates the posted `target_album_id`
+  server-side via `AlbumAssignmentService::userCanAccessAlbum()` so a
+  contributor cannot move images into an unassigned album by editing the
+  request directly. Admin/moderator (`manage_albums`) behaviour is
+  unchanged — every album remains a valid move target. See TODO §22.
+
+### Added
+
+- **Coppermine importer now assigns image ownership** (`plugins/coppermine-importer/CoppermineImporter.php`,
+  `plugins/coppermine-importer/admin/index.php`,
+  `plugins/coppermine-importer/admin/ajax_import.php`): every image imported
+  from a Coppermine gallery now has its `uploaded_by` column populated
+  instead of being left at `0` ("no recorded owner"). The preview/options
+  step of the import wizard (step 2) shows an "Assign imported images to"
+  dropdown listing active Lumora users, defaulting to the administrator
+  currently running the import; the chosen user ID is validated server-side
+  and carried through the session-based import state to every
+  `import_images` chunk. A future user-mapping import (importing Coppermine
+  accounts and matching them to Lumora users) could preserve original
+  per-image ownership instead of this single-owner default — see TODO #20.
+
+### Changed
+
+- **Album/category create, edit, and delete moved into `GalleryService`**
+  (`admin/albums.php`, `admin/categories.php`,
+  `include/services/GalleryService.php`): this logic previously lived
+  inline in the two admin page scripts (direct `LumoraDB::insert()`/
+  `update()`/`delete()` calls) — the one place in the admin panel that
+  didn't follow the project's service-layer convention. Six new methods
+  (`createAlbum()`, `updateAlbum()`, `deleteAlbum()`, `createCategory()`,
+  `updateCategory()`, `deleteCategory()`) now own every behavioral rule
+  (folder auto-generation and uniqueness checking, `thumb_image_id`
+  validation, cascading delete of images/assignments, empty-folder-only
+  on-disk removal, self-parent prevention, reparenting children/albums on
+  category delete); the two pages now only handle permission checks, CSRF
+  validation, request parsing, flash messages, and redirects. Purely an
+  internal refactor — behavior, flash-message text, and redirect targets
+  are unchanged from the admin's perspective.
+- **Core themes expanded for full custom styling** (`themes/default/style.css`,
+  `themes/classic-fansite/style.css`): both stylesheets are now organised under
+  named section banners (Layout, Typography, Navigation, Albums & Categories,
+  Image Pages, Forms, Buttons, Tables, Messages, Utility Components, Media,
+  Loading indicator, Print styles, Responsive) so every public-facing
+  component can be restyled from CSS alone, without touching PHP templates.
+  Added CSS-only building blocks for components that don't have a page yet
+  (forms, tables, alerts, buttons, panels, dividers, badges, a hover-overlay
+  utility for thumbnails/cards, a loading spinner, and a print stylesheet
+  that hides site chrome for clean image printing), all driven by each
+  theme's existing colour variables so dark mode keeps working automatically.
+  No visual output changed and no PHP files were touched.
+- **`color-scheme: light dark` support added** (`themes/default/style.css`,
+  `themes/classic-fansite/style.css`): both themes now declare
+  `color-scheme: light dark;` in their light `:root` block and override it to
+  `color-scheme: dark;` inside their `html[data-bs-theme="dark"]` block, so
+  native browser UI (scrollbars, form control chrome, date pickers) matches
+  the active colour mode instead of always rendering light.
+
+### Documentation
+
+- **New theme development guide** (`docs/THEME_DEVELOPMENT.md`, linked from
+  `README.md`): documents the full dark mode architecture
+  (`{COLOR_MODE_INIT}` / `{COLOR_MODE_TOGGLE}` tokens, preference resolution
+  order, the `data-bs-theme` attribute mechanism), a minimal dark-mode-ready
+  theme example, guidance on inheriting the standard `--lum-*` / `--fs-*`
+  variable-naming conventions instead of hard-coding colours, an
+  accessibility checklist (contrast, icons, forms/buttons, focus outlines,
+  hover states, code/tables/captions, modals) to run through before shipping
+  a theme, and recipes for smooth colour-mode transitions, a theme-aware
+  logo swap, and print styles.
+
+### Security
+
+- **Private albums are now actually access-controlled**
+  (`include/services/GalleryService.php`, `album.php`): `getAlbum()` gained
+  a `$public_only` parameter; `album.php` now passes `!lumora_is_admin()`
+  so a "Private (hidden)" album returns the same 404 as a nonexistent one
+  for any visitor who isn't staff, instead of being fully viewable by
+  anyone who guesses/enumerates its numeric ID. Previously, "Private" only
+  hid an album from navigation and category listings, not from direct
+  access. See `TODO-security.md` #1.
+- **`view_updates` no longer allows performing updates**
+  (`admin/ajax_update_perform.php`, `admin/update.php`): the endpoint that
+  downloads/extracts release archives, replaces application files, runs
+  database migrations, and can roll back or abort an update now requires
+  the `site_configuration` permission, matching `ajax_run_migrations.php`,
+  instead of the more widely-grantable `view_updates`. A custom permission
+  group holding only `view_updates` (e.g. for read-only status monitoring)
+  can no longer trigger the full update pipeline. `admin/update.php`'s
+  "Install Update" card and "Run Database Update" button now show a
+  read-only notice instead of an interactive control when the current user
+  lacks `site_configuration`. See `TODO-security.md` #2.
+- **Open redirect fixed on login** (`admin/login.php`, `include/functions.php`):
+  new `lumora_safe_redirect_target()` helper rejects protocol-relative
+  `redirect` values like `//evil.com` (which pass a naive
+  `str_starts_with($redirect, '/')` check but browsers treat as an
+  off-site redirect), in addition to the existing same-site-only check.
+  See `TODO-security.md` #3.
+- **Installer `?force=1` reinstall now requires authentication**
+  (`install/index.php`): forcing a reinstall over an already-installed site
+  previously bypassed the "already installed" guard with nothing but an
+  unauthenticated query parameter — the only remaining protection was the
+  `install/` directory having been deleted, which the installer's own code
+  acknowledges commonly fails for FTP-deployed sites. `?force=1` now
+  requires a session already holding the `site_configuration` permission
+  against the site's *existing* database (bootstrap.php loads config.php
+  and auth.php whenever config.php exists, even inside the installer),
+  redirecting to `admin/login.php` otherwise. See `TODO-security.md` #4.
+- **Password recovery no longer hardcoded to `role = 'admin'`**
+  (`admin/forgot_password.php`): the recovery lookup now finds the oldest
+  user belonging to any group holding both `user_management` and
+  `site_configuration` (via `GroupService`), instead of matching the
+  literal `admin` slug. Recovery now keeps working even if the primary
+  administrator's account has been moved to a custom group with
+  equivalent permissions. See `TODO-security.md` #5.
+- **Login rate limiter TOCTOU race closed** (`admin/login.php`): the
+  separate unlocked read / `LOCK_EX`-only write of
+  `cache/.login_ratelimit.json` were replaced with a single
+  `$rl_with_lock()` helper that holds one exclusive `flock()` across the
+  entire read-prune-decide-write cycle, so concurrent requests from the
+  same IP can no longer each observe a stale failure count and slip past
+  the lockout together. See `TODO-security.md` #6.
+- **Album-assignment eligibility generalised beyond the `'contributor'`
+  slug** (`include/services/AlbumAssignmentService.php`,
+  `admin/user_albums.php`, `admin/users.php`): `assignAlbum()`,
+  `setAssignedAlbums()`, and the "Assign Albums" UI now check the
+  `manage_assigned_albums` permission via `GroupService`/`UserService`
+  rather than the literal `contributor` role slug, so a custom permission
+  group with that permission works identically to the built-in
+  contributor group. See `TODO-security.md` #7.
+- **Removed dead `@`-suppressed code block** (`admin/migrate.php`): an
+  inert, unreachable block that violated the project's own
+  no-`@`-suppression convention has been deleted. See `TODO-security.md` #8.
+- **Coppermine importer's table prefix is now sanitised**
+  (`plugins/coppermine-importer/CoppermineImporter.php`): the
+  admin-supplied source-database table prefix is stripped to
+  `[a-zA-Z0-9_]` before being interpolated into SQL identifiers, matching
+  the core installer's own `db_prefix` validation. See `TODO-security.md` #9.
+- **Coppermine config-detector AJAX no longer leaks exception internals**
+  (`plugins/coppermine-importer/admin/ajax_detect_config.php`): the outer
+  catch-all previously returned the exception's class name, message, file
+  path, and line number directly in the JSON response. It now logs full
+  details server-side via `error_log()` and `MigrationService::logEvent()`
+  and returns a generic error message to the client. See
+  `TODO-security.md` #10.
+- **Config import now enforces the same validation as manual save**
+  (`admin/config.php`, `include/services/LumoraConfig.php`): the config
+  export/import feature previously stored imported values with only a
+  key-name whitelist check, skipping the enum/range validation the manual
+  settings form applies (e.g. `log_mode`, `category_layout`, `timezone`).
+  A new `LumoraConfig::sanitizeValue()` method centralises this validation;
+  both the `save` and `import` actions in `admin/config.php` now call it,
+  so a hand-edited or corrupted export file can no longer store an
+  out-of-range or unrecognised config value. See `TODO-security.md` #11.
+
+### Added
+
+- **User Group Management** (`include/services/GroupService.php`,
+  `include/migrations/Migration0007_CreateGroupsTables.php`,
+  `include/services/UserService.php`, `include/auth.php`, `include/bootstrap.php`,
+  `admin/groups.php`, `admin/includes/admin_helpers.php`, `install/schema.sql`):
+  Roles are now dynamic permission groups instead of a fixed
+  admin/moderator/contributor ENUM. New `{PREFIX}groups` and
+  `{PREFIX}group_permissions` tables (Migration0007, DB version 13) back a new
+  `GroupService` with `getAllGroups()`, `getGroup()`, `getGroupBySlug()`,
+  `groupExists()`, `getGroupPermissions()`, `groupHasPermission()`,
+  `createGroup()`, `renameGroup()`, `updateGroupPermissions()`, and
+  `deleteGroup()`. `{PREFIX}users`.`role` is widened from an ENUM to a
+  `varchar(50)` referencing a group slug.
+
+  The three system groups (admin, moderator, contributor) are seeded with the
+  exact permission sets that were previously hardcoded in
+  `UserService::ROLE_PERMISSIONS` — both by Migration0007 for upgrades and
+  directly in `install/schema.sql` for fresh installs — so no installation
+  sees a behavioural change until an administrator deliberately edits a
+  group. `UserService::roleHasPermission()`, `getRolePermissions()`,
+  `roleOptions()`, and `roleBadge()` now delegate to `GroupService`, so every
+  existing caller (`admin/users.php`, `include/auth.php`'s remember-me session
+  restore, `admin/includes/admin_helpers.php`'s sidebar filtering,
+  `AlbumAssignmentService`) keeps working unchanged. `GroupService` falls
+  back to the legacy hardcoded three-role behaviour on installations pending
+  Migration0007, so nothing breaks before the migration is run.
+
+  New admin page `admin/groups.php` (gated on `user_management`, reachable via
+  a new "Groups" sidebar item next to Users) lists every group with its
+  permission count and current user count; supports creating custom groups,
+  renaming any group, granting/revoking individual permissions per group, and
+  deleting unused custom groups. Safeguards: the three system groups can
+  never be deleted; a group with one or more user accounts still assigned to
+  it cannot be deleted until they're reassigned from Admin → Users; the
+  `admin` system group can never lose the `user_management` or
+  `site_configuration` permissions — `GroupService::updateGroupPermissions()`
+  silently re-adds them if a submitted form omits either one, so
+  administrators can never lock themselves out of Users/Groups or
+  Configuration. Permission changes take effect immediately for every user in
+  the affected group on their next request.
+
+- **Per-Image Ownership Enforcement** (`include/migrations/Migration0006_AddUploadedByToImages.php`,
+  `include/services/GalleryService.php`, `include/services/ThumbnailService.php`,
+  `include/thumb.php`, `include/auth.php`, `admin/images.php`, `admin/ajax_image_delete.php`,
+  `admin/ajax_image_move.php`, `admin/ajax_image_rethumb.php`, `admin/ajax_batch.php`,
+  `install/schema.sql`): The `edit_own_images` permission (contributor role) is now
+  enforced at the row level instead of only at the page level. A new `uploaded_by`
+  column on `{PREFIX}images` (Migration0006, DB version 12) records which user uploaded
+  each image; all pre-existing images are backfilled to the primary administrator
+  account during the migration so ownership is never left undefined. New
+  `GalleryService::imageBelongsToUser()` is the single source of truth for ownership
+  checks, used by a new `lumora_require_image_access(int $imageId)` helper in
+  `include/auth.php` (mirroring `lumora_require_album_access()`).
+
+  `admin/images.php` now scopes its list, cross-album search, edit, save, and delete
+  actions to a contributor's own uploads only — never another user's images, and never
+  bypassable by guessing an image ID in the URL. Two new `GalleryService` methods,
+  `getAdminAlbumImages()` and `countAdminAlbumImages()`, replace the page's previous
+  inline SQL for the plain (non-search) per-album listing so the ownership filter is
+  applied consistently through the service layer; `searchImages()` and
+  `countSearchImages()` gained a matching optional `$owner_id` parameter. The bulk AJAX
+  handlers (`ajax_image_delete.php`, `ajax_image_move.php`) check ownership per image ID
+  rather than gating the whole request, so one unauthorised ID in a bulk selection is
+  skipped with a per-item error instead of aborting the entire call;
+  `ajax_image_rethumb.php` (single image) returns an unauthorised JSON error immediately.
+  `ThumbnailService::batchAddImage()` (and its `include/thumb.php` wrapper) gained an
+  `$uploaded_by` parameter, and `admin/ajax_batch.php` now passes the current session
+  user's ID so every new Batch Add upload is automatically attributed to its uploader.
+
+  Left unchanged/out of scope: the Coppermine importer plugin does not record an
+  uploader on imported rows (admin-only tool, unaffected by this permission); the bulk
+  move target-album dropdown still lists every album regardless of the contributor's
+  album assignments.
+
+- **Contributor Album Assignments** (`include/services/AlbumAssignmentService.php`,
+  `include/migrations/Migration0005_CreateAlbumAssignmentsTable.php`, `include/auth.php`,
+  `admin/albums.php`, `admin/batch.php`, `admin/ajax_batch.php`, `admin/users.php`,
+  `admin/user_albums.php`, `install/schema.sql`): Implements the `manage_assigned_albums`
+  permission that was previously defined but unused. A new `{PREFIX}album_assignments`
+  table (Migration0005, DB version 11) records which albums an administrator or
+  moderator has granted a contributor account access to. New `AlbumAssignmentService`
+  provides `assignAlbum()`, `unassignAlbum()`, `setAssignedAlbums()`,
+  `getAssignedAlbumIds()`, `getAssignedAlbums()`, `userCanAccessAlbum()` (the single
+  source of truth for album-scoped access checks), `getAssignedUsers()`,
+  `countAssignedAlbums()`, and cascade-cleanup methods called from
+  `UserService::deleteUser()` and `admin/albums.php`'s delete handler. A new
+  `lumora_require_album_access(int $albumId)` helper in `include/auth.php` re-validates
+  access to a specific album server-side (not just filters a dropdown), used by
+  `admin/albums.php`, `admin/batch.php`, and `admin/ajax_batch.php`.
+
+  `admin/albums.php` now serves three list modes: the existing hierarchy/flat views
+  for `manage_albums` holders are unchanged; a new flat "assigned albums" view shows
+  contributors only their assigned albums, with no New Album button, no category
+  filter, and no per-row Delete button. Contributors can edit an assigned album's
+  metadata and cover image but not reassign its category (shown as read-only text) or
+  create/delete albums. The album edit screen shows a "Assigned to: …" line (visible
+  to `manage_albums` holders only) when the album has contributor assignments.
+  `admin/batch.php`'s album picker is scoped to assigned albums for contributors, with
+  both the dropdown and the `?album=` GET parameter re-validated server-side; the same
+  re-validation was added to `admin/ajax_batch.php`.
+
+  New page **`admin/user_albums.php`** (gated on `manage_albums`, reachable via a new
+  "Assign Albums" button next to contributor rows on `admin/users.php` and a
+  "Manage Assigned Albums" card on the edit-user screen) presents every album as a
+  filterable, checkable list and saves the full assignment set in one call via
+  `setAssignedAlbums()`. `admin/users.php`'s user list shows each contributor's current
+  assignment count next to their role badge. `install/schema.sql`'s migration-notes
+  header also gained the previously-undocumented DB version 9→10 entry for
+  Migration0004 (`color_mode`), closing a documentation gap from the prior session.
+
+  Explicitly out of scope for this change (tracked in TODO.md §18): per-row image
+  ownership ("edit own uploads") and category management for contributors.
+
+- **User Management — page-level access enforcement** (`include/auth.php`,
+  `admin/includes/admin_helpers.php`, `admin/login.php`, `admin/index.php`, and every
+  admin page / AJAX handler): Moderator and contributor accounts can now log in to the
+  admin panel (previously `login.php` accepted only the `admin` role). Three new helpers
+  in `include/auth.php` — `lumora_require_login()`, `lumora_require_permission()`, and
+  `lumora_require_any_permission()` — enforce page-level access using the existing
+  role→permission mapping in `UserService::ROLE_PERMISSIONS`; a shared `lumora_forbidden()`
+  helper renders a 403 page for authenticated users who lack the required permission.
+  Every admin page and its supporting AJAX handlers were switched from a blanket
+  `lumora_require_admin()` check to the permission that matches its function (e.g.
+  `albums.php` / `categories.php` → `manage_albums`, `images.php` and its image AJAX
+  handlers → `manage_images` or `edit_own_images`, `tools.php` and its maintenance AJAX
+  handlers → `maintenance_tools`, `batch.php` / `ajax_batch.php` → `batch_add`).
+  Site configuration, installation, import, user management, and update pages remain
+  admin-only. The admin sidebar navigation (`lum_admin_page()`) now hides items the
+  current user's role does not grant access to, and the dashboard's Quick Links card
+  (`admin/dashboard.php`) only shows the shortcut buttons the current role can actually
+  use. The remember-me persistent-login cookie now works for all three roles instead of
+  admin only.
+
+- **Optional theme and plugin replacement during core upgrade** (`admin/update.php`,
+  `admin/ajax_update_perform.php`, `include/services/UpdaterService.php`): Two unchecked
+  checkboxes now appear in the Install Update confirmation area — one for plugins, one for
+  themes. By default both remain unchecked so existing custom themes and plugins are always
+  preserved. When checked, the selection is stored in the update lock file and honoured
+  during the Replace stage; the persistent `update_preserve_themes` / `update_preserve_plugins`
+  config values are never modified. The progress log now reports whether themes/plugins were
+  preserved or replaced (and whether the replacement was user-requested or config-driven).
+
+- **Dark mode support** (`admin/admin.css`, `admin/includes/admin_helpers.php`,
+  `admin/config.php`, `admin/ajax_color_mode.php`,
+  `include/services/ThemeRenderer.php`,
+  `themes/default/style.css`, `themes/default/template.html`,
+  `themes/classic-fansite/style.css`, `themes/classic-fansite/template.html`,
+  custom themes): Full light / dark / auto colour-scheme support for both the public gallery
+  and the admin panel. Bootstrap 5.3's built-in dark-mode theming (`data-bs-theme`) is
+  used for all framework components; a set of CSS custom properties (`--lum-*` / `--fs-*`)
+  adapts every custom gallery component. An inline `<script>` placed as the first element
+  in `<head>` reads the stored preference before any CSS is parsed, preventing
+  flash-of-wrong-theme. The preference cycles Auto (follow OS) → Dark → Light → Auto via
+  a ☀️ / 🌙 / 🖥️ toggle button in each theme's navigation bar and the admin topbar.
+  Preference is stored in `localStorage`; for logged-in administrators it is additionally
+  synced to the new `{PREFIX}users.color_mode` column (`auto` / `light` / `dark`,
+  default `auto`) via `admin/ajax_color_mode.php` so the choice persists across devices.
+  A new **Default Colour Mode** selector in Admin → Configuration sets the site-wide
+  fallback for first-time visitors whose `localStorage` is empty.
+  The Xena custom theme already had `@media (prefers-color-scheme: dark)` support;
+  `html[data-bs-theme="dark"]` equivalents have been added so the explicit toggle works
+  even when the system preference is light. All four custom themes received additive
+  `html[data-bs-theme="dark"]` override blocks covering thumbnail captions, card info
+  rows, category list headers, breadcrumbs, and interactive states.
+
+- **Database migration 0004** (`include/migrations/Migration0004_AddColorModeToUsers.php`):
+  Adds `color_mode ENUM('auto','light','dark') NOT NULL DEFAULT 'auto'` to `{PREFIX}users`.
 
 ## [1.9.2] — 2026-06-29
 

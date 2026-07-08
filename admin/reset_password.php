@@ -17,7 +17,7 @@ define('LUMORA_ENTRY', true);
 require_once dirname(__DIR__) . '/include/bootstrap.php';
 
 // Already logged in → go to dashboard.
-if (lumora_is_admin()) {
+if (lumora_is_logged_in()) {
     lumora_redirect(lumora_base_url() . 'admin/dashboard.php');
 }
 

@@ -8,7 +8,9 @@ declare(strict_types=1);
  *   lum_flash_html()        — render and clear queued flash messages
  *   lum_per_page_selector() — render a per-page size selector form
  *   lum_admin_pagination()  — render Bootstrap 5 pagination controls
- *   lum_admin_page()        — render a full admin page
+ *   lum_admin_page()        — render a full admin page (sidebar nav is filtered
+ *                             to the items the current user's role grants
+ *                             access to — see GroupService::getGroupPermissions())
  *
  * @copyright Copyright (C) 2025 Ariane
  * @license   GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
@@ -154,6 +156,11 @@ function lum_admin_pagination(array $pag): string
 /**
  * Render a full admin panel page.
  *
+ * Includes a dark-mode initialization script (runs before Bootstrap CSS loads
+ * to prevent flash-of-wrong-theme) and a toggle button in the topbar that
+ * cycles Auto → Dark → Light → Auto and syncs the preference to the database
+ * for the logged-in user.
+ *
  * @param string $title   Page title (shown in <title> and <h1>).
  * @param string $content Main content HTML.
  * @param string $active  Active sidebar item key (matches $nav entries).
@@ -166,14 +173,41 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
     $user         = lumora_current_user();
     $username     = h($user['username'] ?? 'Admin');
     $csrf         = h(lumora_csrf_token());
+    $csrf_js      = json_encode(lumora_csrf_token());
+    $ajax_cm_url  = json_encode(lumora_base_url() . 'admin/ajax_color_mode.php');
     $ver          = LUMORA_VERSION;
     $flash        = lum_flash_html();
     $title_h      = h($title);
     $gallery_name = h(lumora_config('gallery_name', 'Lumora Gallery'));
 
+    // ── Colour mode for dark mode init ─────────────────────────────────────────
+    // Read the user's stored DB preference (column may not exist before migration
+    // 0004 runs — fall back to 'auto' gracefully).
+    $user_color_mode = 'auto';
+    try {
+        $uid = (int) ($user['id'] ?? 0);
+        if ($uid > 0) {
+            $cm = LumoraDB::fetchValue(
+                'SELECT `color_mode` FROM `{PREFIX}users` WHERE `id` = ?',
+                [$uid]
+            );
+            if (in_array($cm, ['auto', 'light', 'dark'], true)) {
+                $user_color_mode = $cm;
+            }
+        }
+    } catch (\Throwable) {
+        // Column not yet added — migration 0004 pending. Use 'auto' fallback.
+    }
+
+    // Site-wide default (admin can set in Configuration).
+    $site_default = in_array((string) lumora_config('default_color_mode', 'auto'), ['auto', 'light', 'dark'], true)
+        ? (string) lumora_config('default_color_mode', 'auto')
+        : 'auto';
+
+    // Effective initial preference — user pref overrides site default.
+    $init_pref_js = json_encode($user_color_mode !== 'auto' ? $user_color_mode : $site_default);
+
     // Persistent security warning: shown on every admin page until install/ is gone.
-    // The directory should be auto-deleted by the installer on success, but may
-    // survive on restrictive filesystems or after a forced reinstall.
     $install_warn = is_dir(LUMORA_ROOT . 'install')
         ? '<div class="alert alert-danger alert-dismissible fade show py-2 mb-3" role="alert">'
           . '<strong>Security warning:</strong> The <code>install/</code> directory still exists. '
@@ -189,19 +223,33 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
         : '';
 
     $nav_items = [
-        'dashboard'    => ['icon' => '📊', 'label' => 'Dashboard',              'url' => 'dashboard.php'],
-        'batch'        => ['icon' => '⬆️', 'label' => 'Batch Add',              'url' => 'batch.php'],
-        'categories'   => ['icon' => '📁', 'label' => 'Categories',             'url' => 'categories.php'],
-        'albums'       => ['icon' => '🖼️', 'label' => 'Albums',                 'url' => 'albums.php'],
-        'images'       => ['icon' => '📸', 'label' => 'Images',                 'url' => 'images.php'],
-        'config'       => ['icon' => '⚙️', 'label' => 'Configuration',          'url' => 'config.php'],
-        'tools'        => ['icon' => '🔧', 'label' => 'Tools',                  'url' => 'tools.php'],
-        'installation' => ['icon' => '🖥️', 'label' => 'Installation',           'url' => 'installation.php'],
-        'migrate'      => ['icon' => '📥', 'label' => 'Import',                 'url' => 'migrate.php'],
-        'updates'      => ['icon' => '🔔', 'label' => 'Updates' . $update_badge, 'url' => 'update.php'],
-        'account'      => ['icon' => '👤', 'label' => 'Account',                'url' => 'account.php'],
-        'users'        => ['icon' => '👥', 'label' => 'Users',                  'url' => 'users.php'],
+        'dashboard'    => ['icon' => '📊', 'label' => 'Dashboard',              'url' => 'dashboard.php',    'permission' => null],
+        'batch'        => ['icon' => '⬆️', 'label' => 'Batch Add',              'url' => 'batch.php',        'permission' => 'batch_add'],
+        'categories'   => ['icon' => '📁', 'label' => 'Categories',             'url' => 'categories.php',   'permission' => 'manage_albums'],
+        'albums'       => ['icon' => '🖼️', 'label' => 'Albums',                 'url' => 'albums.php',       'permission' => 'manage_albums'],
+        'images'       => ['icon' => '📸', 'label' => 'Images',                 'url' => 'images.php',       'permission' => ['manage_images', 'edit_own_images']],
+        'config'       => ['icon' => '⚙️', 'label' => 'Configuration',          'url' => 'config.php',       'permission' => 'site_configuration'],
+        'tools'        => ['icon' => '🔧', 'label' => 'Tools',                  'url' => 'tools.php',        'permission' => 'maintenance_tools'],
+        'installation' => ['icon' => '🖥️', 'label' => 'Installation',           'url' => 'installation.php', 'permission' => 'site_configuration'],
+        'migrate'      => ['icon' => '📥', 'label' => 'Import',                 'url' => 'migrate.php',      'permission' => 'site_configuration'],
+        'updates'      => ['icon' => '🔔', 'label' => 'Updates' . $update_badge, 'url' => 'update.php',       'permission' => 'view_updates'],
+        'account'      => ['icon' => '👤', 'label' => 'Account',                'url' => 'account.php',      'permission' => null],
+        'users'        => ['icon' => '👥', 'label' => 'Users',                  'url' => 'users.php',        'permission' => 'user_management'],
+        'groups'       => ['icon' => '🛡️', 'label' => 'Groups',                'url' => 'groups.php',       'permission' => 'user_management'],
     ];
+
+    // Hide nav items the current user's role does not grant access to.
+    // 'permission' === null means every logged-in role may see the item
+    // (dashboard, account); an array means any one of the listed permissions
+    // is sufficient (mirrors lumora_require_any_permission()).
+    $nav_items = array_filter($nav_items, static function (array $item): bool {
+        $perm = $item['permission'];
+        if ($perm === null) return true;
+        foreach ((array) $perm as $p) {
+            if (lumora_has_permission($p)) return true;
+        }
+        return false;
+    });
 
     $nav_html = '';
     foreach ($nav_items as $key => $item) {
@@ -216,6 +264,25 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Colour-mode init: runs before any CSS to prevent flash-of-wrong-theme -->
+  <script>
+  (function () {
+    'use strict';
+    var initPref = {$init_pref_js};
+    var stored   = '';
+    try { stored = localStorage.getItem('lum_color_mode') || ''; } catch (e) {}
+    // User's explicit localStorage choice always wins; fall back to server-side pref.
+    var pref = stored || initPref || 'auto';
+    var dark;
+    if (pref === 'dark')       { dark = true; }
+    else if (pref === 'light') { dark = false; }
+    else {
+      try { dark = window.matchMedia('(prefers-color-scheme: dark)').matches; }
+      catch (e) { dark = false; }
+    }
+    document.documentElement.setAttribute('data-bs-theme', dark ? 'dark' : 'light');
+  })();
+  </script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{$title_h} — Lumora Gallery Admin</title>
@@ -237,6 +304,12 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
       </li>
       <li class="nav-item">
         <a class="nav-link text-white-50 small" href="{$admin_url}account.php">👤 {$username}</a>
+      </li>
+      <li class="nav-item d-flex align-items-center">
+        <button type="button" id="lum-adm-color-toggle" class="lum-color-toggle me-2"
+                title="Toggle colour mode" aria-label="Toggle colour mode">
+          <span id="lum-adm-color-icon">🖥️</span>
+        </button>
       </li>
       <li class="nav-item">
         <form method="post" action="{$admin_url}logout.php" class="d-inline">
@@ -267,6 +340,72 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var CSRF       = {$csrf_js};
+  var AJAX_CM    = {$ajax_cm_url};
+
+  var toggle = document.getElementById('lum-adm-color-toggle');
+  var icon   = document.getElementById('lum-adm-color-icon');
+  if (!toggle) return;
+
+  function currentPref() {
+    try { return localStorage.getItem('lum_color_mode') || 'auto'; } catch (e) { return 'auto'; }
+  }
+
+  var icons = { auto: '\ud83d\udda5\ufe0f', light: '\u2600\ufe0f', dark: '\ud83c\udf19' };
+  var labels = {
+    auto:  'Colour mode: Auto (system) — click for dark',
+    dark:  'Colour mode: Dark — click for light',
+    light: 'Colour mode: Light — click for auto'
+  };
+
+  function applyTheme(pref) {
+    var dark;
+    if (pref === 'dark')       { dark = true; }
+    else if (pref === 'light') { dark = false; }
+    else {
+      try { dark = window.matchMedia('(prefers-color-scheme: dark)').matches; }
+      catch (e) { dark = false; }
+    }
+    document.documentElement.setAttribute('data-bs-theme', dark ? 'dark' : 'light');
+    if (icon)   icon.textContent = icons[pref] || icons.auto;
+    if (toggle) toggle.setAttribute('title', labels[pref] || labels.auto);
+  }
+
+  // Initialise icon to match current preference.
+  applyTheme(currentPref());
+
+  // React to OS-level changes when in auto mode.
+  try {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+      if (currentPref() === 'auto') applyTheme('auto');
+    });
+  } catch (e) {}
+
+  toggle.addEventListener('click', function () {
+    var cur  = currentPref();
+    var next = cur === 'auto' ? 'dark' : cur === 'dark' ? 'light' : 'auto';
+    try { localStorage.setItem('lum_color_mode', next); } catch (e) {}
+
+    // Smooth transition for subsequent switches (not first paint).
+    document.documentElement.style.transition = 'background-color .25s ease, color .25s ease, border-color .25s ease';
+    applyTheme(next);
+
+    // Sync to DB so the preference persists across devices.
+    try {
+      var params = new URLSearchParams({ csrf_token: CSRF, mode: next });
+      fetch(AJAX_CM, {
+        method : 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body   : params.toString(),
+      }).catch(function () {});
+    } catch (e) {}
+  });
+})();
+</script>
 </body>
 </html>
 HTML;

@@ -50,21 +50,42 @@ class Migration0003_UpdateUsersTableForRoles extends AbstractMigration
             );
         }
 
-        // 2. Rename legacy roles before altering the ENUM definition.
-        //    Pre-v9 installs may have rows with role = 'editor' or 'viewer'.
-        LumoraDB::query(
-            "UPDATE `{$prefix}users` SET `role` = 'moderator'   WHERE `role` = 'editor'"
+        // 2/3. Legacy role rename + ENUM redefinition — only when the column
+        //      is still in its pre-v9 shape (enum containing 'editor'/'viewer').
+        //      Migration0007 later widens `role` to varchar(50) so it can hold
+        //      any group slug; without this guard, replaying this migration
+        //      (or running it on an install already past Migration0007) would
+        //      unconditionally convert `role` back to a 3-value ENUM, which
+        //      silently truncates/rejects any custom group slug that doesn't
+        //      match 'admin'/'moderator'/'contributor'. Unlike step 1's
+        //      columnExists() guard, this step previously ran unconditionally
+        //      every time — found via a migration-replay test that runs every
+        //      migration in order against an already-fully-migrated schema.
+        $col = LumoraDB::fetchOne(
+            "SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'role'",
+            [LumoraDB::table('users')]
         );
-        LumoraDB::query(
-            "UPDATE `{$prefix}users` SET `role` = 'contributor' WHERE `role` = 'viewer'"
-        );
+        $is_legacy_enum = $col !== null
+            && stripos((string) $col['COLUMN_TYPE'], 'enum') === 0
+            && stripos((string) $col['COLUMN_TYPE'], 'editor') !== false;
 
-        // 3. Redefine the ENUM and update the default.
-        LumoraDB::query(
-            "ALTER TABLE `{$prefix}users`
-             MODIFY COLUMN `role`
-               enum('admin','moderator','contributor') NOT NULL DEFAULT 'contributor'"
-        );
+        if ($is_legacy_enum) {
+            // Rename legacy roles before altering the ENUM definition.
+            LumoraDB::query(
+                "UPDATE `{$prefix}users` SET `role` = 'moderator'   WHERE `role` = 'editor'"
+            );
+            LumoraDB::query(
+                "UPDATE `{$prefix}users` SET `role` = 'contributor' WHERE `role` = 'viewer'"
+            );
+
+            // Redefine the ENUM and update the default.
+            LumoraDB::query(
+                "ALTER TABLE `{$prefix}users`
+                 MODIFY COLUMN `role`
+                   enum('admin','moderator','contributor') NOT NULL DEFAULT 'contributor'"
+            );
+        }
     }
 
     /**

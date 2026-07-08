@@ -26,7 +26,14 @@ declare(strict_types=1);
  *   { success: bool, message: string }
  *
  * Security:
- *   - Admin session required.
+ *   - Requires the 'site_configuration' permission (not just 'view_updates')
+ *     since every action this endpoint dispatches — run_stage, rollback, and
+ *     abort — downloads/extracts archives, replaces application files, and/or
+ *     runs database migrations. 'view_updates' only grants visibility into the
+ *     read-only status page and update-check endpoint; it must never be
+ *     sufficient on its own to actually perform an update, or a custom
+ *     permission group intended for read-only monitoring would unexpectedly
+ *     be able to execute the full update pipeline. See TODO-security.md #2.
  *   - CSRF token validated.
  *   - Stage and version inputs are validated before being passed to UpdaterService.
  *   - Update lock prevents concurrent update sessions.
@@ -42,7 +49,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
-if (!lumora_is_admin()) {
+if (!lumora_has_permission('site_configuration')) {
     http_response_code(403);
     echo json_encode(['success' => false, 'message' => 'Forbidden']);
     exit;
@@ -85,7 +92,13 @@ switch ($action) {
             exit;
         }
 
-        $result = UpdaterService::runStage($stage, $version);
+        // Per-update replace options — accepted only for the preflight stage and
+        // stored in the lock file for subsequent stages to read.  Both default to
+        // false (preserve), keeping the safe default when the parameter is absent.
+        $replace_plugins = isset($_POST['replace_plugins']) && $_POST['replace_plugins'] === '1';
+        $replace_themes  = isset($_POST['replace_themes'])  && $_POST['replace_themes']  === '1';
+        $options         = ['replace_plugins' => $replace_plugins, 'replace_themes' => $replace_themes];
+        $result          = UpdaterService::runStage($stage, $version, $options);
         echo json_encode($result);
         break;
 

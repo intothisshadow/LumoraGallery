@@ -9,6 +9,12 @@ declare(strict_types=1);
  * Increments album hit counter when count_album_views is enabled
  * (session-throttled to one hit per album per visit).
  *
+ * Private albums (visibility = 1) are only reachable by staff
+ * (lumora_is_admin()) — get_album() is called with $public_only = true
+ * for any other visitor, so a private album 404s exactly like a
+ * nonexistent one rather than disclosing its existence or content to
+ * someone who guesses/enumerates its numeric ID.
+ *
  * @copyright Copyright (C) 2025 Ariane
  * @license   GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
  */
@@ -29,7 +35,7 @@ if ($album_id === 0) {
     lumora_redirect(lumora_base_url());
 }
 
-$album = get_album($album_id);
+$album = get_album($album_id, !lumora_is_admin());
 if (!$album) {
     http_response_code(404);
     lumora_render_page('<div class="alert alert-warning">Album not found.</div>');

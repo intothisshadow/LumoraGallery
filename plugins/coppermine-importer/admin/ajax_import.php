@@ -203,7 +203,8 @@ try {
             $result = $importer->importImages(
                 (int) ($sess['img_last_id'] ?? 0),
                 LUMORA_CPG_IMPORTER_IMG_CHUNK,
-                $sess['album_id_map'] ?? []
+                $sess['album_id_map'] ?? [],
+                (int) ($sess['uploaded_by'] ?? 0)
             );
 
             $sess['img_last_id']         = $result['last_id'];

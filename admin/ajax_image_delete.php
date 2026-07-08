@@ -18,7 +18,7 @@ declare(strict_types=1);
 define('LUMORA_ENTRY', true);
 require_once dirname(__DIR__) . '/include/bootstrap.php';
 require_once __DIR__ . '/includes/admin_helpers.php';
-lumora_require_admin();
+lumora_require_any_permission(['manage_images', 'edit_own_images']);
 
 header('Content-Type: application/json');
 
@@ -47,12 +47,20 @@ if (count($ids) > 500) {
     $ids = array_slice($ids, 0, 500);
 }
 
+// A contributor holds 'edit_own_images' (not 'manage_images') and may only
+// delete images they uploaded themselves; each ID is re-checked below rather
+// than gating the whole request, so one unauthorised ID in a bulk selection
+// is skipped with a per-item error instead of aborting the entire call.
+$can_manage_all  = lumora_has_permission('manage_images');
+$current_user    = lumora_current_user();
+$current_user_id = (int) ($current_user['user_id'] ?? 0);
+
 $deleted = 0;
 $errors  = [];
 
 foreach ($ids as $id) {
     $image = LumoraDB::fetchOne(
-        'SELECT i.id, i.filename, i.album_id, a.folder
+        'SELECT i.id, i.filename, i.album_id, i.uploaded_by, a.folder
          FROM `{PREFIX}images` i
          JOIN `{PREFIX}albums` a ON a.id = i.album_id
          WHERE i.id = ?',
@@ -61,6 +69,11 @@ foreach ($ids as $id) {
 
     if (!$image) {
         $errors[] = "Image #$id: not found.";
+        continue;
+    }
+
+    if (!$can_manage_all && (int) $image['uploaded_by'] !== $current_user_id) {
+        $errors[] = "Image #$id ({$image['filename']}): not authorised.";
         continue;
     }
 

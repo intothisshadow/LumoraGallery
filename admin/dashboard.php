@@ -9,7 +9,7 @@ declare(strict_types=1);
 define('LUMORA_ENTRY', true);
 require_once dirname(__DIR__) . '/include/bootstrap.php';
 require_once __DIR__ . '/includes/admin_helpers.php';
-lumora_require_admin();
+lumora_require_login();
 
 $stats   = get_gallery_stats();
 $base    = h(lumora_base_url() . 'admin/');
@@ -87,31 +87,27 @@ $stat_html = <<<HTML
 </div>
 HTML;
 
-// ── Quick links ─────────────────────────────────────────────────────────────
-$ql = <<<HTML
-<div class="row g-3 mb-4">
-  <div class="col-sm-6 col-lg-3">
-    <a href="{$base}batch.php" class="btn btn-outline-primary w-100 py-3">
-      ⬆️ Batch Add Images
-    </a>
-  </div>
-  <div class="col-sm-6 col-lg-3">
-    <a href="{$base}categories.php?action=new" class="btn btn-outline-secondary w-100 py-3">
-      📁 New Category
-    </a>
-  </div>
-  <div class="col-sm-6 col-lg-3">
-    <a href="{$base}albums.php?action=new" class="btn btn-outline-secondary w-100 py-3">
-      🖼️ New Album
-    </a>
-  </div>
-  <div class="col-sm-6 col-lg-3">
-    <a href="{$base}config.php" class="btn btn-outline-secondary w-100 py-3">
-      ⚙️ Configuration
-    </a>
-  </div>
-</div>
-HTML;
+// ── Quick links (filtered to the permissions the current role holds) ────────
+$ql_buttons = [];
+if (lumora_has_permission('batch_add')) {
+    $ql_buttons[] = '<a href="' . $base . 'batch.php" class="btn btn-outline-primary w-100 py-3">⬆️ Batch Add Images</a>';
+}
+if (lumora_has_permission('manage_albums')) {
+    $ql_buttons[] = '<a href="' . $base . 'categories.php?action=new" class="btn btn-outline-secondary w-100 py-3">📁 New Category</a>';
+    $ql_buttons[] = '<a href="' . $base . 'albums.php?action=new" class="btn btn-outline-secondary w-100 py-3">🖼️ New Album</a>';
+}
+if (lumora_has_permission('site_configuration')) {
+    $ql_buttons[] = '<a href="' . $base . 'config.php" class="btn btn-outline-secondary w-100 py-3">⚙️ Configuration</a>';
+}
+
+$ql = '';
+if (!empty($ql_buttons)) {
+    $ql = '<div class="row g-3 mb-4">';
+    foreach ($ql_buttons as $btn_html) {
+        $ql .= '<div class="col-sm-6 col-lg-3">' . $btn_html . '</div>';
+    }
+    $ql .= '</div>';
+}
 
 // ── Latest images preview ────────────────────────────────────────────────────
 $latest_html = '';

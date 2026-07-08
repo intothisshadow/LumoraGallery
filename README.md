@@ -42,8 +42,10 @@ Lumora/
 │   ├── includes/               Admin-only helpers (flash messages, per-page selector, pagination controls, page renderer)
 │   ├── index.php               Admin entry point — redirects unauthenticated requests to login
 │   ├── account.php             Account management (username, email, password)
-│   ├── users.php               User management (create/edit/delete staff accounts, roles, enable/disable, password reset)
-│   ├── albums.php              Album management
+│   ├── users.php               User management (create/edit/delete staff accounts, roles, enable/disable, password reset); "Assign Albums" link for contributor rows
+│   ├── groups.php              Permission group management (view/create/rename/delete groups, grant/revoke permissions per group)
+│   ├── user_albums.php         Assign specific albums to a contributor account (checkbox picker, filterable)
+│   ├── albums.php              Album management — hierarchy/flat views for admin/moderator; scoped "assigned albums" view for contributors
 │   ├── batch.php               Batch-add images from FTP
 │   ├── ajax_batch.php          AJAX endpoint for chunked batch processing
 │   ├── ajax_image_delete.php    AJAX endpoint for bulk image deletion
@@ -71,7 +73,7 @@ Lumora/
 │   ├── login.php / logout.php
 │   └── admin.css
 ├── albums/                     Image storage — original + thumb_* thumbnails
-├── docs/                       CHANGELOG.md, HISTORY.md
+├── docs/                       CHANGELOG.md, HISTORY.md, THEME_DEVELOPMENT.md
 ├── include/                    Core PHP includes
 │   ├── services/               Static service classes (business logic layer)
 │   │   ├── LumoraConfig.php    Config cache — load(), get(), set()
@@ -85,12 +87,18 @@ Lumora/
 │   │   ├── GitHubUpdateProvider.php    GitHub Releases API provider — metadata, SHA-256, archive URL
 │   │   ├── UpdaterService.php  Update orchestrator — 10-stage workflow, lock file, backup, rollback
 │   │   ├── InstallationService.php  Installation settings detection, migration helpers, health checks, audit logging
-│   │   └── UserService.php     User CRUD, role constants, permission framework (ROLE_PERMISSIONS, roleHasPermission, currentUserHasPermission)
+│   │   ├── UserService.php     User CRUD, role constants, permission framework (delegates to GroupService)
+│   │   ├── GroupService.php    Permission groups — CRUD, permission catalog (ALL_PERMISSIONS), system-group safeguards
+│   │   └── AlbumAssignmentService.php  Per-contributor album assignments — assign/unassign/set, userCanAccessAlbum() access check, cascade cleanup
 │   ├── migrations/             Versioned PHP schema migration classes
 │   │   ├── AbstractMigration.php              Base class — up(), down(), tableExists(), columnExists(), indexExists()
 │   │   ├── Migration0001_CreateMigrationsTable.php  Self-bootstrapping first migration — creates {PREFIX}migrations table
 │   │   ├── Migration0002_CreateConfigChangesTable.php  Creates {PREFIX}config_changes audit table for installation setting changes
-│   │   └── Migration0003_UpdateUsersTableForRoles.php  Adds is_active column; updates role ENUM to admin/moderator/contributor
+│   │   ├── Migration0003_UpdateUsersTableForRoles.php  Adds is_active column; updates role ENUM to admin/moderator/contributor
+│   │   ├── Migration0004_AddColorModeToUsers.php  Adds color_mode column (auto/light/dark) to users
+│   │   ├── Migration0005_CreateAlbumAssignmentsTable.php  Creates {PREFIX}album_assignments table for contributor album access
+│   │   ├── Migration0006_AddUploadedByToImages.php  Adds uploaded_by column to images for per-image ownership enforcement
+│   │   └── Migration0007_CreateGroupsTables.php  Creates {PREFIX}groups / {PREFIX}group_permissions tables; widens users.role from ENUM to varchar
 │   ├── bootstrap.php           Load order, constants
 │   ├── db.php                  PDO singleton (LumoraDB)
 │   ├── functions.php           Utility helpers and legacy forwarding wrappers
@@ -173,14 +181,15 @@ migration straightforward — point Lumora at the same `albums/` directory and r
 - Image resolution displayed under each thumbnail
 - Hit counter for albums and images (session-throttled; image counts recorded via lightbox `change` event → `ajax_hit.php`)
 - Special views: Most Viewed, Latest, Random
+- **Light / dark / auto colour mode** — a ☀️/🌙/🖥️ toggle in the theme's navigation bar cycles Auto (follows the OS) → Dark → Light; the preference is applied before first paint (no flash of the wrong theme) and remembered in `localStorage`
 
 ### Admin panel
 - **Dashboard** — stats cards + latest images
-- **Users** — paginated staff account list (10/25/50 per page); create accounts with role selector; edit username, email, and role; reset any account's password (no current-password check); enable/disable accounts; delete accounts; guards prevent self-deletion, self-deactivation, and removal of the last active administrator; migration guard redirects to the Updates page if schema migration hasn't run yet
+- **Users** — paginated staff account list (10/25/50 per page); create accounts with role selector; edit username, email, and role; reset any account's password (no current-password check); enable/disable accounts; delete accounts; guards prevent self-deletion, self-deactivation, and removal of the last active administrator; migration guard redirects to the Updates page if schema migration hasn't run yet. **Role-based page access:** admin, moderator, and contributor accounts can all log in; each admin page and its AJAX endpoints are gated on the permission the role's group holds — moderators get Categories, Albums, Images, and Tools but not Configuration, Installation, Import, Updates, or Users; contributors get Batch Add and Images, plus Albums scoped to whichever albums they've been assigned. The sidebar navigation only shows the pages the current role can access. **Groups** — a companion page (`admin/groups.php`, gated on `user_management`) lets administrators view every permission group (the three built-in system groups plus any custom ones), create new custom groups, rename any group, grant or revoke individual permissions per group, and delete unused custom groups; system groups can't be deleted, a group with active members can't be deleted until they're reassigned, and the admin group can never lose the permissions needed to reach Users/Groups or Configuration. **Contributor album assignments:** an "Assign Albums" link next to each contributor row (and a matching card on the edit-user screen) opens a filterable checkbox picker (`admin/user_albums.php`) for granting access to specific albums — gated on `manage_albums`, so moderators can manage assignments without needing the Users page itself.
 - **Categories** — full parent/child hierarchy tree view (root categories at top; children indented with `└ ` connectors and depth steps; subcategory count indicator); create, edit, delete; nested (parent/child); re-parents children on delete; optional cover image (ID-based, falls back to first image in category's albums)
-- **Albums** — hierarchy view by default (albums grouped under their category with subcategories nested beneath their parent; uncategorized albums in a dedicated section; falls back to flat paginated table when search or category filter is active); search albums by name (case-insensitive partial match; search preserved across pagination); paginated flat list (25/50/100 per page, session-persisted; item count summary; category filter); create, edit, delete; auto-generated folder names or custom; filesystem directory creation; empty folder removed automatically on album delete
+- **Albums** — for admin/moderator: hierarchy view by default (albums grouped under their category with subcategories nested beneath their parent; uncategorized albums in a dedicated section; falls back to flat paginated table when search or category filter is active); search albums by name (case-insensitive partial match; search preserved across pagination); paginated flat list (25/50/100 per page, session-persisted; item count summary; category filter); create, edit, delete; auto-generated folder names or custom; filesystem directory creation; empty folder removed automatically on album delete. For contributors: a flat, unpaginated list of only their assigned albums, with no New Album button, no category filter, and no per-row Delete button; they can edit an assigned album's metadata and cover image but not reassign its category. The album edit screen shows an "Assigned to: …" note (visible to admin/moderator only) when the album has contributor assignments.
 - **Images** — per-album paginated image grid (24/page); search images by filename or title (scoped to an album or across all albums; cross-album results include the category › album path); edit title, sort position, and visibility; optional file replacement via multipart upload (validates type, size, image integrity; regenerates thumbnail and updates dimensions/filesize); single-image delete cleans up disk files and resets album/category cover references; bulk delete and bulk move to another album (up to 500 images per AJAX call); per-image thumbnail regeneration
-- **Batch Add** — scan `albums/{folder}/` for new images, process in 50-image AJAX chunks (handles 9000+ without timeout)
+- **Batch Add** — scan `albums/{folder}/` for new images, process in 50-image AJAX chunks (handles 9000+ without timeout); album picker scoped to assigned albums for contributors
 - **Configuration** — all settings in one form; theme selector; live image processor status; gallery behavior and upload limit controls
 - **Config export/import** — JSON backup; import excludes `base_url` to protect other installs
 - **Tools** — four maintenance operations, each scoped to all albums or a single album:
@@ -194,6 +203,15 @@ migration straightforward — point Lumora at the same `albums/` directory and r
 
 ### Themes
 Themes live in `themes/{name}/` and require only `template.html`. The active theme is selected in Admin → Configuration. Multiple themes can be installed simultaneously.
+
+Building a new theme? See [`docs/THEME_DEVELOPMENT.md`](docs/THEME_DEVELOPMENT.md) for the full theming guide, including how the built-in dark mode system works and an accessibility checklist to run through before shipping a theme.
+
+Both bundled themes (and all four custom themes) fully support dark mode via a
+shared `--lum-*`/`--fs-*` CSS custom-property layer and Bootstrap 5.3's
+`data-bs-theme` attribute. Logged-in staff additionally get their colour-mode
+preference synced to their account (`{PREFIX}users.color_mode`) so it follows
+them across devices; a **Default Colour Mode** setting in Admin →
+Configuration sets the site-wide fallback for first-time visitors.
 
 Two themes are included:
 
@@ -247,6 +265,7 @@ All settings are managed in **Admin → Configuration**. Key options:
 | `latest_albums_count` | 5 | Number of recently updated albums shown on the home page; `0` = hide section |
 | `who_is_online_duration` | 5 | Visitor window in minutes for the Who Is Online strip (1–60); `0` = disable tracking |
 | `show_powered_by` | 1 | Show a "Powered by Lumora Gallery" credit in the footer (`0` = hidden); uses `{POWERED_BY}` theme token |
+| `default_color_mode` | auto | Site-wide fallback colour mode (`auto` / `light` / `dark`) for visitors with no stored preference |
 
 Settings are stored in the `{PREFIX}config` database table and cached by the `LumoraConfig` static class per request.
 

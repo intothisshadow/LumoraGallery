@@ -195,9 +195,23 @@ try {
     }
 
 } catch (\Throwable $e) {
+    // Log full exception details server-side (never expose stack traces,
+    // class names, or filesystem paths to the client — see TODO-security.md #10).
+    error_log(sprintf(
+        'Lumora Coppermine importer (ajax_detect_config.php): %s: %s in %s:%d',
+        get_class($e),
+        $e->getMessage(),
+        $e->getFile(),
+        $e->getLine()
+    ));
+    MigrationService::logEvent(
+        LUMORA_CPG_IMPORTER_SOURCE,
+        MigrationService::LOG_ERROR,
+        'Config detection error: ' . $e->getMessage()
+    );
     cpg_detect_error(
-        get_class($e) . ': ' . $e->getMessage()
-        . ' in ' . basename($e->getFile()) . ':' . $e->getLine(),
+        'An unexpected error occurred while scanning for Coppermine installations. '
+        . 'Check the server error log for details.',
         500
     );
 }

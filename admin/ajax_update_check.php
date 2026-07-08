@@ -18,7 +18,7 @@ require_once __DIR__ . '/includes/admin_helpers.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
-if (!lumora_is_admin()) {
+if (!lumora_has_permission('view_updates')) {
     http_response_code(403);
     echo json_encode(['error' => 'Forbidden']);
     exit;

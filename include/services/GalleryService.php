@@ -234,6 +234,116 @@ class GalleryService
         );
     }
 
+    // ── Category Write Operations ───────────────────────────────────────────────
+
+    /**
+     * Create a new category.
+     *
+     * Business rules enforced here (moved out of admin/categories.php so they
+     * can be tested and reused independently of the page):
+     *   - name is required.
+     *   - thumb_image_id, if > 0, must reference an existing approved image;
+     *     otherwise it's silently reset to 0 and a warning is returned.
+     *
+     * @param array{name: string, description?: string, parent_id?: int, pos?: int,
+     *              thumb_image_id?: int} $data
+     * @return array{id: int, warning: string|null}|string
+     *         Array with the new category's ID and optional warning on
+     *         success; an error message string on failure.
+     */
+    public static function createCategory(array $data): array|string
+    {
+        $name = trim((string) ($data['name'] ?? ''));
+        if ($name === '') {
+            return 'Category name is required.';
+        }
+
+        $thumb = self::resolveThumbImageId((int) ($data['thumb_image_id'] ?? 0));
+
+        $id = (int) LumoraDB::insert('categories', [
+            'parent_id'      => (int) ($data['parent_id'] ?? 0),
+            'name'           => $name,
+            'description'    => trim((string) ($data['description'] ?? '')),
+            'pos'            => (int) ($data['pos'] ?? 0),
+            'thumb_image_id' => $thumb['id'],
+        ]);
+
+        return ['id' => $id, 'warning' => $thumb['warning']];
+    }
+
+    /**
+     * Update an existing category's editable fields.
+     *
+     * Business rules enforced here:
+     *   - name is required.
+     *   - A category may not be set as its own parent (silently forced to
+     *     root — parent_id = 0 — rather than rejected, matching the previous
+     *     inline page behavior).
+     *   - thumb_image_id validated the same way as createCategory().
+     *
+     * @param array{name: string, description?: string, parent_id?: int, pos?: int,
+     *              thumb_image_id?: int} $data
+     * @return array{warning: string|null}|string true-shaped array on
+     *         success (with an optional warning), an error message string
+     *         on failure.
+     */
+    public static function updateCategory(int $id, array $data): array|string
+    {
+        $name = trim((string) ($data['name'] ?? ''));
+        if ($name === '') {
+            return 'Category name is required.';
+        }
+
+        $parent_id = (int) ($data['parent_id'] ?? 0);
+        if ($parent_id === $id) {
+            $parent_id = 0; // A category cannot be its own parent.
+        }
+
+        $thumb = self::resolveThumbImageId((int) ($data['thumb_image_id'] ?? 0));
+
+        LumoraDB::update('categories', [
+            'name'           => $name,
+            'description'    => trim((string) ($data['description'] ?? '')),
+            'parent_id'      => $parent_id,
+            'pos'            => (int) ($data['pos'] ?? 0),
+            'thumb_image_id' => $thumb['id'],
+        ], 'id = ?', [$id]);
+
+        return ['warning' => $thumb['warning']];
+    }
+
+    /**
+     * Delete a category, reparenting its child categories and albums to the
+     * deleted category's own parent (never deleting them).
+     *
+     * Returns null (no-op) when $id doesn't match an existing category,
+     * matching the previous inline page behavior of silently doing nothing
+     * — the page never flashed a message in that case either.
+     *
+     * @return string|null A human-readable result message, or null if the
+     *                      category did not exist.
+     */
+    public static function deleteCategory(int $id): ?string
+    {
+        $cat = self::getCategory($id);
+        if (!$cat) {
+            return null;
+        }
+
+        $parent_id = (int) $cat['parent_id'];
+        LumoraDB::query(
+            'UPDATE `{PREFIX}categories` SET parent_id = ? WHERE parent_id = ?',
+            [$parent_id, $id]
+        );
+        LumoraDB::query(
+            'UPDATE `{PREFIX}albums` SET category_id = ? WHERE category_id = ?',
+            [$parent_id, $id]
+        );
+        LumoraDB::delete('categories', 'id = ?', [$id]);
+
+        return 'Category deleted. Child items moved to parent.';
+    }
+
     // ── Albums ────────────────────────────────────────────────────────────────
 
     /**
@@ -271,16 +381,27 @@ class GalleryService
 
     /**
      * Get a single album row (with image_count), or null.
+     *
+     * @param bool $public_only When true, also requires visibility = 0
+     *                          (public), returning null for a private album
+     *                          even if the ID exists. Public-facing pages
+     *                          (album.php) must pass true for any visitor
+     *                          who is not staff, since private albums are
+     *                          otherwise fully reachable by anyone who
+     *                          guesses/enumerates the numeric album ID —
+     *                          they are hidden from navigation only, not
+     *                          access-controlled by default.
      */
-    public static function getAlbum(int $id): ?array
+    public static function getAlbum(int $id, bool $public_only = false): ?array
     {
-        return LumoraDB::fetchOne(
-            'SELECT a.*,
+        $sql = 'SELECT a.*,
                  (SELECT COUNT(*) FROM `{PREFIX}images` i WHERE i.album_id = a.id AND i.approved = 1) AS image_count
              FROM `{PREFIX}albums` a
-             WHERE a.id = ?',
-            [$id]
-        );
+             WHERE a.id = ?';
+        if ($public_only) {
+            $sql .= ' AND a.visibility = 0';
+        }
+        return LumoraDB::fetchOne($sql, [$id]);
     }
 
     /** Increment album hit counter. */
@@ -409,6 +530,165 @@ class GalleryService
         );
     }
 
+    // ── Album Write Operations ──────────────────────────────────────────────────
+
+    /**
+     * Create a new album, auto-generating a zero-padded numeric folder name
+     * (e.g. "00042") when $data['folder'] is blank, and creating the backing
+     * directory under LUMORA_ALBUMS_PATH.
+     *
+     * Business rules enforced here (moved out of admin/albums.php so they can
+     * be tested and reused independently of the page):
+     *   - title is required.
+     *   - thumb_image_id, if > 0, must reference an existing approved image;
+     *     otherwise it's silently reset to 0 and a warning is returned.
+     *   - A caller-supplied folder must already be sanitized (via
+     *     lumora_sanitize_folder()) by the caller and must be unique; a blank
+     *     folder is replaced with lumora_generate_folder($id) derived from
+     *     the new album's own auto-increment ID, matching the previous
+     *     "insert with a temp folder, then rename" two-step used by the page.
+     *   - The album's folder directory is created on disk if missing; a
+     *     failure to create it is reported as a warning, not a hard error,
+     *     since the album row itself was still saved successfully.
+     *
+     * @param array{category_id?: int, folder?: string, title: string, description?: string,
+     *              visibility?: int, pos?: int, thumb_image_id?: int} $data
+     * @return array{id: int, folder: string, warning: string|null}|string
+     *         Array with the new album's ID, final folder name, and an
+     *         optional warning on success; an error message string on
+     *         failure (empty title, or a caller-supplied folder already in use).
+     */
+    public static function createAlbum(array $data): array|string
+    {
+        $title = trim((string) ($data['title'] ?? ''));
+        if ($title === '') {
+            return 'Album title is required.';
+        }
+
+        $thumb  = self::resolveThumbImageId((int) ($data['thumb_image_id'] ?? 0));
+        $folder = (string) ($data['folder'] ?? '');
+
+        $base_row = [
+            'category_id'    => (int) ($data['category_id'] ?? 0),
+            'title'          => $title,
+            'description'    => trim((string) ($data['description'] ?? '')),
+            'visibility'     => ((int) ($data['visibility'] ?? 0)) === 1 ? 1 : 0,
+            'pos'            => (int) ($data['pos'] ?? 0),
+            'thumb_image_id' => $thumb['id'],
+            'created_at'     => date('Y-m-d H:i:s'),
+        ];
+
+        if ($folder === '') {
+            $new_id = (int) LumoraDB::insert('albums', $base_row + ['folder' => '__tmp__']);
+            $folder = lumora_generate_folder($new_id);
+            LumoraDB::update('albums', ['folder' => $folder], 'id = ?', [$new_id]);
+        } else {
+            $exists = LumoraDB::fetchValue('SELECT id FROM `{PREFIX}albums` WHERE folder = ?', [$folder]);
+            if ($exists) {
+                return 'Folder name "' . $folder . '" is already in use.';
+            }
+            $new_id = (int) LumoraDB::insert('albums', $base_row + ['folder' => $folder]);
+        }
+
+        $warning = $thumb['warning'];
+        $dir     = LUMORA_ALBUMS_PATH . $folder;
+        if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
+            $dir_warning = 'Album saved but could not create directory albums/' . $folder . '/. Create it manually via FTP.';
+            $warning     = $warning !== null ? $warning . ' ' . $dir_warning : $dir_warning;
+        }
+
+        return ['id' => $new_id, 'folder' => $folder, 'warning' => $warning];
+    }
+
+    /**
+     * Update an existing album's editable fields. The folder is never
+     * changed here — renaming it after creation would break the filesystem
+     * path every stored image relies on, so the page never exposes it as
+     * editable and this method has no folder parameter at all.
+     *
+     * @param array{title: string, description?: string, visibility?: int, pos?: int,
+     *              thumb_image_id?: int, category_id?: int} $data
+     * @param bool $allow_category_change Whether category_id may be changed —
+     *             pass false for a contributor editing an assigned album
+     *             (category reassignment is a 'manage_albums'-only
+     *             capability); the existing category is left untouched when
+     *             false, even if $data['category_id'] is present.
+     * @return array{warning: string|null}|string An array with an optional
+     *         warning on success, or an error message string on failure
+     *         (empty title).
+     */
+    public static function updateAlbum(int $id, array $data, bool $allow_category_change = true): array|string
+    {
+        $title = trim((string) ($data['title'] ?? ''));
+        if ($title === '') {
+            return 'Album title is required.';
+        }
+
+        $thumb = self::resolveThumbImageId((int) ($data['thumb_image_id'] ?? 0));
+
+        $updates = [
+            'title'          => $title,
+            'description'    => trim((string) ($data['description'] ?? '')),
+            'visibility'     => ((int) ($data['visibility'] ?? 0)) === 1 ? 1 : 0,
+            'pos'            => (int) ($data['pos'] ?? 0),
+            'thumb_image_id' => $thumb['id'],
+        ];
+        if ($allow_category_change && array_key_exists('category_id', $data)) {
+            $updates['category_id'] = (int) $data['category_id'];
+        }
+
+        LumoraDB::update('albums', $updates, 'id = ?', [$id]);
+
+        return ['warning' => $thumb['warning']];
+    }
+
+    /**
+     * Delete an album: its image rows, the album row itself, any contributor
+     * album assignments (AlbumAssignmentService), and — only when the
+     * backing folder exists on disk and is empty — the folder itself. A
+     * non-empty folder's files are left on disk and the returned message
+     * says so.
+     *
+     * Matches the previous inline page behavior exactly, including running
+     * the delete queries even when $id doesn't match any row (a harmless
+     * no-op DELETE affecting 0 rows) — the page never checked for existence
+     * first either, so this method doesn't introduce a new "not found" case.
+     *
+     * @return string A human-readable result message describing what
+     *                happened to the album's on-disk folder, suitable for a
+     *                flash message.
+     */
+    public static function deleteAlbum(int $id): string
+    {
+        $album = LumoraDB::fetchOne('SELECT folder FROM `{PREFIX}albums` WHERE id = ?', [$id]);
+
+        LumoraDB::delete('images', 'album_id = ?', [$id]);
+        LumoraDB::delete('albums', 'id = ?', [$id]);
+        AlbumAssignmentService::removeAllAssignmentsForAlbum($id);
+
+        $folder_msg = ' Image files on disk were NOT removed.';
+        if ($album && $album['folder'] !== '') {
+            $dir = LUMORA_ALBUMS_PATH . $album['folder'];
+            if (is_dir($dir)) {
+                $scan     = scandir($dir);
+                $is_empty = ($scan !== false && count($scan) === 2);
+                if ($is_empty) {
+                    if (rmdir($dir)) {
+                        $folder_msg = ' Empty folder albums/' . $album['folder'] . '/ was removed.';
+                    } else {
+                        $folder_msg = ' Folder albums/' . $album['folder'] . '/ could not be removed — delete it manually via FTP.';
+                    }
+                } else {
+                    $folder_msg = ' Folder albums/' . $album['folder'] . '/ is not empty — files kept on disk.';
+                }
+            } else {
+                $folder_msg = ' No folder found on disk for albums/' . $album['folder'] . '/';
+            }
+        }
+
+        return 'Album deleted.' . $folder_msg;
+    }
+
     // ── Images ────────────────────────────────────────────────────────────────
 
     /**
@@ -488,7 +768,7 @@ class GalleryService
 
         $ids = array_column(
             LumoraDB::fetchAll(
-                "SELECT id FROM `{PREFIX}images` WHERE album_id = ? AND approved = 1 ORDER BY {$order}",
+                "SELECT id FROM `{PREFIX}images` AS i WHERE i.album_id = ? AND i.approved = 1 ORDER BY {$order}",
                 [$album_id]
             ),
             'id'
@@ -523,8 +803,12 @@ class GalleryService
      * @param int    $album_id Restrict to this album; 0 = all albums.
      * @param int    $page     1-based page number.
      * @param int    $per_page Rows per page.
-     * @return list<array{id: int, album_id: int, filename: string, title: string,
-     *                    filesize: int, width: int, height: int, hits: int,
+     * @param int    $owner_id Restrict to images uploaded by this user; 0 = no
+     *                         ownership filter. Used to scope the contributor
+     *                         role's 'edit_own_images' permission to its own
+     *                         uploads on admin/images.php.
+     * @return list<array{id: int, album_id: int, uploaded_by: int, filename: string,
+     *                    title: string, filesize: int, width: int, height: int, hits: int,
      *                    approved: int, pos: int, added_at: string,
      *                    folder: string, album_title: string, cat_name: string}>
      */
@@ -532,7 +816,8 @@ class GalleryService
         string $query,
         int    $album_id  = 0,
         int    $page      = 1,
-        int    $per_page  = 24
+        int    $per_page  = 24,
+        int    $owner_id  = 0
     ): array {
         $like   = '%' . $query . '%';
         $offset = max(0, ($page - 1) * $per_page);
@@ -542,6 +827,10 @@ class GalleryService
         if ($album_id > 0) {
             $where   .= ' AND i.album_id = ?';
             $params[] = $album_id;
+        }
+        if ($owner_id > 0) {
+            $where   .= ' AND i.uploaded_by = ?';
+            $params[] = $owner_id;
         }
         $params[] = $per_page;
         $params[] = $offset;
@@ -564,9 +853,11 @@ class GalleryService
      *
      * @param string $query    Search term; partial / multi-word; case-insensitive.
      * @param int    $album_id Restrict to this album; 0 = all albums.
+     * @param int    $owner_id Restrict to images uploaded by this user; 0 = no
+     *                         ownership filter.
      * @return int             Total matching image count.
      */
-    public static function countSearchImages(string $query, int $album_id = 0): int
+    public static function countSearchImages(string $query, int $album_id = 0, int $owner_id = 0): int
     {
         $like   = '%' . $query . '%';
         $params = [$like, $like];
@@ -576,6 +867,10 @@ class GalleryService
             $where   .= ' AND i.album_id = ?';
             $params[] = $album_id;
         }
+        if ($owner_id > 0) {
+            $where   .= ' AND i.uploaded_by = ?';
+            $params[] = $owner_id;
+        }
 
         return (int) LumoraDB::fetchValue(
             "SELECT COUNT(*)
@@ -583,6 +878,93 @@ class GalleryService
              WHERE {$where}",
             $params
         );
+    }
+
+    /**
+     * Get a paginated list of images in a single album for the admin UI
+     * (any approval status), optionally scoped to a single uploader.
+     *
+     * Counterpart to searchImages()/countSearchImages() for the plain
+     * (non-search) per-album listing on admin/images.php.
+     *
+     * @param int $album_id Album to list.
+     * @param int $page     1-based page number.
+     * @param int $per_page Rows per page.
+     * @param int $owner_id Restrict to images uploaded by this user; 0 = no
+     *                      ownership filter.
+     * @return list<array{id: int, album_id: int, uploaded_by: int, filename: string,
+     *                    title: string, filesize: int, width: int, height: int, hits: int,
+     *                    approved: int, pos: int, added_at: string, folder: string}>
+     */
+    public static function getAdminAlbumImages(int $album_id, int $page, int $per_page, int $owner_id = 0): array
+    {
+        $offset = max(0, ($page - 1) * $per_page);
+        $where  = 'i.album_id = ?';
+        $params = [$album_id];
+
+        if ($owner_id > 0) {
+            $where   .= ' AND i.uploaded_by = ?';
+            $params[] = $owner_id;
+        }
+        $params[] = $per_page;
+        $params[] = $offset;
+
+        return LumoraDB::fetchAll(
+            "SELECT i.*, a.folder
+             FROM `{PREFIX}images` i
+             JOIN `{PREFIX}albums` a ON a.id = i.album_id
+             WHERE {$where}
+             ORDER BY i.pos ASC, i.id ASC
+             LIMIT ? OFFSET ?",
+            $params
+        );
+    }
+
+    /**
+     * Count images in a single album for the admin UI (any approval status),
+     * optionally scoped to a single uploader.
+     *
+     * @param int $album_id Album to count.
+     * @param int $owner_id Restrict to images uploaded by this user; 0 = no
+     *                      ownership filter.
+     */
+    public static function countAdminAlbumImages(int $album_id, int $owner_id = 0): int
+    {
+        $where  = 'album_id = ?';
+        $params = [$album_id];
+
+        if ($owner_id > 0) {
+            $where   .= ' AND uploaded_by = ?';
+            $params[] = $owner_id;
+        }
+
+        return (int) LumoraDB::fetchValue(
+            "SELECT COUNT(*) FROM `{PREFIX}images` WHERE {$where}",
+            $params
+        );
+    }
+
+    // ── Image Ownership ───────────────────────────────────────────────────────
+
+    /**
+     * Return true when the image identified by $imageId has uploaded_by = $userId.
+     *
+     * The single source of truth for the contributor role's 'edit_own_images'
+     * permission, used by lumora_require_image_access() in auth.php and by the
+     * per-ID checks in the bulk image AJAX handlers (ajax_image_delete.php,
+     * ajax_image_move.php, ajax_image_rethumb.php). Returns false for an image
+     * with uploaded_by = 0 (no recorded owner) — such images remain accessible
+     * only to users holding 'manage_images'.
+     */
+    public static function imageBelongsToUser(int $imageId, int $userId): bool
+    {
+        if ($userId <= 0) {
+            return false;
+        }
+        return (int) LumoraDB::fetchValue(
+            'SELECT COUNT(*) FROM `{PREFIX}images` WHERE id = ? AND uploaded_by = ?',
+            [$imageId, $userId]
+        ) > 0;
     }
 
     // ── Gallery-wide image queries ────────────────────────────────────────────
@@ -733,6 +1115,37 @@ class GalleryService
             'online'       => $count,
             'record_count' => $record,
             'record_date'  => $record_date,
+        ];
+    }
+
+    // ── Private write helpers ────────────────────────────────────────────────
+
+    /**
+     * Validate a caller-supplied thumb_image_id: it must reference an
+     * existing approved image, or it's silently reset to 0 with a warning
+     * message. Shared by createAlbum()/updateAlbum()/createCategory()/
+     * updateCategory() — all four accept a thumb_image_id with identical
+     * validation rules.
+     *
+     * @return array{id: int, warning: string|null}
+     */
+    private static function resolveThumbImageId(int $thumb_image_id): array
+    {
+        if ($thumb_image_id <= 0) {
+            return ['id' => 0, 'warning' => null];
+        }
+
+        $valid = LumoraDB::fetchValue(
+            'SELECT id FROM `{PREFIX}images` WHERE id = ? AND approved = 1',
+            [$thumb_image_id]
+        );
+        if ($valid) {
+            return ['id' => $thumb_image_id, 'warning' => null];
+        }
+
+        return [
+            'id'      => 0,
+            'warning' => 'Cover image ID ' . $thumb_image_id . ' does not exist or is not approved. Cover cleared.',
         ];
     }
 }

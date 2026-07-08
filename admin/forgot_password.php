@@ -13,6 +13,14 @@ declare(strict_types=1);
  * Requires the {PREFIX}password_reset_tokens table (DB version 7).
  * If the table is absent a clear error is shown instead of crashing.
  *
+ * Recovery target: the account looked up is the oldest user belonging to
+ * any group that holds both 'user_management' and 'site_configuration'
+ * (see GroupService) — not literally `role = 'admin'`. Groups are dynamic
+ * as of Migration0007, so an administrator's account may have been moved
+ * to a custom group with equivalent permissions; matching by permission
+ * rather than by the fixed 'admin' slug keeps recovery working in that
+ * case. See TODO-security.md #5.
+ *
  * @copyright Copyright (C) 2025 Ariane
  * @license   GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
  */
@@ -20,7 +28,7 @@ define('LUMORA_ENTRY', true);
 require_once dirname(__DIR__) . '/include/bootstrap.php';
 
 // Already logged in → go to dashboard.
-if (lumora_is_admin()) {
+if (lumora_is_logged_in()) {
     lumora_redirect(lumora_base_url() . 'admin/dashboard.php');
 }
 
@@ -31,11 +39,28 @@ $csrf    = lumora_csrf_token();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     lumora_csrf_validate();
 
-    // Find the admin user (single-admin; no username input needed).
-    $user = LumoraDB::fetchOne(
-        'SELECT id, username, email FROM `{PREFIX}users` WHERE role = ? LIMIT 1',
-        ['admin']
-    );
+    // Find the account to recover: the oldest user in any group holding both
+    // 'user_management' and 'site_configuration' — i.e. an account that can
+    // actually reach Users/Groups and Configuration once logged back in,
+    // regardless of whether it uses the built-in 'admin' slug or a custom
+    // group with equivalent permissions.
+    $recovery_roles = [];
+    foreach (GroupService::getAllGroups() as $g) {
+        if (in_array('user_management', $g['permissions'], true)
+            && in_array('site_configuration', $g['permissions'], true)
+        ) {
+            $recovery_roles[] = $g['slug'];
+        }
+    }
+
+    $user = null;
+    if (!empty($recovery_roles)) {
+        $ph = implode(',', array_fill(0, count($recovery_roles), '?'));
+        $user = LumoraDB::fetchOne(
+            "SELECT id, username, email FROM `{PREFIX}users` WHERE role IN ({$ph}) ORDER BY id ASC LIMIT 1",
+            $recovery_roles
+        );
+    }
 
     if ($user) {
         try {

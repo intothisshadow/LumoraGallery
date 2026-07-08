@@ -18,6 +18,8 @@
 
 /* ── Customisation variables ──────────────────────────────── */
 :root {
+  color-scheme: light dark;
+
   /* Primary accent — the signature colour of your fansite */
   --fs-accent:             #4a1f6e;
   --fs-accent-light:       #6d3a9e;
@@ -57,6 +59,41 @@
   /* Thumbnail grid (consumed by lum-thumbgrid) */
   --lum-thumb-min:         150px;
   --lum-gap:               .5rem;
+
+  /* Content-area text tokens (light defaults) */
+  --fs-text:               #222222;
+  --fs-muted:              #6c757d;
+  --fs-head-text:          #333333;
+  --fs-thumb-cap-bg:       #f7f5fc;
+  --fs-sort-bg:            var(--fs-panel-bg);
+  --fs-card-tint-blue:     #ede8f5;
+  --fs-card-tint-neutral:  var(--fs-body-bg);
+  --fs-card-tint-warm:     #f5f0e8;
+  --fs-catlist-even:       #f7f5fc;
+  --fs-catlist-hover:      #ede8f5;
+}
+
+/* ── Dark mode overrides ──────────────────────────────────── */
+/* The outer page shell (--fs-page-bg, nav, footer) is already */
+/* dark-coloured, so only the inner content area changes.       */
+html[data-bs-theme="dark"] {
+  color-scheme: dark;
+
+  --fs-body-bg:            #1e1e2e;
+  --fs-panel-bg:           #252535;
+  --fs-panel-border:       #3e3a58;
+  --fs-text:               #dde0f0;
+  --fs-muted:              #8890ab;
+  --fs-head-text:          #b8bcd8;
+  --fs-thumb-cap-bg:       #1e1e2e;
+  --fs-sort-bg:            #252535;
+  --fs-card-tint-blue:     #1e1a35;
+  --fs-card-tint-neutral:  #222230;
+  --fs-card-tint-warm:     #222018;
+  --fs-catlist-even:       #222230;
+  --fs-catlist-hover:      #1e1a35;
+  /* Slightly darker outer frame in dark mode */
+  --fs-page-bg:            #12121a;
 }
 
 /* ── Reset / base ─────────────────────────────────────────── */
@@ -64,12 +101,16 @@
 *::before,
 *::after { box-sizing: border-box; }
 
+/* ============================================================
+   Layout
+   ============================================================ */
+
 /* ── Page shell ───────────────────────────────────────────── */
 .fs-body {
   background: var(--fs-page-bg);
   min-height: 100vh;
   font-family: var(--fs-font-family);
-  color: #222;
+  color: var(--fs-text);
   margin: 0;
   padding: 0;
 }
@@ -93,8 +134,6 @@
   overflow: hidden;
 }
 
-/* Holds the optional {CUSTOM_HEADER} image — positioned absolute so it */
-/* fills the banner behind the title text.                                */
 .fs-banner-bg {
   position: absolute;
   inset: 0;
@@ -102,7 +141,6 @@
   line-height: 0;
 }
 
-/* If the custom header is a bare <img>, make it cover the banner area. */
 .fs-banner-bg img {
   width: 100%;
   height: 100%;
@@ -111,7 +149,6 @@
   display: block;
 }
 
-/* Title text sits above the bg image with a scrim for legibility. */
 .fs-banner-text {
   position: relative;
   z-index: 1;
@@ -139,7 +176,6 @@
   text-shadow: 0 1px 5px rgba(0,0,0,.5);
 }
 
-/* Suppress the empty <p> when no description is configured. */
 .fs-banner-desc:empty { display: none; }
 
 /* ── Navigation ───────────────────────────────────────────── */
@@ -151,7 +187,6 @@
   z-index: 100;
 }
 
-/* Scrolls horizontally on narrow viewports rather than wrapping. */
 .fs-nav-inner {
   display: flex;
   align-items: stretch;
@@ -184,16 +219,15 @@
   color: var(--fs-nav-link-hover);
 }
 
-/* Admin link is pushed to the far right of the nav bar. */
 .fs-nav-admin {
   margin-left: auto;
   display: flex;
   align-items: center;
+  gap: .4rem;
   padding: 0 .6rem;
   flex-shrink: 0;
 }
 
-/* Admin link rendered by lumora_render_page() */
 .lum-admin-link {
   color: rgba(255,255,255,.6) !important;
   font-size: .78rem;
@@ -207,6 +241,25 @@
 
 .lum-admin-link:hover {
   color: #fff !important;
+  border-color: rgba(255,255,255,.55);
+}
+
+/* ── Colour-mode toggle (in nav) ──────────────────────────── */
+.lum-color-toggle {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: var(--fs-radius);
+  color: rgba(255,255,255,.6);
+  cursor: pointer;
+  font-size: .78rem;
+  padding: .25rem .5rem;
+  line-height: 1.4;
+  transition: color .15s, border-color .15s;
+  flex-shrink: 0;
+}
+
+.lum-color-toggle:hover {
+  color: #fff;
   border-color: rgba(255,255,255,.55);
 }
 
@@ -236,11 +289,50 @@
   text-decoration: underline;
 }
 
-/* ═══════════════════════════════════════════════════════════
+/* ============================================================
+   Typography
+   ============================================================ */
+.fs-main { color: var(--fs-text); }
+
+.fs-main h1, .fs-main h2, .fs-main h3,
+.fs-main h4, .fs-main h5, .fs-main h6 {
+  color: var(--fs-head-text);
+}
+
+.fs-main a { color: var(--fs-accent); }
+.fs-main a:hover, .fs-main a:focus { color: var(--fs-accent-light); }
+
+.fs-main ul, .fs-main ol { color: var(--fs-text); }
+
+.fs-main blockquote {
+  border-left: 3px solid var(--fs-accent);
+  padding: .5rem 1rem;
+  margin: 1rem 0;
+  color: var(--fs-muted);
+  font-style: italic;
+}
+
+.fs-main code, .fs-main kbd, .fs-main samp {
+  background: var(--fs-card-tint-neutral);
+  color: var(--fs-text);
+  border-radius: .25rem;
+  padding: .1rem .3rem;
+}
+
+.fs-main pre {
+  background: var(--fs-card-tint-neutral);
+  color: var(--fs-text);
+  border-radius: var(--fs-radius);
+  padding: .75rem 1rem;
+  overflow-x: auto;
+}
+
+.fs-main small,
+.fs-main .text-muted { color: var(--fs-muted) !important; }
+
+/* ============================================================
    Gallery component styles
-   All lum-* classes referenced in include/template.php are
-   defined below, restyled to match the classic-fansite look.
-   ═══════════════════════════════════════════════════════════ */
+   ============================================================ */
 
 /* ── Section headings ─────────────────────────────────────── */
 .lum-section-title {
@@ -277,7 +369,7 @@
   font-size: .7rem;
   text-transform: uppercase;
   letter-spacing: .07em;
-  color: #6c757d;
+  color: var(--fs-muted);
   margin-top: .18rem;
 }
 
@@ -315,19 +407,16 @@
   justify-content: center;
   width: 100%;
   height: 110px;
-  background: #ede8f5;
+  background: var(--fs-card-tint-blue);
   color: var(--fs-accent-light);
 }
 
-/* Card description — show full text, no line-clamp */
 .lum-card-desc {
   font-size: .82rem;
   margin-top: .35rem;
 }
 
-/* ── Card info rows (album / category meta) ───────────────── */
-/* Replaces the old <small class="text-muted"> inline string.  */
-/* Each stat gets its own centred, tinted row.                  */
+/* ── Card info rows ───────────────────────────────────────── */
 .lum-card-meta { margin-top: .3rem; }
 
 .lum-card-meta span {
@@ -335,20 +424,17 @@
   text-align:  center;
   padding:     .2rem .4rem;
   font-size:   .72rem;
-  color:       #444;
+  color:       var(--fs-head-text);
   line-height: 1.3;
 }
 
-/* Image / sub-category count — light accent tint */
 .lum-card-images,
-.lum-card-subcats { background: #ede8f5; }
+.lum-card-subcats { background: var(--fs-card-tint-blue); }
 
-/* Views / album count — body-background tint */
 .lum-card-views,
-.lum-card-albums  { background: var(--fs-body-bg); }
+.lum-card-albums  { background: var(--fs-card-tint-neutral); }
 
-/* Added date — warm cream tint, distinct from the two tints above */
-.lum-card-date { background: #f5f0e8; }
+.lum-card-date    { background: var(--fs-card-tint-warm); }
 
 /* ── Thumbnail grid ───────────────────────────────────────── */
 .lum-thumbgrid {
@@ -394,8 +480,8 @@
   align-items: center;
   padding: .28rem .45rem;
   font-size: .7rem;
-  color: #6c757d;
-  background: #f7f5fc;
+  color: var(--fs-muted);
+  background: var(--fs-thumb-cap-bg);
   border-top: 1px solid var(--fs-panel-border);
   line-height: 1.2;
   gap: .2rem;
@@ -413,11 +499,10 @@
   font-size: .62rem;
 }
 
-/* Added date — own full-width row beneath resolution/views, centred. */
 .lum-thumb-date {
   flex: 1 0 100%;
   text-align: center;
-  color: #6c757d;
+  color: var(--fs-muted);
 }
 
 .lum-thumb-date::before {
@@ -427,7 +512,7 @@
 
 /* ── Sort bar ─────────────────────────────────────────────── */
 .lum-sort-bar {
-  background: var(--fs-panel-bg);
+  background: var(--fs-sort-bg);
   border: 1px solid var(--fs-panel-border);
   border-radius: var(--fs-radius);
   padding: .45rem .7rem;
@@ -465,19 +550,50 @@
 
 /* ── Primary button (Bootstrap colour override) ───────────── */
 .btn-outline-primary {
-  --bs-btn-color:              var(--fs-accent);
-  --bs-btn-border-color:       var(--fs-accent);
-  --bs-btn-hover-color:        #fff;
-  --bs-btn-hover-bg:           var(--fs-accent);
-  --bs-btn-hover-border-color: var(--fs-accent);
-  --bs-btn-active-color:       #fff;
-  --bs-btn-active-bg:          var(--fs-accent);
+  --bs-btn-color:               var(--fs-accent);
+  --bs-btn-border-color:        var(--fs-accent);
+  --bs-btn-hover-color:         #fff;
+  --bs-btn-hover-bg:            var(--fs-accent);
+  --bs-btn-hover-border-color:  var(--fs-accent);
+  --bs-btn-active-color:        #fff;
+  --bs-btn-active-bg:           var(--fs-accent);
   --bs-btn-active-border-color: var(--fs-accent);
+}
+
+.btn-primary {
+  --bs-btn-bg:                  var(--fs-accent);
+  --bs-btn-border-color:        var(--fs-accent);
+  --bs-btn-hover-bg:            var(--fs-accent-light);
+  --bs-btn-hover-border-color:  var(--fs-accent-light);
+  --bs-btn-active-bg:           var(--fs-accent-light);
+  --bs-btn-active-border-color: var(--fs-accent-light);
+}
+
+.fs-main .btn:disabled,
+.fs-main .btn.disabled { opacity: .55; cursor: not-allowed; }
+
+.lum-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 1px solid var(--fs-panel-border);
+  background: var(--fs-panel-bg);
+  color: var(--fs-text);
+  transition: background .15s, color .15s, border-color .15s;
+}
+
+.lum-icon-btn:hover {
+  background: var(--fs-accent);
+  border-color: var(--fs-accent);
+  color: #fff;
 }
 
 /* ── Album description ────────────────────────────────────── */
 .lum-album-desc {
-  color: #444;
+  color: var(--fs-text);
   background: var(--fs-panel-bg);
   border-left: 3px solid var(--fs-accent);
   border-radius: 0 var(--fs-radius) var(--fs-radius) 0;
@@ -489,7 +605,7 @@
 
 /* ── Category description ─────────────────────────────────── */
 .lum-cat-desc {
-  color: #444;
+  color: var(--fs-text);
   background: var(--fs-panel-bg);
   border-left: 3px solid var(--fs-accent);
   border-radius: 0 var(--fs-radius) var(--fs-radius) 0;
@@ -502,7 +618,7 @@
 /* ── Who Is Online strip ──────────────────────────────────── */
 .lum-who-is-online {
   font-size: .82rem;
-  color: #6c757d;
+  color: var(--fs-muted);
   text-align: center;
   margin-top: 1rem;
   margin-bottom: .5rem;
@@ -519,8 +635,6 @@
 }
 
 /* ── Category list (row layout) ───────────────────────────── */
-/* Structure (grid columns, padding) is inherited from lumora.css defaults.    */
-/* Only fansite-specific colour and radius overrides are needed here.           */
 .lum-catlist {
   border: 1px solid var(--fs-panel-border);
   border-radius: var(--fs-radius);
@@ -558,8 +672,8 @@
   transition: background .15s;
 }
 
-.lum-catlist-row:nth-child(even) { background: #f7f5fc; }
-.lum-catlist-row:hover            { background: #ede8f5; }
+.lum-catlist-row:nth-child(even) { background: var(--fs-catlist-even); }
+.lum-catlist-row:hover            { background: var(--fs-catlist-hover); }
 
 .lum-catlist-col-thumb {
   padding: .5rem;
@@ -579,7 +693,7 @@
   width: 120px;
   height: 150px;
   border-radius: var(--fs-radius);
-  background: #ede8f5;
+  background: var(--fs-card-tint-blue);
   color: var(--fs-accent-light);
   display: flex;
   align-items: center;
@@ -603,7 +717,7 @@
 
 .lum-catlist-desc {
   font-size: .85rem;
-  color: #6c757d;
+  color: var(--fs-muted);
   line-height: 1.4;
 }
 
@@ -616,6 +730,138 @@
   padding: .75rem .5rem;
 }
 
+/* ============================================================
+   Forms (search boxes, future public-facing forms)
+   ============================================================ */
+.fs-main .form-control,
+.fs-main .form-select {
+  background-color: var(--fs-panel-bg);
+  border-color: var(--fs-panel-border);
+  color: var(--fs-text);
+}
+
+.fs-main .form-control:focus,
+.fs-main .form-select:focus {
+  background-color: var(--fs-panel-bg);
+  color: var(--fs-text);
+  border-color: var(--fs-accent);
+  box-shadow: 0 0 0 .2rem rgba(74,31,110,.18);
+}
+
+.fs-main .form-label { color: var(--fs-head-text); font-weight: 600; }
+
+.fs-main .form-check-input:checked {
+  background-color: var(--fs-accent);
+  border-color: var(--fs-accent);
+}
+
+.fs-main .form-text { color: var(--fs-muted); }
+
+.fs-main .is-invalid,
+.fs-main .form-control.is-invalid { border-color: #dc3545; }
+.fs-main .invalid-feedback { color: #dc3545; }
+
+.fs-main .is-valid,
+.fs-main .form-control.is-valid { border-color: #198754; }
+.fs-main .valid-feedback { color: #198754; }
+
+/* ============================================================
+   Tables (search results, future data views)
+   ============================================================ */
+.fs-main .table {
+  color: var(--fs-text);
+  border-color: var(--fs-panel-border);
+}
+
+.fs-main .table > thead {
+  color: var(--fs-accent-text);
+  background: var(--fs-accent);
+}
+
+.fs-main .table-striped > tbody > tr:nth-of-type(odd) > * {
+  background: var(--fs-catlist-even);
+  color: var(--fs-text);
+}
+
+.fs-main .table-hover > tbody > tr:hover > * {
+  background: var(--fs-catlist-hover);
+}
+
+.fs-main .table-responsive {
+  border-radius: var(--fs-radius);
+  overflow: hidden;
+  border: 1px solid var(--fs-panel-border);
+}
+
+/* ============================================================
+   Messages / alerts
+   ============================================================ */
+.fs-main .alert { border-radius: var(--fs-radius); }
+
+/* ============================================================
+   Utility components
+   ============================================================ */
+.lum-panel {
+  background: var(--fs-panel-bg);
+  border: 1px solid var(--fs-panel-border);
+  border-radius: var(--fs-radius);
+  padding: 1rem;
+}
+
+.lum-divider {
+  border: none;
+  border-top: 1px solid var(--fs-panel-border);
+  margin: 1.5rem 0;
+}
+
+.fs-main .badge { border-radius: var(--fs-radius); font-weight: 600; }
+
+/* ============================================================
+   Media — hover overlays
+   ============================================================ */
+.lum-hover-overlay { position: relative; }
+
+.lum-hover-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0);
+  transition: background .2s ease;
+  pointer-events: none;
+}
+
+.lum-hover-overlay:hover::after { background: rgba(0,0,0,.18); }
+
+/* ============================================================
+   Loading indicator
+   ============================================================ */
+.lum-spinner {
+  display: inline-block;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: .2rem solid var(--fs-panel-border);
+  border-top-color: var(--fs-accent);
+  border-radius: 50%;
+  animation: lum-spin .7s linear infinite;
+}
+
+@keyframes lum-spin { to { transform: rotate(360deg); } }
+
+/* ============================================================
+   Print styles
+   ============================================================ */
+@media print {
+  .fs-nav, .fs-footer, .fs-banner, .lum-sort-bar,
+  .lum-pagination, .lum-admin-link, .lum-color-toggle {
+    display: none !important;
+  }
+  .fs-page { box-shadow: none; max-width: 100%; }
+  .fs-main { padding: 0 !important; }
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
 @media (max-width: 575px) {
   .lum-catlist-header,
   .lum-catlist-row {
@@ -640,21 +886,14 @@
     padding: .5rem .25rem;
   }
 
-  /*
-   * Header labels ("ALBUMS" / "IMAGES") inherit the full-width .75rem
-   * font-size + .75rem horizontal padding + .05em letter-spacing from
-   * .lum-catlist-header-cell, which doesn't fit in a 56px column and
-   * overflows past the card/viewport edge. Shrink to match the row cells.
-   */
   .lum-catlist-header-cell--albums,
   .lum-catlist-header-cell--images {
     font-size:      .6rem;
-    padding:         .5rem .15rem;
-    letter-spacing:  0;
+    padding:        .5rem .15rem;
+    letter-spacing: 0;
   }
 }
 
-/* ── Responsive ───────────────────────────────────────────── */
 @media (max-width: 575px) {
   :root {
     --lum-thumb-min:         120px;
@@ -665,13 +904,6 @@
 
   .fs-main { padding: 1rem .875rem; }
 
-  /*
-   * Sort bar: Bootstrap's .btn-group is a single non-wrapping flex item,
-   * so on narrow phones the sort buttons overflow past the viewport edge
-   * instead of wrapping. Force the group to wrap and undo the joined-
-   * button negative margins / squared-off corners that only make sense
-   * in a single unbroken row.
-   */
   .lum-sort-bar { padding: .4rem .55rem; }
 
   .lum-sort-bar .btn-group {

@@ -24,7 +24,7 @@ declare(strict_types=1);
 define('LUMORA_ENTRY', true);
 require_once dirname(__DIR__) . '/include/bootstrap.php';
 require_once __DIR__ . '/includes/admin_helpers.php';
-lumora_require_admin();
+lumora_require_permission('site_configuration');
 
 $self    = lumora_base_url() . 'admin/installation.php';
 $self_h  = h($self);

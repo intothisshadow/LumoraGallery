@@ -19,6 +19,15 @@ class LumoraDB
     private static ?PDO    $pdo    = null;
     private static string  $prefix = '';
 
+    /**
+     * Current transaction nesting depth. 0 = no active transaction.
+     * Used by beginTransaction()/commit()/rollBack() below to make nested
+     * calls safe via SAVEPOINTs instead of throwing, since PDO itself (as of
+     * PHP 8.0) throws a PDOException on a second beginTransaction() call
+     * rather than silently nesting.
+     */
+    private static int $txDepth = 0;
+
     // ── Connection ────────────────────────────────────────────────────────────
 
     public static function connect(
@@ -146,8 +155,56 @@ class LumoraDB
     }
 
     // ── Transactions ──────────────────────────────────────────────────────────
+    //
+    // Nesting-safe via SAVEPOINTs (InnoDB supports these). A service method
+    // that opens its own transaction (e.g. GroupService::createGroup()) can
+    // therefore be called safely from within an already-open transaction —
+    // by another service method, or by a test harness wrapping each test in
+    // an outer transaction for rollback-based isolation — without PDO's
+    // "There is already an active transaction" exception. Only the outermost
+    // beginTransaction()/commit()/rollBack() pair touches the real PDO
+    // transaction; inner calls use named SAVEPOINTs instead.
 
-    public static function beginTransaction(): void  { self::pdo()->beginTransaction(); }
-    public static function commit(): void            { self::pdo()->commit(); }
-    public static function rollBack(): void          { self::pdo()->rollBack(); }
+    public static function beginTransaction(): void
+    {
+        if (self::$txDepth === 0) {
+            self::pdo()->beginTransaction();
+        } else {
+            self::pdo()->exec('SAVEPOINT lumora_sp_' . self::$txDepth);
+        }
+        self::$txDepth++;
+    }
+
+    public static function commit(): void
+    {
+        self::$txDepth = max(0, self::$txDepth - 1);
+        if (self::$txDepth === 0) {
+            // A DDL statement (CREATE/ALTER/DROP TABLE) issued anywhere inside
+            // this transaction causes MySQL/MariaDB to implicitly commit —
+            // silently, from PDO's perspective, since the server does this
+            // without PDO being asked to. inTransaction() reflects the real
+            // server-side state though, so guard here rather than letting
+            // commit() throw "There is no active transaction" when that's
+            // happened (e.g. SchemaService/migration-replaying tests).
+            if (self::pdo()->inTransaction()) {
+                self::pdo()->commit();
+            }
+        } else {
+            self::pdo()->exec('RELEASE SAVEPOINT lumora_sp_' . self::$txDepth);
+        }
+    }
+
+    public static function rollBack(): void
+    {
+        self::$txDepth = max(0, self::$txDepth - 1);
+        if (self::$txDepth === 0) {
+            // See the comment in commit() above — same implicit-commit-from-DDL
+            // scenario applies here.
+            if (self::pdo()->inTransaction()) {
+                self::pdo()->rollBack();
+            }
+        } else {
+            self::pdo()->exec('ROLLBACK TO SAVEPOINT lumora_sp_' . self::$txDepth);
+        }
+    }
 }

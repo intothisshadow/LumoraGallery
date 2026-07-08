@@ -24,7 +24,7 @@ declare(strict_types=1);
 define('LUMORA_ENTRY', true);
 require_once dirname(__DIR__) . '/include/bootstrap.php';
 require_once __DIR__ . '/includes/admin_helpers.php';
-lumora_require_admin();
+lumora_require_permission('user_management');
 
 $current_user    = lumora_current_user();
 $current_user_id = (int) ($current_user['user_id'] ?? 0);
@@ -347,6 +347,20 @@ if ($view_action === 'edit' && $edit_id > 0) {
     }
     $act_attr = $is_self ? ' disabled' : '';
 
+    // Accounts whose group holds 'manage_assigned_albums' (the built-in
+    // contributor group, or any custom group with that permission) get an
+    // extra quick-link card to manage their album access.
+    $albums_card = '';
+    if (UserService::roleHasPermission((string) $u['role'], 'manage_assigned_albums')) {
+        $ua_url_h = h(lumora_base_url() . 'admin/user_albums.php?user=' . $u_id);
+        $assigned_count = AlbumAssignmentService::countAssignedAlbums($u_id);
+        $albums_card = '<div class="lum-adm-card mb-4">'
+            . '<h5 class="mb-1">Album Access</h5>'
+            . '<p class="text-muted small mb-3">Currently assigned to <strong>' . $assigned_count . '</strong> album' . ($assigned_count === 1 ? '' : 's') . '.</p>'
+            . '<a href="' . $ua_url_h . '" class="btn btn-outline-primary btn-sm">Manage Assigned Albums</a>'
+            . '</div>';
+    }
+
     $content = <<<HTML
 <div class="mb-3">
   <a href="{$base_h}" class="btn btn-sm btn-outline-secondary">← Back to Users</a>
@@ -408,6 +422,8 @@ if ($view_action === 'edit' && $edit_id > 0) {
 
   <!-- ── Password + Actions ────────────────────────────────────────── -->
   <div class="col-lg-6">
+
+    {$albums_card}
 
     <div class="lum-adm-card mb-4">
       <h5 class="mb-1">Reset Password</h5>
@@ -524,6 +540,17 @@ foreach ($users as $u) {
     $is_self  = ($uid === $current_user_id);
     $edit_url = h($base . '?action=edit&id=' . $uid);
 
+    // Album assignment count and quick-link — shown for any account whose
+    // group holds 'manage_assigned_albums' (built-in contributor group, or
+    // a custom group with that permission).
+    $albums_btn = '';
+    if (UserService::roleHasPermission((string) $u['role'], 'manage_assigned_albums')) {
+        $assigned_count = AlbumAssignmentService::countAssignedAlbums($uid);
+        $role_b .= ' <span class="text-muted small">(' . $assigned_count . ' album' . ($assigned_count === 1 ? '' : 's') . ')</span>';
+        $albums_url  = h(lumora_base_url() . 'admin/user_albums.php?user=' . $uid);
+        $albums_btn  = '<a href="' . $albums_url . '" class="btn btn-sm btn-outline-secondary">Albums</a>';
+    }
+
     $status_b = $is_act
         ? '<span class="badge bg-success">Active</span>'
         : '<span class="badge bg-secondary">Disabled</span>';
@@ -572,7 +599,7 @@ foreach ($users as $u) {
            . '<td class="align-middle">'
            .   '<div class="d-flex gap-1 flex-wrap">'
            .   '<a href="' . $edit_url . '" class="btn btn-sm btn-outline-primary">Edit</a>'
-           .   $tog . $del
+           .   $albums_btn . $tog . $del
            .   '</div>'
            . '</td>'
            . '</tr>';

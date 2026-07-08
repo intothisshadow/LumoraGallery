@@ -12,7 +12,7 @@ declare(strict_types=1);
 define('LUMORA_ENTRY', true);
 require_once dirname(__DIR__) . '/include/bootstrap.php';
 require_once __DIR__ . '/includes/admin_helpers.php';
-lumora_require_admin();
+lumora_require_permission('site_configuration');
 
 $base   = lumora_base_url() . 'admin/config.php';
 $csrf   = h(lumora_csrf_token());
@@ -51,37 +51,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'who_is_online_duration',
             'show_powered_by',
             'category_layout',
+            'default_color_mode',
         ];
 
         // Boolean checkbox keys: always save even when not present in POST
-        // (unchecked checkbox sends nothing; hidden input handles the default).
+        // (unchecked checkbox sends nothing; treated as '0' by sanitizeValue()).
         $bool_keys = ['count_album_views', 'gallery_offline', 'show_powered_by'];
 
+        // Every value is normalised through LumoraConfig::sanitizeValue() so the
+        // same enum/range constraints apply here and in the `import` action below
+        // — see TODO-security.md #11.
         foreach ($allowed as $key) {
             if (in_array($key, $bool_keys, true)) {
-                // Hidden input guarantees the key is always present ('0' or '1').
-                $val = (isset($_POST[$key]) && $_POST[$key] === '1') ? '1' : '0';
-                lumora_set_config($key, $val);
+                lumora_set_config($key, LumoraConfig::sanitizeValue($key, $_POST[$key] ?? '0'));
             } elseif (isset($_POST[$key])) {
-                $val = match($key) {
-                    'thumb_width', 'thumb_height'           => (string) max(1, (int) $_POST[$key]),
-                    'per_page'                              => (string) max(1, (int) $_POST[$key]),
-                    'base_url'                              => rtrim(trim($_POST[$key]), '/') . '/',
-                    'thumb_quality'                         => (string) max(1, min(100, (int) $_POST[$key])),
-                    'max_upload_size_mb',
-                    'max_image_width',
-                    'max_image_height'                      => (string) max(0, (int) $_POST[$key]),
-                    'latest_albums_count'                   => (string) max(0, min(50, (int) $_POST[$key])),
-                    'who_is_online_duration'                 => (string) max(1, min(60, (int) $_POST[$key])),
-                    'log_mode'                              => in_array($_POST[$key], ['off', 'errors', 'all'], true)
-                                                                ? $_POST[$key] : 'off',
-                    'timezone'                              => in_array(trim($_POST[$key]), \DateTimeZone::listIdentifiers(), true)
-                                                                ? trim($_POST[$key]) : 'UTC',
-                    'category_layout'                       => in_array($_POST[$key], ['grid', 'list'], true)
-                                                                ? $_POST[$key] : 'grid',
-                    default                                 => trim($_POST[$key]),
-                };
-                lumora_set_config($key, $val);
+                lumora_set_config($key, LumoraConfig::sanitizeValue($key, $_POST[$key]));
             }
         }
         lum_flash('Settings saved.');
@@ -113,11 +97,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'latest_albums_count', 'who_is_online_duration',
             'show_powered_by',
             'category_layout',
+            'default_color_mode',
         ];
         $imported = 0;
         foreach ($data['lumora_config'] as $k => $v) {
             if (in_array($k, $safe_keys, true)) {
-                lumora_set_config($k, (string)$v);
+                // Same per-key enum/range validation as the `save` action above —
+                // an imported JSON file can no longer store an out-of-range or
+                // unrecognised value just because it passed the key-name
+                // whitelist check. See TODO-security.md #11.
+                lumora_set_config($k, LumoraConfig::sanitizeValue($k, $v));
                 $imported++;
             }
         }
@@ -151,18 +140,17 @@ $cfg = [
     'who_is_online_duration' => lumora_config('who_is_online_duration', '5'),
     'show_powered_by'        => lumora_config('show_powered_by',        '1'),
     'category_layout'        => lumora_config('category_layout',        'grid'),
+    'default_color_mode'     => lumora_config('default_color_mode',     'auto'),
 ];
 
-// Detect active image processor (no config needed — auto-detected at runtime).
+// Detect active image processor.
 $processor_status = extension_loaded('imagick')
     ? '✓ Imagick PHP extension (active, preferred)'
     : (extension_loaded('gd')
         ? '⚠ GD library (fallback — install the PHP imagick extension for better quality)'
         : '✗ None found — thumbnail generation disabled');
 
-// Theme metadata (Theme Name / Author / Design URI), read from each theme's
-// primary stylesheet CSS header comment via lumora_get_theme_meta(). Falls
-// back to the folder name when a theme has no metadata header.
+// Theme metadata.
 $themes = lumora_list_themes();
 $theme_meta = [];
 foreach ($themes as $t) {
@@ -178,7 +166,6 @@ if (empty($themes)) {
     $theme_opts = '<option value="default" selected>default (no themes found)</option>';
 }
 
-// Reference table of installed themes shown beneath the selector.
 $theme_rows = '';
 foreach ($themes as $t) {
     $m        = $theme_meta[$t];
@@ -221,6 +208,9 @@ $chk_offline      = $cfg['gallery_offline']   === '1' ? ' checked' : '';
 $chk_powered_by   = $cfg['show_powered_by']   === '1' ? ' checked' : '';
 $sel_cat_grid     = $cfg['category_layout']   === 'grid' ? ' selected' : '';
 $sel_cat_list     = $cfg['category_layout']   === 'list' ? ' selected' : '';
+$sel_cm_auto      = $cfg['default_color_mode'] === 'auto'  ? ' selected' : '';
+$sel_cm_light     = $cfg['default_color_mode'] === 'light' ? ' selected' : '';
+$sel_cm_dark      = $cfg['default_color_mode'] === 'dark'  ? ' selected' : '';
 $v_latest_albums  = h($cfg['latest_albums_count']);
 $v_who_online_dur = h($cfg['who_is_online_duration']);
 
@@ -258,8 +248,30 @@ $content = <<<HTML
     <div class="mb-3">
       <label class="form-label fw-semibold">Active Theme</label>
       <select name="theme" class="form-select" style="max-width:220px">{$theme_opts}</select>
-      <div class="form-text">Themes are folders inside <code>themes/</code> that contain a <code>template.html</code>. Display name, author, and design URI are read from a <code>Theme Name</code> / <code>Author</code> / <code>Design URI</code> CSS header comment at the top of each theme's primary stylesheet (the first theme-relative stylesheet linked in <code>template.html</code>); a theme with no such header falls back to its folder name.</div>
+      <div class="form-text">Themes are folders inside <code>themes/</code> that contain a <code>template.html</code>. Display name, author, and design URI are read from a <code>Theme Name</code> / <code>Author</code> / <code>Design URI</code> CSS header comment at the top of each theme's primary stylesheet; a theme with no such header falls back to its folder name.</div>
       {$theme_table}
+    </div>
+
+    <div class="row g-3 mb-3">
+      <div class="col-md-6">
+        <label class="form-label fw-semibold">Default Colour Mode</label>
+        <select name="default_color_mode" class="form-select" style="max-width:220px">
+          <option value="auto"{$sel_cm_auto}>Auto (follow visitor's system preference)</option>
+          <option value="light"{$sel_cm_light}>Light — always start in light mode</option>
+          <option value="dark"{$sel_cm_dark}>Dark — always start in dark mode</option>
+        </select>
+        <div class="form-text">Sets the default colour scheme for visitors who have not yet used the
+          <strong>🖥️ / ☀️ / 🌙</strong> toggle. Visitors' own preference (stored in their browser)
+          always takes priority over this setting.</div>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label fw-semibold">Category Layout</label>
+        <select name="category_layout" class="form-select" style="max-width:260px">
+          <option value="grid"{$sel_cat_grid}>Grid — card grid (default)</option>
+          <option value="list"{$sel_cat_list}>List — one category per row</option>
+        </select>
+        <div class="form-text">Choose how categories are displayed on the home page and category browsing pages. <em>List</em> shows each category as a row with thumbnail, name, album count, and image count.</div>
+      </div>
     </div>
 
     <div class="mb-3">
@@ -269,17 +281,10 @@ $content = <<<HTML
                name="show_powered_by" value="1"{$chk_powered_by}>
         <label class="form-check-label fw-semibold" for="show_powered_by">Show Powered By Credit</label>
       </div>
-      <div class="form-text">Display a &ldquo;Powered by Lumora Gallery&rdquo; credit in the site footer. Themes use the <code>{POWERED_BY}</code> template token to control placement.</div>
+      <div class="form-text">Display a &ldquo;Powered by Lumora Gallery&rdquo; credit in the site footer.</div>
     </div>
 
-    <div class="mb-3">
-      <label class="form-label fw-semibold">Category Layout</label>
-      <select name="category_layout" class="form-select" style="max-width:260px">
-        <option value="grid"{$sel_cat_grid}>Grid — card grid (default)</option>
-        <option value="list"{$sel_cat_list}>List — one category per row</option>
-      </select>
-      <div class="form-text">Choose how categories are displayed on the home page and category browsing pages. <em>List</em> shows each category as a row with thumbnail, name, album count, and image count &mdash; inspired by the classic Coppermine layout.</div>
-    </div>
+    <!-- ── Images & Thumbnails ─────────────────────────────────────── -->
     <hr class="my-4">
     <h6 class="mb-3 text-muted">Images &amp; Thumbnails</h6>
 
@@ -414,7 +419,7 @@ $content = <<<HTML
                  name="count_album_views" value="1"{$chk_album_views}>
           <label class="form-check-label fw-semibold" for="count_album_views">Count Album Views</label>
         </div>
-        <div class="form-text">Track how many times each album page is visited. Session-throttled to one count per visitor per session. Disable to reduce write load on very high-traffic galleries.</div>
+        <div class="form-text">Track how many times each album page is visited. Session-throttled to one count per visitor per session.</div>
       </div>
       <div class="col-md-6">
         <div class="form-check form-switch">
@@ -423,7 +428,7 @@ $content = <<<HTML
                  name="gallery_offline" value="1"{$chk_offline}>
           <label class="form-check-label fw-semibold text-danger" for="gallery_offline">Gallery Offline Mode</label>
         </div>
-        <div class="form-text">Show a "Gallery Offline" maintenance page to all visitors. Admins always see the real gallery. Enable before running maintenance that modifies the <code>albums/</code> directory.</div>
+        <div class="form-text">Show a "Gallery Offline" maintenance page to all visitors. Admins always see the real gallery.</div>
       </div>
     </div>
 

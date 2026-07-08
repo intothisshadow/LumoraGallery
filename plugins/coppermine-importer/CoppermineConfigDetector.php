@@ -246,9 +246,14 @@ final class CoppermineConfigDetector
         // Strip single-line comments (preserving the newline)
         $content = (string) preg_replace('/^\s*\/\/[^\n]*/m', '', $content);
 
-        // Match: $CONFIG['key'] = 'value'; or $CONFIG['key'] = "value";
-        // Group 2: single-quoted value   Group 3: double-quoted value
-        $pattern = '/\$CONFIG\[\'([^\']+)\'\]\s*=\s*(?:\'((?:[^\'\\\\]|\\\\.)*)\'|"((?:[^"\\\\]|\\\\.)*)")\s*;/m';
+        // Match: $CONFIG['key'] = 'value'; or $CONFIG["key"] = "value";
+        // (and mixed quote styles between the key and the value are also
+        // accepted, since Coppermine configs found in the wild aren't fully
+        // consistent about it). Group 1: the quote character used for the
+        // key (backreferenced via \1 so the closing bracket must match) —
+        // group 2: the key itself. Group 3: single-quoted value. Group 4:
+        // double-quoted value.
+        $pattern = '/\$CONFIG\[([\'"])([^\'"]+)\1\]\s*=\s*(?:\'((?:[^\'\\\\]|\\\\.)*)\'|"((?:[^"\\\\]|\\\\.)*)")\s*;/m';
 
         $result = [];
         if (preg_match_all($pattern, $content, $matches, PREG_SET_ORDER) === false) {
@@ -256,11 +261,11 @@ final class CoppermineConfigDetector
         }
 
         foreach ($matches as $m) {
-            $key = $m[1];
-            // Group 2 = single-quoted value; group 3 = double-quoted value.
+            $key = $m[2];
+            // Group 3 = single-quoted value; group 4 = double-quoted value.
             // PHP 8+: non-participating groups return null, not ''. Use ??
             // so we fall through to the group that actually matched.
-            $value = $m[3] ?? $m[2] ?? '';
+            $value = $m[4] ?? $m[3] ?? '';
             // Unescape basic PHP backslash sequences (e.g. \' \\ \n)
             $result[$key] = stripslashes($value);
         }

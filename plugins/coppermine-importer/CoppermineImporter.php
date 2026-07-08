@@ -41,7 +41,15 @@ final class CoppermineImporter
         private readonly string $db_pass,
         string                  $prefix
     ) {
-        $this->cpg_prefix = rtrim($prefix, '_') . '_';
+        // Strip anything outside letters/digits/underscore before use as a SQL
+        // identifier fragment, matching install/index.php's own db_prefix
+        // validation. $prefix is admin-supplied (via the import wizard, gated
+        // on 'site_configuration'), and while it's the same privilege level
+        // needed to reach this code at all, an unsanitised prefix is still an
+        // unnecessary injection surface in every query built below. See
+        // TODO-security.md #9.
+        $clean_prefix = preg_replace('/[^a-zA-Z0-9_]/', '', $prefix) ?? '';
+        $this->cpg_prefix = rtrim($clean_prefix, '_') . '_';
     }
 
     // ── Connection ────────────────────────────────────────────────────────────
@@ -330,10 +338,15 @@ final class CoppermineImporter
      * @param  int              $last_id      Last CPG pid processed (0 = start)
      * @param  int              $limit        Chunk size
      * @param  array<int, int>  $album_id_map Full CPG aid → Lumora album_id map
+     * @param  int              $uploaded_by  Lumora user_id to record as the owner
+     *                                        of every imported image (0 = no
+     *                                        recorded owner). Defaults to the
+     *                                        administrator performing the import;
+     *                                        see admin/index.php's owner selector.
      * @return array{imported: int, skipped: int, missing_files: int, errors: list<string>,
      *               done: bool, last_id: int}
      */
-    public function importImages(int $last_id, int $limit, array $album_id_map): array
+    public function importImages(int $last_id, int $limit, array $album_id_map, int $uploaded_by = 0): array
     {
         $select = $this->buildPictureSelect();
 
@@ -367,8 +380,8 @@ final class CoppermineImporter
         $insert = $lumora_pdo->prepare(
             "INSERT INTO `{$pre}images`
                  (`album_id`, `filename`, `title`, `filesize`, `width`, `height`,
-                  `hits`, `approved`, `pos`, `added_at`)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                  `hits`, `approved`, `pos`, `added_at`, `uploaded_by`)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
 
         $imported      = 0;
@@ -435,6 +448,7 @@ final class CoppermineImporter
                     $approved,
                     $pos,
                     $added_at,
+                    $uploaded_by,
                 ]);
                 $imported++;
             } catch (\Throwable $e) {

@@ -9,6 +9,11 @@ declare(strict_types=1);
  * failure adds a 1-second delay to slow automated guessing.  The record for
  * the source IP is cleared on any successful authentication.
  *
+ * The post-login `redirect` destination is validated by
+ * lumora_safe_redirect_target() (functions.php) to reject protocol-relative
+ * targets like "//evil.com", which also start with '/' but browsers treat
+ * as an off-site redirect. See TODO-security.md #3.
+ *
  * @copyright Copyright (C) 2025 Ariane
  * @license   GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
  */
@@ -16,7 +21,7 @@ define('LUMORA_ENTRY', true);
 require_once dirname(__DIR__) . '/include/bootstrap.php';
 
 // Already logged in → go to dashboard.
-if (lumora_is_admin()) {
+if (lumora_is_logged_in()) {
     lumora_redirect(lumora_base_url() . 'admin/dashboard.php');
 }
 
@@ -24,6 +29,14 @@ if (lumora_is_admin()) {
 // Track failed attempts per IP in cache/.login_ratelimit.json.
 // Window: 15 minutes.  Limit: 5 failures before lockout.
 // Every single failure also adds a 1-second server delay to slow brute force.
+//
+// The entire read-prune-decide[-write] cycle for a request happens inside a
+// single exclusive flock() hold (see $rl_with_lock below) rather than
+// separate unlocked reads and LOCK_EX-only writes. Previously, two
+// concurrent requests from the same IP could each read a stale (pre-write)
+// failure count and both be let through before either observed the other's
+// write, letting more than $rl_max failures slip past the lockout. See
+// TODO-security.md #6.
 
 $rl_ip     = (string) ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
 $rl_file   = LUMORA_ROOT . 'cache' . DIRECTORY_SEPARATOR . '.login_ratelimit.json';
@@ -32,46 +45,73 @@ $rl_max    = 5;     // failures before lockout
 $rl_now    = time();
 
 /**
- * Load the rate-limit store, purge stale entries, and return the cleaned map.
- * @return array<string, list<int>>  IP → list of failure timestamps
+ * Open the rate-limit store, acquire an exclusive lock for the lifetime of
+ * $callback, prune stale entries, and hand the pruned map to $callback along
+ * with a $write closure that persists a replacement map before the lock is
+ * released. Degrades to an empty, unwritable in-memory map (no lockout, no
+ * persistence) if the cache directory or file cannot be opened/locked, so a
+ * filesystem hiccup fails open on rate limiting rather than blocking login
+ * entirely.
+ *
+ * @template T
+ * @param callable(array<string, list<int>>, callable(array<string, list<int>>): void): T $callback
+ * @return T
  */
-$rl_load = static function () use ($rl_file, $rl_window, $rl_now): array {
-    $data = [];
-    if (is_file($rl_file)) {
-        $raw = file_get_contents($rl_file);
-        if ($raw !== false) {
-            $decoded = json_decode($raw, true);
-            if (is_array($decoded)) {
-                $data = $decoded;
+$rl_with_lock = static function (callable $callback) use ($rl_file, $rl_window, $rl_now): mixed {
+    $noop_write = static function (array $ignored): void {};
+
+    $dir = dirname($rl_file);
+    if (!is_dir($dir)) {
+        return $callback([], $noop_write);
+    }
+
+    $fh = @fopen($rl_file, 'c+');
+    if ($fh === false) {
+        return $callback([], $noop_write);
+    }
+
+    if (!flock($fh, LOCK_EX)) {
+        fclose($fh);
+        return $callback([], $noop_write);
+    }
+
+    try {
+        $raw     = stream_get_contents($fh);
+        $decoded = ($raw !== false && $raw !== '') ? json_decode($raw, true) : null;
+        $data    = is_array($decoded) ? $decoded : [];
+
+        // Prune timestamps outside the window.
+        foreach ($data as $ip => &$times) {
+            $times = array_values(array_filter(
+                is_array($times) ? $times : [],
+                static fn(mixed $t): bool => is_int($t) && ($rl_now - $t) < $rl_window
+            ));
+            if (empty($times)) {
+                unset($data[$ip]);
             }
         }
-    }
-    // Prune timestamps outside the window.
-    foreach ($data as $ip => &$times) {
-        $times = array_values(array_filter(
-            is_array($times) ? $times : [],
-            static fn(mixed $t): bool => is_int($t) && ($rl_now - $t) < $rl_window
-        ));
-        if (empty($times)) {
-            unset($data[$ip]);
-        }
-    }
-    unset($times);
-    return $data;
-};
+        unset($times);
 
-/**
- * Persist the rate-limit map back to disk.
- * @param array<string, list<int>> $data
- */
-$rl_save = static function (array $data) use ($rl_file): void {
-    $dir = dirname($rl_file);
-    if (is_dir($dir)) {
-        @file_put_contents($rl_file, json_encode($data, JSON_UNESCAPED_SLASHES), LOCK_EX);
+        $write = static function (array $newData) use ($fh): void {
+            rewind($fh);
+            ftruncate($fh, 0);
+            fwrite($fh, json_encode($newData, JSON_UNESCAPED_SLASHES));
+            fflush($fh);
+        };
+
+        return $callback($data, $write);
+    } finally {
+        flock($fh, LOCK_UN);
+        fclose($fh);
     }
 };
 
-$rl_data     = $rl_load();
+// Read-only snapshot for the initial GET-time lockout check and disabled
+// form state. The POST path below re-checks (and mutates) the lock state
+// under its own fresh lock acquisition rather than trusting this snapshot,
+// so a request that arrives concurrently with another IP's write always
+// sees the up-to-date count at the moment it actually matters.
+$rl_data     = $rl_with_lock(static fn(array $data): array => $data);
 $rl_failures = count($rl_data[$rl_ip] ?? []);
 $rl_locked   = ($rl_failures >= $rl_max);
 
@@ -82,6 +122,13 @@ $csrf     = lumora_csrf_token();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     lumora_csrf_validate();
+
+    // Re-check the lockout state under a fresh exclusive lock immediately
+    // before deciding whether to process credentials, rather than trusting
+    // the snapshot read above — this is the actual TOCTOU-closing step.
+    $rl_locked = $rl_with_lock(
+        static fn(array $data): bool => count($data[$rl_ip] ?? []) >= $rl_max
+    );
 
     if ($rl_locked) {
         // Enforce a delay and refuse; do not process credentials.
@@ -95,21 +142,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             isset($_POST['remember_me'])
         );
 
-        if ($user && $user['role'] === 'admin') {
+        if ($user) {
             // Success — clear rate-limit record for this IP.
-            unset($rl_data[$rl_ip]);
-            $rl_save($rl_data);
-            $dest = ($redirect && str_starts_with($redirect, '/'))
-                ? $redirect
-                : lumora_base_url() . 'admin/dashboard.php';
+            // Any active staff role (admin, moderator, contributor) may log in;
+            // page-level access within the panel is enforced per-permission.
+            $rl_with_lock(static function (array $data, callable $write) use ($rl_ip): null {
+                unset($data[$rl_ip]);
+                $write($data);
+                return null;
+            });
+            $dest = lumora_safe_redirect_target($redirect, lumora_base_url() . 'admin/dashboard.php');
             lumora_redirect($dest);
         } else {
-            // Failure — record attempt, add per-failure delay.
-            $rl_data[$rl_ip][] = $rl_now;
-            $rl_save($rl_data);
+            // Failure — record attempt (read, append, write, all under one
+            // lock hold) and add a per-failure delay.
+            $rl_failure_count = $rl_with_lock(
+                static function (array $data, callable $write) use ($rl_ip, $rl_now): int {
+                    $data[$rl_ip][] = $rl_now;
+                    $write($data);
+                    return count($data[$rl_ip]);
+                }
+            );
             usleep(1_000_000); // 1-second delay on every failure
             // If this failure just tripped the limit, upgrade the message.
-            if (count($rl_data[$rl_ip]) >= $rl_max) {
+            if ($rl_failure_count >= $rl_max) {
                 $error = 'Too many failed login attempts. '
                        . 'Please wait a few minutes before trying again.';
             } else {

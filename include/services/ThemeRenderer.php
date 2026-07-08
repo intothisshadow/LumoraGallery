@@ -38,13 +38,16 @@ class ThemeRenderer
      *   {POWERED_BY}          - Powered By credit HTML (empty when show_powered_by = 0)
      *   {CONTENT}             - main page content
      *   {CHARSET}             - always "utf-8"
+     *   {COLOR_MODE_INIT}     - inline <script> for <head> that sets data-bs-theme
+     *                           before first paint (prevents flash-of-wrong-theme)
+     *   {COLOR_MODE_TOGGLE}   - toggle button (☀️/🌙/🖥️) for the nav
      *
      * @param string $content   The main page HTML.
      * @param array  $extra     Additional token => value pairs to replace.
      */
     public static function renderPage(string $content, array $extra = []): void
     {
-        // ── Gallery offline mode ──────────────────────────────────────────────
+        // ── Gallery offline mode ───────────────────────────────────────────────
         // Non-admin visitors see a maintenance page. Admins always see the real
         // content so they can verify the gallery before bringing it back online.
         if (LumoraConfig::get('gallery_offline', '0') === '1' && !lumora_is_admin()) {
@@ -93,12 +96,124 @@ class ThemeRenderer
             '{POWERED_BY}'          => self::renderPoweredBy(),
             '{CONTENT}'             => $content,
             '{PAGE_TITLE}'          => '',  // caller override expected
+            '{COLOR_MODE_INIT}'     => self::renderColorModeInit(),
+            '{COLOR_MODE_TOGGLE}'   => self::renderColorModeToggle(),
         ];
 
         // Caller-supplied tokens override defaults.
         $tokens = array_merge($tokens, $extra);
 
         echo str_replace(array_keys($tokens), array_values($tokens), $template);
+    }
+
+    // ── Dark mode ─────────────────────────────────────────────────────────────
+
+    /**
+     * Return an inline <script> that sets data-bs-theme on <html> before the
+     * first paint so Bootstrap components and custom CSS both render immediately
+     * in the correct colour scheme (no "flash of wrong theme").
+     *
+     * Resolution order:
+     *   1. User's explicit localStorage preference ('auto', 'light', 'dark').
+     *   2. Per-user DB preference (read server-side for logged-in admins).
+     *   3. Site-wide default_color_mode config value.
+     *   4. System preference via prefers-color-scheme media query.
+     *
+     * Place the {COLOR_MODE_INIT} token as the first item inside <head> in
+     * each theme's template.html.
+     */
+    private static function renderColorModeInit(): string
+    {
+        // Site-wide default from config.
+        $raw_default  = (string) LumoraConfig::get('default_color_mode', 'auto');
+        $site_default = in_array($raw_default, ['auto', 'light', 'dark'], true)
+            ? $raw_default
+            : 'auto';
+
+        // Per-user DB preference for logged-in admins.
+        $user_pref = 'auto';
+        if (lumora_is_admin()) {
+            $user = lumora_current_user();
+            $uid  = (int) ($user['id'] ?? 0);
+            if ($uid > 0) {
+                try {
+                    $cm = LumoraDB::fetchValue(
+                        'SELECT `color_mode` FROM `{PREFIX}users` WHERE `id` = ?',
+                        [$uid]
+                    );
+                    if (in_array($cm, ['auto', 'light', 'dark'], true)) {
+                        $user_pref = (string) $cm;
+                    }
+                } catch (\Throwable) {
+                    // Migration 0004 not yet applied — use 'auto' fallback.
+                }
+            }
+        }
+
+        // Server-side initial pref: user's DB setting overrides site default.
+        $init_pref_js = json_encode($user_pref !== 'auto' ? $user_pref : $site_default);
+
+        return '<script>'
+            . '(function(){'
+            . '"use strict";'
+            . 'var s=' . $init_pref_js . ';'
+            . 'var ls="";'
+            . 'try{ls=localStorage.getItem("lum_color_mode")||"";}catch(e){}'
+            . 'var p=ls||s||"auto";'
+            . 'var dk;'
+            . 'if(p==="dark"){dk=true;}'
+            . 'else if(p==="light"){dk=false;}'
+            . 'else{try{dk=window.matchMedia("(prefers-color-scheme: dark)").matches;}catch(e){dk=false;}}'
+            . 'document.documentElement.setAttribute("data-bs-theme",dk?"dark":"light");'
+            . '})();'
+            . '</script>';
+    }
+
+    /**
+     * Return the colour-mode toggle button HTML and its associated <script>.
+     *
+     * The toggle cycles Auto → Dark → Light → Auto and persists the choice to
+     * localStorage.  (The admin panel additionally syncs to the database via
+     * ajax_color_mode.php; the public gallery uses localStorage only.)
+     *
+     * Place the {COLOR_MODE_TOGGLE} token wherever you want the button to appear
+     * in the theme template — typically alongside {ADMIN_LINK} in the nav area.
+     */
+    private static function renderColorModeToggle(): string
+    {
+        return '<button type="button" id="lum-color-toggle" class="lum-color-toggle"'
+            . ' title="Toggle colour mode" aria-label="Toggle colour mode">'
+            . '<span id="lum-color-icon">\ud83d\udda5\ufe0f</span>'
+            . '</button>'
+            . '<script>'
+            . 'document.addEventListener("DOMContentLoaded",function(){'
+            . '"use strict";'
+            . 'var toggle=document.getElementById("lum-color-toggle");'
+            . 'var icon=document.getElementById("lum-color-icon");'
+            . 'if(!toggle)return;'
+            . 'var icons={auto:"\ud83d\udda5\ufe0f",light:"\u2600\ufe0f",dark:"\ud83c\udf19"};'
+            . 'var labels={"auto":"Colour mode: Auto \u2014 click for dark","dark":"Colour mode: Dark \u2014 click for light","light":"Colour mode: Light \u2014 click for auto"};'
+            . 'function cur(){try{return localStorage.getItem("lum_color_mode")||"auto";}catch(e){return"auto";}}'
+            . 'function apply(p){'
+            . 'var dk;'
+            . 'if(p==="dark"){dk=true;}'
+            . 'else if(p==="light"){dk=false;}'
+            . 'else{try{dk=window.matchMedia("(prefers-color-scheme: dark)").matches;}catch(e){dk=false;}}'
+            . 'document.documentElement.setAttribute("data-bs-theme",dk?"dark":"light");'
+            . 'if(icon)icon.textContent=icons[p]||icons.auto;'
+            . 'if(toggle)toggle.setAttribute("title",labels[p]||labels.auto);'
+            . '}'
+            . 'apply(cur());'
+            . 'try{window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",function(){if(cur()==="auto")apply("auto");});}catch(e){}'
+            . 'toggle.addEventListener("click",function(){'
+            . 'var c=cur();'
+            . 'var n=c==="auto"?"dark":c==="dark"?"light":"auto";'
+            . 'try{localStorage.setItem("lum_color_mode",n);}catch(e){}'
+            . 'document.documentElement.style.transition="background-color .25s ease,color .25s ease,border-color .25s ease";'
+            . 'apply(n);'
+            . '});'
+            . '});'
+            . '</script>';
     }
 
     // ── Navigation ────────────────────────────────────────────────────────────
@@ -424,9 +539,6 @@ HTML;
                 $meta_html .= '<span class="lum-card-views">'
                     . number_format($hits_val) . ' view' . ($hits_val !== 1 ? 's' : '')
                     . '</span>';
-                // Prefer the most recent approved image's added_at (reflects when
-                // new content was actually last added); fall back to the album's
-                // own created_at for albums that have no images yet.
                 $updated_raw = $item['latest_added_at'] ?? $item['created_at'] ?? null;
                 if (!empty($updated_raw)) {
                     $updated_ts = strtotime((string) $updated_raw);
@@ -484,15 +596,6 @@ HTML;
     /**
      * Render a row-based category list (Coppermine-style list layout).
      *
-     * Each category is displayed as one row with four columns:
-     *   1. Thumbnail
-     *   2. Category name + description
-     *   3. Album count (recursive — includes all descendant subcategories)
-     *   4. Image count (recursive — includes all descendant subcategories)
-     *
-     * Counts are fetched via GalleryService::getCategorySubtreeCounts() which resolves
-     * the full subtree for each category in three queries total.
-     *
      * @param array $items  Rows from get_categories().
      */
     public static function renderCatlist(array $items): string
@@ -501,14 +604,12 @@ HTML;
             return '<div class="lum-empty alert alert-secondary">No categories found.</div>';
         }
 
-        // Fetch tree-wide counts (all descendant subcategories included).
         $cat_ids     = array_map(fn(array $item): int => (int) $item['id'], $items);
         $tree_counts = GalleryService::getCategorySubtreeCounts($cat_ids);
 
         $base = lumora_base_url();
         $html = '<div class="lum-catlist">';
 
-        // Header row
         $html .= '<div class="lum-catlist-header">';
         $html .= '<div class="lum-catlist-header-cell lum-catlist-header-cell--thumb"></div>';
         $html .= '<div class="lum-catlist-header-cell lum-catlist-header-cell--name">Category</div>';
@@ -545,13 +646,8 @@ HTML;
     /**
      * Render categories using the layout configured in `category_layout` config key.
      *
-     * 'grid' (default) → renderCatgrid() (Bootstrap card grid)
-     * 'list'           → renderCatlist() (Coppermine-style row table)
-     *
-     * Always use this method (or its wrapper) for rendering categories on public
-     * pages so the admin's layout preference is honoured everywhere.
-     *
-     * @param array $items  Rows from get_categories().
+     * 'grid' (default) → renderCatgrid()
+     * 'list'           → renderCatlist()
      */
     public static function renderCategories(array $items): string
     {
@@ -563,7 +659,6 @@ HTML;
 
     /**
      * Return the cover thumbnail HTML for a category or album card.
-     * Tries the configured thumb_image_id, then the first image in the album/category.
      */
     public static function renderItemThumb(array $item, string $type, string $url): string
     {
@@ -591,7 +686,6 @@ HTML;
                 if ($row) $thumb_url = image_thumb_url($row);
             }
         } elseif ($type === 'category') {
-            // Use an explicitly configured cover image if set.
             if (!empty($item['thumb_image_id'])) {
                 $row = LumoraDB::fetchOne(
                     'SELECT i.filename, a.folder FROM `{PREFIX}images` i
@@ -602,7 +696,6 @@ HTML;
                 if ($row) $thumb_url = image_thumb_url($row);
             }
 
-            // Fall back to the first image in any public album in this category.
             if (!$thumb_url) {
                 $row = LumoraDB::fetchOne(
                     'SELECT i.filename, a.folder FROM `{PREFIX}images` i
@@ -621,7 +714,6 @@ HTML;
                 . '</a>';
         }
 
-        // SVG placeholder.
         return '<a href="' . $url . '" class="lum-catcard-placeholder d-flex align-items-center justify-content-center">'
             . '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="currentColor" viewBox="0 0 16 16">'
             . '<path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>'
@@ -635,7 +727,7 @@ HTML;
      * Render a "Sort by" button group for album views.
      *
      * @param string $current   Current sort key.
-     * @param string $base_url  URL prefix to append the sort value to (e.g. 'album.php?album=3&sort=').
+     * @param string $base_url  URL prefix to append sort value to.
      */
     public static function renderSortControls(string $current, string $base_url): string
     {
@@ -660,22 +752,16 @@ HTML;
         return $html;
     }
 
-    // ── PhotoSwipe lightbox init ──────────────────────────────────────────────
+    // ── PhotoSwipe lightbox init ───────────────────────────────────────────────
 
     /**
      * Return the inline <script> that initialises PhotoSwipe 5 on #lum-gallery.
      *
-     * @param string $base_url  Gallery base URL with trailing slash (from lumora_base_url()).
-     *                          Used to build the absolute URL for ajax_hit.php so the
-     *                          endpoint resolves correctly regardless of subdirectory depth.
+     * @param string $base_url  Gallery base URL with trailing slash.
      */
     public static function renderLightboxJs(string $base_url = ''): string
     {
-        // Encode the hit endpoint URL for safe embedding in a JS string literal.
         $hit_url_js = json_encode($base_url . 'ajax_hit.php');
-
-        // A tiny non-module <script> block that writes the endpoint URL into
-        // window.__lumHitUrl before the ESM module below runs.
         $setup = '<script>window.__lumHitUrl = ' . $hit_url_js . ';</script>' . "\n";
 
         return $setup . <<<'LIGHTBOX'
@@ -683,7 +769,6 @@ HTML;
 (async function () {
   'use strict';
 
-  // PhotoSwipe 5 — loaded as ESM; no global required, no CDN script tag needed.
   const { default: PhotoSwipe } = await import(
     'https://cdn.jsdelivr.net/npm/photoswipe@5.4.4/dist/photoswipe.esm.min.js'
   );
@@ -717,7 +802,6 @@ HTML;
       bgOpacity:             0.9,
     });
 
-    // ── Download button ───────────────────────────────────────────────────
     pswp.on('uiRegister', function () {
       pswp.ui.registerElement({
         name:     'download-button',
@@ -736,10 +820,6 @@ HTML;
       });
     });
 
-    // ── View counter ──────────────────────────────────────────────────────
-    // Fires on every slide change (including the initial slide when the
-    // lightbox opens). Sends a fire-and-forget POST to ajax_hit.php; the
-    // server increments the counter once per image per session.
     pswp.on('change', function () {
       var imgId = pswp.currSlide && pswp.currSlide.data
         ? pswp.currSlide.data.imageId
@@ -749,7 +829,6 @@ HTML;
         xh.open('POST', window.__lumHitUrl, true);
         xh.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
         xh.send('image_id=' + encodeURIComponent(imgId));
-        // Response is intentionally ignored — this is fire-and-forget.
       }
     });
 

@@ -12,12 +12,40 @@
   --lum-adm-accent:  #5c75e8;
   --lum-adm-hover:   rgba(255,255,255,.1);
   --lum-adm-active:  rgba(92,117,232,.25);
+
+  /* Colour-mode-adaptable tokens */
+  --lum-adm-bg:        #f0f2f5;
+  --lum-adm-surface:   #ffffff;
+  --lum-adm-border:    #dee2e6;
+  --lum-adm-text:      #212529;
+  --lum-adm-muted:     #6c757d;
+  --lum-adm-head:      #343a40;
+  --lum-adm-tbl-head:  #f8f9fa;
+  --lum-adm-tree-cat:  #eef1ff;
+  --lum-adm-tree-bdr:  #c9d1f0;
+  --lum-adm-stat-col:  var(--lum-adm-accent);
+}
+
+/* ── Dark mode overrides ──────────────────────────────────── */
+html[data-bs-theme="dark"] {
+  --lum-adm-bg:        #12131a;
+  --lum-adm-surface:   #1e2030;
+  --lum-adm-border:    #343650;
+  --lum-adm-text:      #d8daf0;
+  --lum-adm-muted:     #8890ab;
+  --lum-adm-head:      #b8bcd8;
+  --lum-adm-tbl-head:  #1a1c2e;
+  --lum-adm-tree-cat:  #1c2040;
+  --lum-adm-tree-bdr:  #3040a0;
+  --lum-adm-dark:      #0e0f1e;
+  --lum-adm-darker:    #090a15;
 }
 
 html, body { height: 100%; }
 
 .lum-admin {
-  background: #f0f2f5;
+  background: var(--lum-adm-bg);
+  color: var(--lum-adm-text);
   font-size: .9rem;
   min-height: 100vh;
 }
@@ -30,6 +58,24 @@ html, body { height: 100%; }
   background: var(--lum-adm-darker);
   z-index: 1030;
   box-shadow: 0 2px 8px rgba(0,0,0,.3);
+}
+
+/* ── Colour-mode toggle (topbar) ──────────────────────────── */
+.lum-color-toggle {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,.25);
+  border-radius: .3rem;
+  color: rgba(255,255,255,.7);
+  cursor: pointer;
+  font-size: .85rem;
+  padding: .2rem .5rem;
+  line-height: 1.4;
+  transition: color .15s, border-color .15s;
+}
+
+.lum-color-toggle:hover {
+  color: #fff;
+  border-color: rgba(255,255,255,.6);
 }
 
 /* ── Layout body ──────────────────────────────────────────── */
@@ -83,16 +129,16 @@ html, body { height: 100%; }
 
 /* ── Stat cards ───────────────────────────────────────────── */
 .lum-adm-stat {
-  background: #fff;
+  background: var(--lum-adm-surface);
   border-radius: .5rem;
   padding: 1rem;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--lum-adm-border);
 }
 
 .lum-adm-stat-num {
   font-size: 1.8rem;
   font-weight: 700;
-  color: var(--lum-adm-accent);
+  color: var(--lum-adm-stat-col);
   line-height: 1;
 }
 
@@ -100,7 +146,7 @@ html, body { height: 100%; }
   font-size: .75rem;
   text-transform: uppercase;
   letter-spacing: .04em;
-  color: #6c757d;
+  color: var(--lum-adm-muted);
 }
 
 /* ── Tables ───────────────────────────────────────────────── */
@@ -108,16 +154,16 @@ html, body { height: 100%; }
   font-size: .8rem;
   text-transform: uppercase;
   letter-spacing: .04em;
-  color: #6c757d;
-  background: #f8f9fa;
-  border-bottom: 2px solid #dee2e6;
+  color: var(--lum-adm-muted);
+  background: var(--lum-adm-tbl-head);
+  border-bottom: 2px solid var(--lum-adm-border);
 }
 
 /* ── Cards ────────────────────────────────────────────────── */
 .lum-adm-card {
-  background: #fff;
+  background: var(--lum-adm-surface);
   border-radius: .5rem;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--lum-adm-border);
   padding: 1.25rem;
   margin-bottom: 1rem;
 }
@@ -127,12 +173,11 @@ html, body { height: 100%; }
   display: none;
 }
 
-/* ── Responsive ───────────────────────────────────────────── */
 /* ── Tree hierarchy (categories.php / albums.php) ──────────── */
 
 /* Connector glyph (└) used for nested rows */
 .lum-tree-connector {
-  color: #adb5bd;
+  color: var(--lum-adm-muted);
   user-select: none;
   font-family: monospace;
   margin-right: .1rem;
@@ -150,8 +195,8 @@ html, body { height: 100%; }
 
 /* Section-header rows for the albums hierarchy table */
 .lum-tree-cat-header td {
-  background: #eef1ff;
-  border-top: 2px solid #c9d1f0;
+  background: var(--lum-adm-tree-cat);
+  border-top: 2px solid var(--lum-adm-tree-bdr);
   padding-top: .55rem;
   padding-bottom: .55rem;
   font-size: .875rem;
@@ -162,6 +207,7 @@ html, body { height: 100%; }
   border-top: none;
 }
 
+/* ── Responsive ───────────────────────────────────────────── */
 @media (max-width: 767px) {
   .lum-admin-sidebar {
     position: static;

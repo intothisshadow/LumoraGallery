@@ -3,17 +3,27 @@ declare(strict_types=1);
 /**
  * Lumora Gallery — User Service
  *
- * Manages user accounts (CRUD), the role hierarchy, and the permission
- * framework used by the admin panel and auth layer.
+ * Manages user accounts (CRUD) and delegates the permission framework used
+ * by the admin panel and auth layer to GroupService.
  *
- * Roles (DB version 9+):
+ * As of Migration0007 (DB version 13), roles are dynamic permission groups
+ * backed by {PREFIX}groups / {PREFIX}group_permissions (see GroupService and
+ * admin/groups.php) rather than a fixed ENUM. Three system groups are seeded
+ * by the migration and cannot be deleted:
  *   admin       — Full access to all gallery and administrative functions.
  *   moderator   — Content management: albums, images, comments, approved tools.
  *   contributor — Upload and manage own content; no administrative access.
+ * Administrators may additionally create custom groups with any combination
+ * of permissions from GroupService::ALL_PERMISSIONS.
  *
- * Permission constants are defined in ROLE_PERMISSIONS. The permission-checking
- * API (roleHasPermission / currentUserHasPermission) provides the foundation for
- * per-page role gates as non-admin roles gain admin panel access in future phases.
+ * The ROLES / ROLE_LABELS / ROLE_PERMISSIONS constants below are kept only as
+ * legacy fallback data for installations pending Migration0007 — GroupService
+ * uses them when the groups tables don't exist yet, so behaviour is unchanged
+ * until an administrator runs the pending database update. New code should
+ * call GroupService directly for anything group-related; roleHasPermission(),
+ * getRolePermissions(), roleOptions(), and roleBadge() remain here only for
+ * backward compatibility with existing callers and now delegate to
+ * GroupService.
  *
  * All write methods validate their inputs and return `true` on success or a
  * human-readable error string on failure, so callers can flash the message
@@ -76,21 +86,25 @@ class UserService
     // ── Permission helpers ────────────────────────────────────────────────────
 
     /**
-     * Return true when the given role has the named permission.
+     * Return true when the given role (group slug) has the named permission.
+     * Delegates to GroupService, which falls back to the legacy
+     * ROLE_PERMISSIONS map above on installations pending Migration0007.
      */
     public static function roleHasPermission(string $role, string $permission): bool
     {
-        return in_array($permission, self::ROLE_PERMISSIONS[$role] ?? [], true);
+        return GroupService::groupHasPermission($role, $permission);
     }
 
     /**
-     * Return all permission slugs granted to a role.
+     * Return all permission slugs granted to a role (group slug). Delegates
+     * to GroupService, which falls back to the legacy ROLE_PERMISSIONS map
+     * above on installations pending Migration0007.
      *
      * @return list<string>
      */
     public static function getRolePermissions(string $role): array
     {
-        return self::ROLE_PERMISSIONS[$role] ?? [];
+        return GroupService::getGroupPermissions($role);
     }
 
     /**
@@ -187,10 +201,15 @@ class UserService
         $per_page = max(1, $per_page);
         $offset   = ($page - 1) * $per_page;
 
+        // Custom (non-system) roles have no entry in the FIELD() list and so
+        // evaluate to 0; the leading boolean term pushes them after the three
+        // system roles instead of before, since ORDER BY otherwise sorts
+        // unmatched rows first.
         return LumoraDB::fetchAll(
             "SELECT id, username, email, role, is_active, last_login, created_at
                FROM `{PREFIX}users`
-              ORDER BY FIELD(role, 'admin', 'moderator', 'contributor'), username ASC
+              ORDER BY (FIELD(role, 'admin', 'moderator', 'contributor') = 0),
+                       FIELD(role, 'admin', 'moderator', 'contributor'), username ASC
               LIMIT ? OFFSET ?",
             [$per_page, $offset]
         );
@@ -237,7 +256,7 @@ class UserService
             return 'Invalid email address format.';
         }
 
-        if (!in_array($role, self::ROLES, true)) {
+        if (!GroupService::groupExists($role)) {
             return 'Invalid role selected.';
         }
 
@@ -295,7 +314,7 @@ class UserService
         }
 
         if (isset($data['role'])) {
-            if (!in_array($data['role'], self::ROLES, true)) {
+            if (!GroupService::groupExists($data['role'])) {
                 return 'Invalid role selected.';
             }
             $updates['role'] = $data['role'];
@@ -372,9 +391,10 @@ class UserService
             }
         }
 
-        // Revoke persistent tokens before deleting the row.
+        // Revoke persistent tokens and album assignments before deleting the row.
         lumora_clear_remember_tokens($id);
         lumora_clear_reset_tokens($id);
+        AlbumAssignmentService::removeAllAssignmentsForUser($id);
 
         LumoraDB::delete('users', 'id = ?', [$id]);
         return true;
@@ -419,25 +439,26 @@ class UserService
     public static function roleOptions(string $current = ''): string
     {
         $html = '';
-        foreach (self::ROLE_LABELS as $slug => $label) {
-            $sel   = ($slug === $current) ? ' selected' : '';
-            $html .= '<option value="' . h($slug) . '"' . $sel . '>'
-                   . h($label) . '</option>';
+        foreach (GroupService::getAllGroups() as $g) {
+            $sel   = ($g['slug'] === $current) ? ' selected' : '';
+            $html .= '<option value="' . h($g['slug']) . '"' . $sel . '>'
+                   . h($g['name']) . '</option>';
         }
         return $html;
     }
 
     /**
-     * Return a Bootstrap 5 badge for the given role slug.
+     * Return a Bootstrap 5 badge for the given role (group) slug.
      */
     public static function roleBadge(string $role): string
     {
-        $label = self::ROLE_LABELS[$role] ?? $role;
+        $group = GroupService::getGroupBySlug($role);
+        $label = $group['name'] ?? (self::ROLE_LABELS[$role] ?? $role);
         $cls   = match ($role) {
             'admin'       => 'bg-danger',
             'moderator'   => 'bg-warning text-dark',
             'contributor' => 'bg-secondary',
-            default       => 'bg-light text-dark border',
+            default       => 'bg-info text-dark',
         };
         return '<span class="badge ' . $cls . '">' . h($label) . '</span>';
     }

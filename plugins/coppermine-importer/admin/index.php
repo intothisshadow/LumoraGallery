@@ -90,6 +90,10 @@ if ($action === 'connect') {
         'album_last_id' => 0,
         'img_last_id'   => 0,
         'started_at'    => 0,
+        // Default owner for every imported image is the admin running the
+        // import; the preview/options step (step=2) lets them pick a
+        // different existing user before the import starts. See TODO #20.
+        'uploaded_by'   => (int) (lumora_current_user()['user_id'] ?? 0),
     ];
 
     lumora_redirect($plugin_url . 'index.php?step=2');
@@ -109,6 +113,15 @@ if ($action === 'start_import') {
             lumora_redirect($plugin_url . 'index.php?step=2');
         }
     }
+
+    // Owner to record on every imported image (TODO #20). Falls back to the
+    // admin running the import if the posted value is missing or does not
+    // correspond to an existing user account.
+    $current_uid  = (int) (lumora_current_user()['user_id'] ?? 0);
+    $posted_owner = (int) ($_POST['owner_id'] ?? 0);
+    $sess['uploaded_by'] = ($posted_owner > 0 && UserService::getUser($posted_owner) !== null)
+        ? $posted_owner
+        : $current_uid;
 
     $sess['started_at']    = time();
     $sess['imported']      = ['categories' => 0, 'albums' => 0, 'images' => 0];
@@ -394,6 +407,22 @@ DETECTJS;
     $n_img     = number_format((int) ($counts['images']     ?? 0));
     $csrf_h    = h($csrf);
 
+    // ── Image ownership (TODO #20) ─────────────────────────────────────────
+    // Defaults to the admin running the import (set at connect time above);
+    // offered here as a dropdown so a different existing user can be chosen
+    // as the owner of every imported image instead.
+    $current_uid   = (int) (lumora_current_user()['user_id'] ?? 0);
+    $selected_uid  = (int) ($sess['uploaded_by'] ?? $current_uid);
+    $owner_options = '';
+    foreach (UserService::getPaginatedUsers(1, 1000) as $u) {
+        if (!$u['is_active']) {
+            continue;
+        }
+        $sel = ((int) $u['id'] === $selected_uid) ? ' selected' : '';
+        $owner_options .= '<option value="' . (int) $u['id'] . '"' . $sel . '>'
+            . h($u['username']) . '</option>';
+    }
+
     // Re-import confirmation checkbox (rendered INSIDE the start_import form)
     $reimport_check = '';
     if (MigrationService::isImported(LUMORA_CPG_IMPORTER_SOURCE)) {
@@ -426,6 +455,12 @@ DETECTJS;
     echo '<form method="post" action="" id="cpg-start-form">';
     echo '<input type="hidden" name="action"     value="start_import">';
     echo '<input type="hidden" name="csrf_token" value="' . $csrf_h . '">';
+    echo '<div class="mb-3">'
+        . '<label for="owner_id" class="form-label">Assign imported images to</label>'
+        . '<select id="owner_id" name="owner_id" class="form-select">' . $owner_options . '</select>'
+        . '<div class="form-text">Every imported image will be recorded as uploaded by this user. '
+        . 'Defaults to your own account.</div>'
+        . '</div>';
     echo $reimport_check;
     echo '<div class="d-flex gap-2">';
     echo '<button type="submit" class="btn btn-success">Start Import</button>';

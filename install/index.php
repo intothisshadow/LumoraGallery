@@ -9,6 +9,13 @@ declare(strict_types=1);
  *   3  Done
  *
  * Usage: upload the Lumora folder to your server, then visit /install/ in a browser.
+ *
+ * Security: once installed, visiting this page redirects to the gallery root.
+ * A `?force=1` reinstall over an existing installation requires a session
+ * already authenticated with the 'site_configuration' permission against the
+ * site's *current* database — it is not reachable by an anonymous visitor
+ * just by knowing the URL, even if install/ has not yet been deleted. See
+ * TODO-security.md #4.
  */
 
 define('LUMORA_ENTRY',     true);
@@ -341,6 +348,30 @@ if (!isset($_GET['force']) && file_exists(LUMORA_ROOT . 'config.php')) {
         header('Location: ' . $proto . '://' . $host . $path . '/');
         exit;
     }
+}
+
+// A forced reinstall (?force=1) over an already-installed site is a highly
+// destructive, security-sensitive operation — it can point config.php at an
+// entirely different database and create a fresh admin account with
+// attacker-chosen credentials. It must never be reachable just by knowing
+// the URL. bootstrap.php fully loads config.php, connects the database, and
+// includes auth.php whenever config.php exists on disk — even inside the
+// installer (LUMORA_INSTALLER only skips that when config.php is absent) —
+// so lumora_has_permission() reflects a real, already-authenticated session
+// against the site's *existing* database here. Require 'site_configuration'
+// before letting a forced reinstall proceed past this point. See
+// TODO-security.md #4.
+if (
+    isset($_GET['force'])
+    && file_exists(LUMORA_ROOT . 'config.php')
+    && defined('LUMORA_INSTALLED')
+    && LUMORA_INSTALLED === true
+    && !lumora_has_permission('site_configuration')
+) {
+    $login_url = lumora_base_url() . 'admin/login.php?redirect='
+        . urlencode($_SERVER['REQUEST_URI'] ?? '');
+    header('Location: ' . $login_url);
+    exit;
 }
 
 // ── CSRF token for installer ──────────────────────────────────────────────────

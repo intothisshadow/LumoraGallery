@@ -27,7 +27,16 @@ declare(strict_types=1);
 define('LUMORA_ENTRY', true);
 require_once dirname(__DIR__) . '/include/bootstrap.php';
 require_once __DIR__ . '/includes/admin_helpers.php';
-lumora_require_admin();
+lumora_require_permission('view_updates');
+
+// Actions that replace application files or run database migrations
+// (Install Update, Run Database Update, rollback/abort) require the
+// stricter 'site_configuration' permission — 'view_updates' alone only
+// grants visibility into version/status information. See
+// ajax_update_perform.php and TODO-security.md #2 for the matching
+// server-side enforcement; this flag only controls what the UI offers,
+// it is not itself a security boundary.
+$can_perform_updates = lumora_has_permission('site_configuration');
 
 // ── Application update status (cache-only on page load) ───────────────────────
 $upd           = UpdateService::getCachedStatus();
@@ -87,12 +96,19 @@ if ($mig_pending === 0) {
         . '<td class="text-muted small">' . $mig_applied . ' migration(s)</td></tr>'
         . '</table>'
         . '<p class="small text-muted mb-1">Pending migrations:</p>'
-        . '<ul class="mb-3">' . $pending_items_html . '</ul>'
-        . '<div>'
-        . '<button id="lum-migrate-btn" class="btn btn-warning">🗄 Run Database Update</button>'
-        . '<span id="lum-migrate-spinner" class="text-muted small ms-2 d-none">Running…</span>'
-        . '</div>'
-        . '<div id="lum-migrate-result" class="mt-3"></div>';
+        . '<ul class="mb-3">' . $pending_items_html . '</ul>';
+    if ($can_perform_updates) {
+        $db_updates_block .= '<div>'
+            . '<button id="lum-migrate-btn" class="btn btn-warning">🗄 Run Database Update</button>'
+            . '<span id="lum-migrate-spinner" class="text-muted small ms-2 d-none">Running…</span>'
+            . '</div>'
+            . '<div id="lum-migrate-result" class="mt-3"></div>';
+    } else {
+        $db_updates_block .= '<div class="alert alert-info py-2 small mb-0">'
+            . 'Running database updates requires the Site Configuration permission. '
+            . 'Ask an administrator to apply this update.'
+            . '</div>';
+    }
 }
 
 // ── Build application version status block ────────────────────────────────────
@@ -142,7 +158,22 @@ HTML;
 
 // ── Build "Update Now" card (shown only when update is available) ──────────────
 $update_now_card = '';
-if ($upd_available) {
+if ($upd_available && !$can_perform_updates) {
+    // Visible confirmation this update exists, but no interactive controls —
+    // running the updater requires 'site_configuration' (see
+    // ajax_update_perform.php). Showing a disabled/interactive form here
+    // would only invite a confusing 403 on click.
+    $update_now_card = <<<HTML
+<div class="lum-adm-card mb-4">
+  <h5 class="mb-3">⬆ Install Update</h5>
+  <div class="alert alert-info py-2 small mb-0">
+    Installing this update requires the Site Configuration permission.
+    Ask an administrator to apply it.
+  </div>
+</div>
+
+HTML;
+} elseif ($upd_available) {
     // Stage list HTML — rendered in PHP so CSS works without JS running first.
     $stage_rows = '';
     foreach (UpdaterService::STAGE_SEQUENCE as $s) {
@@ -181,7 +212,7 @@ if ($upd_available) {
   {$stuck_notice}
   {$php_warn_note}
 
-  <!-- Confirmation checkbox -->
+  <!-- Confirmation & options -->
   <div id="lum-upd-confirm-area" class="mb-3">
     <p class="small text-muted mb-2">
       The updater will download the release archive, verify its integrity, create an automatic
@@ -189,13 +220,38 @@ if ($upd_available) {
       migrations — all without SSH access.  <strong>Custom themes and plugins are preserved by
       default.</strong>
     </p>
-    <div class="form-check mb-3">
+
+    <div class="form-check mb-2">
       <input class="form-check-input" type="checkbox" id="lum-upd-confirm-chk">
       <label class="form-check-label small" for="lum-upd-confirm-chk">
         I understand that this will replace application files. I have verified my server
         has a backup or am relying on the automatic backup created during the update.
       </label>
     </div>
+
+    <hr class="my-3">
+
+    <p class="small text-muted mb-2">
+      <strong>Optional:</strong> select whether to replace plugins and themes with the versions
+      bundled in the new release. Both are left unchanged by default.
+    </p>
+
+    <div class="form-check mb-2">
+      <input class="form-check-input" type="checkbox" id="lum-upd-replace-plugins">
+      <label class="form-check-label small" for="lum-upd-replace-plugins">
+        Replace installed plugins with versions bundled in this release
+        <span class="text-muted">(plugins are preserved by default)</span>
+      </label>
+    </div>
+
+    <div class="form-check mb-3">
+      <input class="form-check-input" type="checkbox" id="lum-upd-replace-themes">
+      <label class="form-check-label small" for="lum-upd-replace-themes">
+        Replace installed themes with versions bundled in this release
+        <span class="text-muted">(themes are preserved by default; uncheck to keep customised themes)</span>
+      </label>
+    </div>
+
     <button id="lum-upd-start-btn" class="{$btn_classes}" disabled{$btn_disabled}>
       ⬆ Update to {$latest_h} Now
     </button>
@@ -293,9 +349,8 @@ $content = <<<HTML
     <li>Update check results are cached locally for 24 hours; use the button above to force a refresh.</li>
     <li>No gallery content, images, or user data is ever transmitted during an update check.</li>
     <li>Update endpoint: <code>{$endpoint_h}</code></li>
-    <li>Custom themes and plugins are preserved by default during an update.
-        Set <code>update_preserve_themes</code> or <code>update_preserve_plugins</code>
-        to <code>0</code> in the config table to overwrite them.</li>
+    <li>Custom themes and plugins are preserved by default during an update. To replace them with the
+        versions bundled in a release, tick the relevant checkboxes on the Install Update form above.</li>
     <li>An automatic database backup and <code>config.php</code> backup are created before any file replacement.
         Backups are stored in <code>cache/.updates/backup/</code>.</li>
     <li>If the <code>install/</code> directory is present when an update completes, it is automatically
@@ -313,6 +368,12 @@ document.addEventListener('DOMContentLoaded', function () {
   const AJAX_BASE = {$ajax_base_js};
   const AUTO_CHECK = {$auto_check_js};
   const TARGET_VER = {$latest_js};
+
+  // Per-update replacement preferences captured when the start button is clicked.
+  // Stored here so runUpdateStage() can access them without DOM re-reads after
+  // the confirmation area is hidden.
+  let replacePlugins = '0';
+  let replaceThemes  = '0';
 
   // ── Utility ────────────────────────────────────────────────────────────────
 
@@ -352,7 +413,7 @@ document.addEventListener('DOMContentLoaded', function () {
   if (AUTO_CHECK) runCheck();
 
   async function runCheck() {
-    if (\$checkBtn)  { \$checkBtn.disabled = true; \$checkBtn.textContent = 'Checking…'; }
+    if (\$checkBtn)  { \$checkBtn.disabled = true; \$checkBtn.textContent = 'Checking\u2026'; }
     if (\$checkSpin)   \$checkSpin.classList.remove('d-none');
     if (\$checkRes)    \$checkRes.innerHTML = '';
     try {
@@ -360,7 +421,7 @@ document.addEventListener('DOMContentLoaded', function () {
       if (d.error && !d.latest) throw new Error(d.error);
       if (\$statusEl) \$statusEl.innerHTML = renderStatus(d);
       if (d.error && \$checkRes) {
-        \$checkRes.innerHTML = '<div class="alert alert-warning py-2 small">⚠ ' + esc(d.error) + '</div>';
+        \$checkRes.innerHTML = '<div class="alert alert-warning py-2 small">\u26a0 ' + esc(d.error) + '</div>';
       }
       // If an update is now available and the Update Now card was not present, reload.
       if (d.status === 'update_available' && !document.getElementById('lum-upd-start-btn')) {
@@ -371,7 +432,7 @@ document.addEventListener('DOMContentLoaded', function () {
         \$checkRes.innerHTML = '<div class="alert alert-danger py-2 small">Error: ' + esc(err.message) + '</div>';
       }
     } finally {
-      if (\$checkBtn)  { \$checkBtn.disabled = false; \$checkBtn.textContent = '🔄 Check for Updates Now'; }
+      if (\$checkBtn)  { \$checkBtn.disabled = false; \$checkBtn.textContent = '\ud83d\udd04 Check for Updates Now'; }
       if (\$checkSpin)   \$checkSpin.classList.add('d-none');
     }
   }
@@ -415,16 +476,16 @@ document.addEventListener('DOMContentLoaded', function () {
     \$migrateBtn.addEventListener('click', async function () {
       const \$sp  = document.getElementById('lum-migrate-spinner');
       const \$res = document.getElementById('lum-migrate-result');
-      \$migrateBtn.disabled = true; \$migrateBtn.textContent = 'Running…';
+      \$migrateBtn.disabled = true; \$migrateBtn.textContent = 'Running\u2026';
       if (\$sp)  \$sp.classList.remove('d-none');
       if (\$res) \$res.innerHTML = '';
       try {
         const d = await post('ajax_run_migrations.php', {});
         if (d.success) {
-          if (\$res) \$res.innerHTML = '<div class="alert alert-success py-2">✓ ' + esc(d.message) + '</div>';
+          if (\$res) \$res.innerHTML = '<div class="alert alert-success py-2">\u2713 ' + esc(d.message) + '</div>';
           setTimeout(function () { location.reload(); }, 1500);
         } else {
-          let html = '<div class="alert alert-danger py-2">✗ ' + esc(d.message);
+          let html = '<div class="alert alert-danger py-2">\u2717 ' + esc(d.message);
           if (d.errors && d.errors.length) {
             html += '<ul class="mb-0 mt-1">'
               + d.errors.map(function (e) { return '<li class="small font-monospace">' + esc(e) + '</li>'; }).join('')
@@ -432,11 +493,11 @@ document.addEventListener('DOMContentLoaded', function () {
           }
           html += '</div>';
           if (\$res) \$res.innerHTML = html;
-          \$migrateBtn.disabled = false; \$migrateBtn.textContent = '🗄 Run Database Update';
+          \$migrateBtn.disabled = false; \$migrateBtn.textContent = '\ud83d\uddc4 Run Database Update';
         }
       } catch (err) {
         if (\$res) \$res.innerHTML = '<div class="alert alert-danger py-2">Error: ' + esc(err.message) + '</div>';
-        \$migrateBtn.disabled = false; \$migrateBtn.textContent = '🗄 Run Database Update';
+        \$migrateBtn.disabled = false; \$migrateBtn.textContent = '\ud83d\uddc4 Run Database Update';
       } finally {
         if (\$sp) \$sp.classList.add('d-none');
       }
@@ -445,17 +506,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // ── "Update Now" workflow ──────────────────────────────────────────────────
 
-  const \$confirmChk   = document.getElementById('lum-upd-confirm-chk');
-  const \$startBtn     = document.getElementById('lum-upd-start-btn');
-  const \$confirmArea  = document.getElementById('lum-upd-confirm-area');
-  const \$progressArea = document.getElementById('lum-upd-progress');
-  const \$logEl        = document.getElementById('lum-upd-log');
-  const \$statusMsg    = document.getElementById('lum-upd-status-msg');
-  const \$rollbackBtn  = document.getElementById('lum-upd-rollback-btn');
-  const \$abortBtn     = document.getElementById('lum-upd-abort-btn');
-  const \$abortStuck   = document.getElementById('lum-upd-abort-stuck');
+  const \$confirmChk      = document.getElementById('lum-upd-confirm-chk');
+  const \$replacePlugins  = document.getElementById('lum-upd-replace-plugins');
+  const \$replaceThemes   = document.getElementById('lum-upd-replace-themes');
+  const \$startBtn        = document.getElementById('lum-upd-start-btn');
+  const \$confirmArea     = document.getElementById('lum-upd-confirm-area');
+  const \$progressArea    = document.getElementById('lum-upd-progress');
+  const \$logEl           = document.getElementById('lum-upd-log');
+  const \$statusMsg       = document.getElementById('lum-upd-status-msg');
+  const \$rollbackBtn     = document.getElementById('lum-upd-rollback-btn');
+  const \$abortBtn        = document.getElementById('lum-upd-abort-btn');
+  const \$abortStuck      = document.getElementById('lum-upd-abort-stuck');
 
-  // Enable start button only when checkbox is ticked.
+  // Enable start button only when confirmation checkbox is ticked.
   if (\$confirmChk && \$startBtn) {
     \$confirmChk.addEventListener('change', function () {
       \$startBtn.disabled = !this.checked;
@@ -465,16 +528,20 @@ document.addEventListener('DOMContentLoaded', function () {
   // Abort stuck session button.
   if (\$abortStuck) {
     \$abortStuck.addEventListener('click', async function () {
-      \$abortStuck.disabled = true; \$abortStuck.textContent = 'Aborting…';
+      \$abortStuck.disabled = true; \$abortStuck.textContent = 'Aborting\u2026';
       try { await post('ajax_update_perform.php', { action: 'abort' }); } catch (e) {}
       location.reload();
     });
   }
 
-  // Start update.
+  // Start update: capture replacement options then launch preflight.
   if (\$startBtn) {
     \$startBtn.addEventListener('click', async function () {
       if (!TARGET_VER) { alert('No target version known.'); return; }
+
+      // Capture the optional replacement preferences before hiding the form.
+      replacePlugins = (\$replacePlugins && \$replacePlugins.checked) ? '1' : '0';
+      replaceThemes  = (\$replaceThemes  && \$replaceThemes.checked)  ? '1' : '0';
 
       // Transition UI to progress mode.
       if (\$confirmArea)  \$confirmArea.classList.add('d-none');
@@ -487,21 +554,21 @@ document.addEventListener('DOMContentLoaded', function () {
   // Rollback button.
   if (\$rollbackBtn) {
     \$rollbackBtn.addEventListener('click', async function () {
-      \$rollbackBtn.disabled = true; \$rollbackBtn.textContent = 'Rolling back…';
+      \$rollbackBtn.disabled = true; \$rollbackBtn.textContent = 'Rolling back\u2026';
       if (\$abortBtn) \$abortBtn.classList.add('d-none');
-      setStatusMsg('Restoring backup…', 'warning');
+      setStatusMsg('Restoring backup\u2026', 'warning');
       try {
         const d = await post('ajax_update_perform.php', { action: 'rollback' });
         appendLog(d.details || []);
         if (d.success) {
-          setStatusMsg('✓ ' + esc(d.message), 'success');
+          setStatusMsg('\u2713 ' + esc(d.message), 'success');
         } else {
-          setStatusMsg('✗ ' + esc(d.message) + ' — check the update log.', 'danger');
+          setStatusMsg('\u2717 ' + esc(d.message) + ' \u2014 check the update log.', 'danger');
         }
         setTimeout(function () { location.reload(); }, 2000);
       } catch (err) {
         setStatusMsg('Rollback request failed: ' + esc(err.message), 'danger');
-        \$rollbackBtn.disabled = false; \$rollbackBtn.textContent = '↩ Rollback';
+        \$rollbackBtn.disabled = false; \$rollbackBtn.textContent = '\u21a9 Rollback';
       }
     });
   }
@@ -532,6 +599,13 @@ document.addEventListener('DOMContentLoaded', function () {
     const body = { action: 'run_stage', stage: stage };
     if (version) body.version = version;
 
+    // Attach per-update replacement preferences in the preflight POST only.
+    // The updater writes them to the lock file; all later stages read from there.
+    if (stage === 'preflight') {
+      body.replace_plugins = replacePlugins;
+      body.replace_themes  = replaceThemes;
+    }
+
     let data;
     try {
       data = await post('ajax_update_perform.php', body);
@@ -549,7 +623,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (!data.success) {
       markStageFailed(stage);
-      setStatusMsg('✗ ' + esc(data.message), 'danger');
+      setStatusMsg('\u2717 ' + esc(data.message), 'danger');
       // Offer rollback for destructive stages; abort-only for earlier ones.
       if (DESTRUCTIVE.has(stage)) {
         showRollbackBtn();
@@ -560,7 +634,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     markStageDone(stage);
-    setStatusMsg('⟳ ' + esc(data.message), 'muted');
+    setStatusMsg('\u27f3 ' + esc(data.message), 'muted');
 
     if (data.next) {
       // Small pause between stages so the UI updates are visible.
@@ -568,7 +642,7 @@ document.addEventListener('DOMContentLoaded', function () {
       await runUpdateStage(data.next, '');
     } else {
       // Workflow complete.
-      setStatusMsg('🎉 ' + esc(data.message), 'success');
+      setStatusMsg('\ud83c\udf89 ' + esc(data.message), 'success');
       if (\$rollbackBtn) \$rollbackBtn.classList.add('d-none');
       if (\$abortBtn)    \$abortBtn.classList.add('d-none');
       setTimeout(function () { location.reload(); }, 3000);
@@ -583,17 +657,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function markStageActive(stage) {
     const ic = iconEl(stage);
-    if (ic) { ic.textContent = '⟳'; ic.style.color = ''; }
+    if (ic) { ic.textContent = '\u27f3'; ic.style.color = ''; }
   }
 
   function markStageDone(stage) {
     const ic = iconEl(stage);
-    if (ic) { ic.textContent = '✓'; ic.style.color = 'var(--bs-success,#198754)'; }
+    if (ic) { ic.textContent = '\u2713'; ic.style.color = 'var(--bs-success,#198754)'; }
   }
 
   function markStageFailed(stage) {
     const ic = iconEl(stage);
-    if (ic) { ic.textContent = '✗'; ic.style.color = 'var(--bs-danger,#dc3545)'; }
+    if (ic) { ic.textContent = '\u2717'; ic.style.color = 'var(--bs-danger,#dc3545)'; }
   }
 
   function appendLog(lines) {

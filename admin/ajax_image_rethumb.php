@@ -15,7 +15,7 @@ declare(strict_types=1);
 define('LUMORA_ENTRY', true);
 require_once dirname(__DIR__) . '/include/bootstrap.php';
 require_once __DIR__ . '/includes/admin_helpers.php';
-lumora_require_admin();
+lumora_require_any_permission(['manage_images', 'edit_own_images']);
 
 header('Content-Type: application/json');
 
@@ -37,7 +37,7 @@ if ($image_id === 0) {
 }
 
 $image = LumoraDB::fetchOne(
-    'SELECT i.id, i.filename, a.folder
+    'SELECT i.id, i.filename, i.uploaded_by, a.folder
      FROM `{PREFIX}images` i
      JOIN `{PREFIX}albums` a ON a.id = i.album_id
      WHERE i.id = ?',
@@ -47,6 +47,17 @@ $image = LumoraDB::fetchOne(
 if (!$image) {
     echo json_encode(['ok' => false, 'message' => 'Image not found.']);
     exit;
+}
+
+// A contributor holds 'edit_own_images' (not 'manage_images') and may only
+// regenerate thumbnails for images they uploaded themselves.
+if (!lumora_has_permission('manage_images')) {
+    $current_user    = lumora_current_user();
+    $current_user_id = (int) ($current_user['user_id'] ?? 0);
+    if ((int) $image['uploaded_by'] !== $current_user_id) {
+        echo json_encode(['ok' => false, 'message' => 'Not authorised for this image.']);
+        exit;
+    }
 }
 
 $original_path = lumora_album_path($image['folder']) . $image['filename'];

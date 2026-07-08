@@ -21,7 +21,7 @@ declare(strict_types=1);
 define('LUMORA_ENTRY', true);
 require_once dirname(__DIR__) . '/include/bootstrap.php';
 require_once __DIR__ . '/includes/admin_helpers.php';
-lumora_require_admin();
+lumora_require_any_permission(['manage_images', 'edit_own_images']);
 
 header('Content-Type: application/json');
 
@@ -58,6 +58,26 @@ if (!$target_album) {
     exit;
 }
 
+// A contributor holds 'edit_own_images' (not 'manage_images') and may only
+// move images they uploaded themselves; each ID is re-checked below rather
+// than gating the whole request, so one unauthorised ID in a bulk selection
+// is skipped with a per-item error instead of aborting the entire call.
+$can_manage_all  = lumora_has_permission('manage_images');
+$current_user    = lumora_current_user();
+$current_user_id = (int) ($current_user['user_id'] ?? 0);
+
+// Move-target scoping (TODO §22): a contributor without 'manage_albums' may
+// only move images into albums explicitly assigned to them via
+// AlbumAssignmentService — mirrors the album-access re-validation already
+// done for batch-add (admin/batch.php, admin/ajax_batch.php). This is
+// re-checked server-side (not just hidden from the dropdown) so a
+// contributor cannot move images into an unassigned album by editing the
+// posted target_album_id directly.
+if (!AlbumAssignmentService::userCanAccessAlbum($current_user_id, $target_id)) {
+    echo json_encode(['moved' => 0, 'errors' => ['You are not authorised to move images into that album.']]);
+    exit;
+}
+
 $target_folder = $target_album['folder'];
 
 // Cast to positive integers and deduplicate; cap at 500 per call.
@@ -74,7 +94,7 @@ $errors = [];
 
 foreach ($ids as $id) {
     $image = LumoraDB::fetchOne(
-        'SELECT i.id, i.filename, i.album_id, a.folder
+        'SELECT i.id, i.filename, i.album_id, i.uploaded_by, a.folder
          FROM `{PREFIX}images` i
          JOIN `{PREFIX}albums` a ON a.id = i.album_id
          WHERE i.id = ?',
@@ -83,6 +103,11 @@ foreach ($ids as $id) {
 
     if (!$image) {
         $errors[] = "Image #$id: not found.";
+        continue;
+    }
+
+    if (!$can_manage_all && (int) $image['uploaded_by'] !== $current_user_id) {
+        $errors[] = "Image #$id ({$image['filename']}): not authorised.";
         continue;
     }
 

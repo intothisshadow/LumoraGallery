@@ -28,7 +28,24 @@ declare(strict_types=1);
 define('LUMORA_ENTRY', true);
 require_once dirname(__DIR__) . '/include/bootstrap.php';
 require_once __DIR__ . '/includes/admin_helpers.php';
-lumora_require_admin();
+lumora_require_any_permission(['manage_images', 'edit_own_images']);
+
+// A contributor holds 'edit_own_images' (not 'manage_images') and may only
+// view, edit, delete, move, or re-thumbnail images they uploaded themselves.
+// $owner_filter is passed to every list/search query below; 0 means "no
+// ownership filter" (admin/moderator see everything, unchanged from before).
+$can_manage_all  = lumora_has_permission('manage_images');
+$current_user    = lumora_current_user();
+$current_user_id = (int) ($current_user['user_id'] ?? 0);
+$owner_filter    = $can_manage_all ? 0 : $current_user_id;
+
+// Bulk-move target scoping (TODO §22): a contributor without 'manage_albums'
+// may only move images into albums explicitly assigned to them via
+// AlbumAssignmentService — mirrors the batch-add album scoping in batch.php.
+// Admin/moderator ('manage_albums') see every album as a move target,
+// unchanged from before. null = no restriction (every album is a valid target).
+$can_manage_albums = lumora_has_permission('manage_albums');
+$move_target_ids   = $can_manage_albums ? null : AlbumAssignmentService::getAssignedAlbumIds($current_user_id);
 
 $action   = $_GET['action'] ?? 'list';
 $album_id = lumora_int($_GET['album'] ?? 0, 0, 0);
@@ -69,6 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             lum_flash('Image not found.', 'danger');
             lumora_redirect($ret_url);
         }
+        lumora_require_image_access($post_id);
 
         $title    = trim($_POST['title'] ?? '');
         $pos      = lumora_int($_POST['pos']      ?? (int) $image['pos'], (int) $image['pos'], 0);
@@ -133,6 +151,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             [$post_id]
         );
         if ($image) {
+            lumora_require_image_access($post_id);
             $orig_path  = lumora_album_path($image['folder']) . $image['filename'];
             $thumb_path = lumora_album_path($image['folder']) . LUMORA_THUMB_PREFIX . $image['filename'];
             if (is_file($orig_path))  unlink($orig_path);
@@ -171,10 +190,15 @@ foreach ($all_albums as $_sa) {
 if ($_sc !== null) $sel_opts .= '</optgroup>';
 unset($_sa, $_sc);
 
-$move_opts = '<option value="">— Select target album —</option>';
-$_mc       = null;
+// Move-target scoping (TODO §22): $move_target_ids is null for admin/moderator
+// (every album is eligible, unchanged), or a list of assigned album IDs for a
+// contributor who lacks 'manage_albums'.
+$move_opts       = '<option value="">— Select target album —</option>';
+$_mc             = null;
+$has_move_target = false;
 foreach ($all_albums as $_ma) {
     if ((int) $_ma['id'] === $album_id) continue;
+    if ($move_target_ids !== null && !in_array((int) $_ma['id'], $move_target_ids, true)) continue;
     $cat = $_ma['cat_name'] ?? 'Uncategorised';
     if ($cat !== $_mc) {
         if ($_mc !== null) $move_opts .= '</optgroup>';
@@ -182,6 +206,7 @@ foreach ($all_albums as $_ma) {
         $_mc = $cat;
     }
     $move_opts .= '<option value="' . (int) $_ma['id'] . '">' . h($_ma['title']) . '</option>';
+    $has_move_target = true;
 }
 if ($_mc !== null) $move_opts .= '</optgroup>';
 unset($_ma, $_mc);
@@ -212,6 +237,7 @@ if ($action === 'edit') {
         lum_flash('Image not found.', 'danger');
         lumora_redirect($base . ($album_id > 0 ? '?album=' . $album_id : ''));
     }
+    lumora_require_image_access($img_id);
 
     $edit_album_id = (int) $edit_image['album_id_val'];
     $back_parts    = [];
@@ -323,29 +349,18 @@ $show_content = ($album !== null) || $is_search;
 
 if ($show_content) {
     if ($is_search) {
-        $total = GalleryService::countSearchImages($search, $album_id);
+        $total = GalleryService::countSearchImages($search, $album_id, $owner_filter);
     } else {
-        $total = (int) LumoraDB::fetchValue(
-            'SELECT COUNT(*) FROM `{PREFIX}images` WHERE album_id = ?', [$album_id]
-        );
+        $total = GalleryService::countAdminAlbumImages($album_id, $owner_filter);
     }
 
     $total_pages = max(1, (int) ceil($total / $per_page));
     $page        = max(1, min($page, $total_pages));
-    $offset      = ($page - 1) * $per_page;
 
     if ($is_search) {
-        $images = GalleryService::searchImages($search, $album_id, $page, $per_page);
+        $images = GalleryService::searchImages($search, $album_id, $page, $per_page, $owner_filter);
     } else {
-        $images = LumoraDB::fetchAll(
-            'SELECT i.*, a.folder
-             FROM `{PREFIX}images` i
-             JOIN `{PREFIX}albums` a ON a.id = i.album_id
-             WHERE i.album_id = ?
-             ORDER BY i.pos ASC, i.id ASC
-             LIMIT ? OFFSET ?',
-            [$album_id, $per_page, $offset]
-        );
+        $images = GalleryService::getAdminAlbumImages($album_id, $page, $per_page, $owner_filter);
     }
 
     $make_page_url = static function (int $p) use ($base, $album_id, $is_search, $search): string {
@@ -380,6 +395,16 @@ if ($show_content) {
     // This is immune to DOMContentLoaded / getElementById timing issues: the
     // browser fires onclick when the user clicks, by which time the functions
     // defined in the <script> block below are guaranteed to exist.
+    //
+    // Move-target scoping (TODO §22): if a contributor has no albums assigned
+    // to them (or none other than the one currently being viewed), disable the
+    // move dropdown/button entirely and show an explanatory notice, rather than
+    // leaving an empty, confusing “Select target album” dropdown.
+    $move_disabled_attr = $has_move_target ? '' : ' disabled';
+    $move_notice_html   = ($move_target_ids !== null && !$has_move_target)
+        ? '<div class="small text-muted mt-2">You have no other assigned albums to move images into. '
+          . 'Contact an administrator or moderator to get access to additional albums.</div>'
+        : '';
     $content .= <<<HTML
 <div class="lum-adm-card mb-3 py-2">
   <div class="d-flex flex-wrap align-items-center gap-2">
@@ -390,12 +415,13 @@ if ($show_content) {
     <button type="button" id="lum-bulk-delete" class="btn btn-sm btn-outline-danger" disabled onclick="lumBulkDelete()">🗑 Delete Selected</button>
     <div class="vr d-none d-sm-block"></div>
     <div class="d-flex gap-1 align-items-center flex-wrap">
-      <select id="lum-move-target" class="form-select form-select-sm" style="max-width:240px">
+      <select id="lum-move-target" class="form-select form-select-sm" style="max-width:240px"{$move_disabled_attr}>
         {$move_opts}
       </select>
-      <button type="button" id="lum-bulk-move" class="btn btn-sm btn-outline-primary" disabled onclick="lumBulkMove()">📦 Move Selected</button>
+      <button type="button" id="lum-bulk-move" class="btn btn-sm btn-outline-primary" disabled onclick="lumBulkMove()"{$move_disabled_attr}>📦 Move Selected</button>
     </div>
   </div>
+  {$move_notice_html}
   <div id="lum-bulk-status" class="mt-2 small d-none"></div>
 </div>
 HTML;

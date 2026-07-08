@@ -13,11 +13,17 @@ declare(strict_types=1);
  * $all_cats is fetched once unconditionally via getAllCategoriesWithCounts()
  * and serves double duty: (1) the new/edit parent dropdown, (2) the tree
  * view with album and subcategory counts alongside each category name.
+ *
+ * Category create/update/delete business logic (thumb_image_id validation,
+ * self-parent prevention, cascading reparent-on-delete) lives in
+ * GalleryService::createCategory()/updateCategory()/deleteCategory() — this
+ * page only handles permission checks, CSRF validation, request parsing,
+ * flash messages, and redirects.
  */
 define('LUMORA_ENTRY', true);
 require_once dirname(__DIR__) . '/include/bootstrap.php';
 require_once __DIR__ . '/includes/admin_helpers.php';
-lumora_require_admin();
+lumora_require_permission('manage_albums');
 
 $action = $_GET['action'] ?? 'list';
 $id     = lumora_int($_GET['id'] ?? 0, 0, 1);
@@ -36,39 +42,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pos            = lumora_int($_POST['pos']             ?? 0, 0, 0);
         $thumb_image_id = lumora_int($_POST['thumb_image_id'] ?? 0, 0, 0);
 
-        if ($name === '') {
-            lum_flash('Category name is required.', 'danger');
-            lumora_redirect($base . '?action=' . ($edit_id ? 'edit&id=' . $edit_id : 'new'));
-        }
-
-        // Validate thumb_image_id if provided.
-        if ($thumb_image_id > 0) {
-            $valid = LumoraDB::fetchValue(
-                'SELECT id FROM `{PREFIX}images` WHERE id = ? AND approved = 1', [$thumb_image_id]
-            );
-            if (!$valid) {
-                lum_flash('Cover image ID ' . $thumb_image_id . ' does not exist or is not approved. Cover cleared.', 'warning');
-                $thumb_image_id = 0;
-            }
-        }
+        $data = [
+            'name'           => $name,
+            'description'    => $desc,
+            'parent_id'      => $parent_id,
+            'pos'            => $pos,
+            'thumb_image_id' => $thumb_image_id,
+        ];
 
         if ($edit_id > 0) {
-            // Prevent a category from being its own parent.
-            if ($parent_id === $edit_id) $parent_id = 0;
-            LumoraDB::update('categories',
-                ['name' => $name, 'description' => $desc, 'parent_id' => $parent_id,
-                 'pos' => $pos, 'thumb_image_id' => $thumb_image_id],
-                'id = ?', [$edit_id]
-            );
+            $result = GalleryService::updateCategory($edit_id, $data);
+            if (is_string($result)) {
+                lum_flash($result, 'danger');
+                lumora_redirect($base . '?action=edit&id=' . $edit_id);
+            }
+            if ($result['warning'] !== null) {
+                lum_flash($result['warning'], 'warning');
+            }
             lum_flash('Category updated.');
         } else {
-            LumoraDB::insert('categories', [
-                'parent_id'      => $parent_id,
-                'name'           => $name,
-                'description'    => $desc,
-                'pos'            => $pos,
-                'thumb_image_id' => $thumb_image_id,
-            ]);
+            $result = GalleryService::createCategory($data);
+            if (is_string($result)) {
+                lum_flash($result, 'danger');
+                lumora_redirect($base . '?action=new');
+            }
+            if ($result['warning'] !== null) {
+                lum_flash($result['warning'], 'warning');
+            }
             lum_flash('Category created.');
         }
         lumora_redirect($base);
@@ -77,19 +77,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($act === 'delete') {
         $del_id = lumora_int($_POST['id'] ?? 0, 0, 1);
         if ($del_id > 0) {
-            // Re-parent children to the deleted category's parent.
-            $cat = get_category($del_id);
-            if ($cat) {
-                LumoraDB::query(
-                    'UPDATE `{PREFIX}categories` SET parent_id = ? WHERE parent_id = ?',
-                    [(int)$cat['parent_id'], $del_id]
-                );
-                LumoraDB::query(
-                    'UPDATE `{PREFIX}albums` SET category_id = ? WHERE category_id = ?',
-                    [(int)$cat['parent_id'], $del_id]
-                );
-                LumoraDB::delete('categories', 'id = ?', [$del_id]);
-                lum_flash('Category deleted. Child items moved to parent.');
+            $message = GalleryService::deleteCategory($del_id);
+            if ($message !== null) {
+                lum_flash($message);
             }
         }
         lumora_redirect($base);

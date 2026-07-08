@@ -113,6 +113,31 @@ function lumora_redirect(string $url, int $code = 302): never
     exit;
 }
 
+/**
+ * Validate a user-supplied "redirect back to" path and return a safe
+ * destination: either the validated path itself, or $default when the
+ * supplied value is empty or unsafe.
+ *
+ * A path is considered safe only when it starts with exactly one '/'
+ * (a same-site absolute path) and not two or more — "//evil.com" or
+ * "/\evil.com" also begin with '/' but browsers resolve them as a
+ * protocol-relative URL to an external host, which a naive
+ * `str_starts_with($redirect, '/')` check does not catch. See
+ * TODO-security.md #3.
+ */
+function lumora_safe_redirect_target(string $redirect, string $default): string
+{
+    if (
+        $redirect !== ''
+        && str_starts_with($redirect, '/')
+        && !str_starts_with($redirect, '//')
+        && !str_starts_with($redirect, '/\\')
+    ) {
+        return $redirect;
+    }
+    return $default;
+}
+
 // ── Integer input validation ──────────────────────────────────────────────────
 
 /**
@@ -320,11 +345,20 @@ function lumora_generate_folder(int $id): string
  * Strips path traversal (. and ..), hidden-directory segments (leading dot),
  * and any characters outside the allowed set.
  *
+ * Disallowed characters are replaced with a path separator rather than
+ * deleted outright — deleting them could silently fuse two adjacent
+ * segments together (e.g. a null byte between "albums" and ".." with no
+ * slash between them collapsing to "albums..", which contains ".." as a
+ * substring but isn't caught by the exact-match '..' segment filter below).
+ * Replacing with '/' guarantees every stripped character still produces a
+ * segment boundary, so the traversal filter always sees '..' as its own
+ * complete segment when one was present.
+ *
  * @return string Clean relative path, or '' if nothing safe remains.
  */
 function lumora_sanitize_folder(string $raw): string
 {
-    $clean = preg_replace('/[^a-zA-Z0-9_\-\.\/]/', '', $raw);
+    $clean = preg_replace('/[^a-zA-Z0-9_\-\.\/]/', '/', $raw);
     $clean = (string) preg_replace('#/+#', '/', (string) $clean);
     $clean = trim((string) $clean, '/');
     $segments = array_filter(
@@ -415,7 +449,7 @@ function get_category_subtree_counts(array $cat_ids): array  { return GallerySer
 // ── Album wrappers ────────────────────────────────────────────────────────────
 
 function get_albums(int $category_id, string $sort = 'pos'): array { return GalleryService::getAlbums($category_id, $sort); }
-function get_album(int $id): ?array                                 { return GalleryService::getAlbum($id); }
+function get_album(int $id, bool $public_only = false): ?array          { return GalleryService::getAlbum($id, $public_only); }
 function increment_album_hits(int $album_id): void                  { GalleryService::incrementAlbumHits($album_id); }
 
 // ── Image wrappers ────────────────────────────────────────────────────────────

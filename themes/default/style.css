@@ -10,21 +10,76 @@
 
 /* ── Variables ────────────────────────────────────────────── */
 :root {
+  color-scheme: light dark;
+
   --lum-accent:       #0d6efd;
   --lum-accent-dark:  #0b5ed7;
   --lum-nav-bg:       #1a1a2e;
   --lum-nav-fg:       rgba(255,255,255,.85);
   --lum-nav-brand:    #ffffff;
-  --lum-footer-bg:    #f8f9fa;
   --lum-card-radius:  .5rem;
   --lum-thumb-radius: .375rem;
   --lum-thumb-min:    160px;
   --lum-gap:          .625rem;
+
+  /* Colour-mode-adaptable design tokens (light defaults) */
+  --lum-bg:             #f4f6f8;
+  --lum-surface:        #ffffff;
+  --lum-border:         #e0e4e8;
+  --lum-text:           #212529;
+  --lum-muted:          #6c757d;
+  --lum-head-text:      #343a40;
+  --lum-footer-bg:      #f8f9fa;
+  --lum-footer-border:  #e0e4e8;
+  --lum-thumb-cap-bg:   #fafbfc;
+  --lum-thumb-cap-bdr:  #e9ecef;
+  --lum-card-tint-blue: #e8f0fe;
+  --lum-card-tint-gray: #f8f9fa;
+  --lum-card-tint-ambe: #fff8e1;
+  --lum-sort-bg:        #ffffff;
 }
+
+/* ── Dark mode overrides ──────────────────────────────────── */
+/* Applied when Bootstrap dark mode is active (set by our     */
+/* init script from localStorage or system preference).        */
+html[data-bs-theme="dark"] {
+  color-scheme: dark;
+
+  --lum-bg:             #161820;
+  --lum-surface:        #21232f;
+  --lum-border:         #3a3d50;
+  --lum-text:           #dde0f0;
+  --lum-muted:          #8890ab;
+  --lum-head-text:      #c0c4dc;
+  --lum-footer-bg:      #1a1c26;
+  --lum-footer-border:  #2e3044;
+  --lum-thumb-cap-bg:   #1e2030;
+  --lum-thumb-cap-bdr:  #2e3044;
+  --lum-card-tint-blue: #1c2545;
+  --lum-card-tint-gray: #252838;
+  --lum-card-tint-ambe: #251f0e;
+  --lum-sort-bg:        #21232f;
+  /* Keep nav dark in both modes — it's already dark by design */
+}
+
+/* Smooth transition between colour modes (applied after first paint  */
+/* by the toggle script to avoid transitions on initial page load).   */
+html.lum-theme-transition,
+html.lum-theme-transition *,
+html.lum-theme-transition *::before,
+html.lum-theme-transition *::after {
+  transition: background-color .25s ease, color .25s ease,
+              border-color .25s ease !important;
+}
+
+/* ============================================================
+   Layout
+   ============================================================ */
 
 /* ── Body ─────────────────────────────────────────────────── */
 .lum-body {
-  background: #f4f6f8;
+  background: var(--lum-bg);
+  color: var(--lum-text);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -80,21 +135,108 @@
   border-color: rgba(255,255,255,.6);
 }
 
+/* ── Colour-mode toggle (in navbar) ──────────────────────── */
+.lum-color-toggle {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,.25);
+  border-radius: .3rem;
+  color: rgba(255,255,255,.7);
+  cursor: pointer;
+  font-size: .85rem;
+  padding: .28rem .55rem;
+  line-height: 1.4;
+  transition: color .15s, border-color .15s;
+}
+
+.lum-color-toggle:hover {
+  color: #fff;
+  border-color: rgba(255,255,255,.6);
+}
+
 /* ── Footer ───────────────────────────────────────────────── */
 .lum-footer {
   background: var(--lum-footer-bg);
-  border-top: 1px solid #e0e4e8;
-  color: #6c757d;
+  border-top: 1px solid var(--lum-footer-border);
+  color: var(--lum-muted);
 }
 
 .lum-footer a {
-  color: #6c757d;
+  color: var(--lum-muted);
 }
+
+/* ============================================================
+   Typography
+   ============================================================ */
+.lum-main { color: var(--lum-text); }
+
+.lum-main h1, .lum-main h2, .lum-main h3,
+.lum-main h4, .lum-main h5, .lum-main h6 {
+  color: var(--lum-head-text);
+}
+
+.lum-main a { color: var(--lum-accent); }
+.lum-main a:hover, .lum-main a:focus { color: var(--lum-accent-dark); }
+
+.lum-main ul, .lum-main ol { color: var(--lum-text); }
+
+.lum-main blockquote {
+  border-left: 3px solid var(--lum-border);
+  padding: .5rem 1rem;
+  margin: 1rem 0;
+  color: var(--lum-muted);
+  font-style: italic;
+}
+
+.lum-main code, .lum-main kbd, .lum-main samp {
+  background: var(--lum-card-tint-gray);
+  color: var(--lum-text);
+  border-radius: .25rem;
+  padding: .1rem .3rem;
+}
+
+.lum-main pre {
+  background: var(--lum-card-tint-gray);
+  color: var(--lum-text);
+  border-radius: var(--lum-thumb-radius);
+  padding: .75rem 1rem;
+  overflow-x: auto;
+}
+
+.lum-main small,
+.lum-main .text-muted { color: var(--lum-muted) !important; }
+
+/* ============================================================
+   Navigation (breadcrumbs, pagination, sort bar)
+   ============================================================ */
+
+/* ── Breadcrumb ───────────────────────────────────────────── */
+.breadcrumb {
+  background: none;
+  padding: 0;
+  font-size: .9rem;
+}
+
+/* ── Sort bar ─────────────────────────────────────────────── */
+.lum-sort-bar {
+  background: var(--lum-sort-bg);
+  border: 1px solid var(--lum-border);
+  border-radius: var(--lum-card-radius);
+  padding: .5rem .75rem;
+}
+
+/* ── Pagination ───────────────────────────────────────────── */
+.lum-pagination .pagination {
+  margin-bottom: .4rem;
+}
+
+/* ============================================================
+   Albums & Categories
+   ============================================================ */
 
 /* ── Stats bar ────────────────────────────────────────────── */
 .lum-stat-box {
-  background: #fff;
-  border: 1px solid #e0e4e8;
+  background: var(--lum-surface);
+  border: 1px solid var(--lum-border);
   border-radius: var(--lum-card-radius);
   padding: .75rem .5rem;
 }
@@ -110,14 +252,25 @@
   font-size: .75rem;
   text-transform: uppercase;
   letter-spacing: .04em;
-  color: #6c757d;
+  color: var(--lum-muted);
   margin-top: .15rem;
+}
+
+/* ── Section headings ─────────────────────────────────────── */
+.lum-section-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--lum-head-text);
+  border-bottom: 2px solid var(--lum-border);
+  padding-bottom: .4rem;
+  margin-bottom: 1rem;
 }
 
 /* ── Category / Album card grid ───────────────────────────── */
 .lum-catcard {
   border-radius: var(--lum-card-radius);
-  border: 1px solid #e0e4e8;
+  border: 1px solid var(--lum-border);
+  background: var(--lum-surface);
   transition: box-shadow .2s, transform .2s;
   overflow: hidden;
 }
@@ -147,8 +300,8 @@
   display: block;
   width: 100%;
   height: 120px;
-  background: #e9ecef;
-  color: #adb5bd;
+  background: var(--lum-border);
+  color: var(--lum-muted);
 }
 
 /* Card description — show full text, no line-clamp */
@@ -156,9 +309,7 @@
   margin-top: .35rem;
 }
 
-/* ── Card info rows (album / category meta) ───────────────── */
-/* Replaces the old <small class="text-muted"> inline string.  */
-/* Each stat gets its own centred, tinted row.                  */
+/* ── Card info rows ───────────────────────────────────────── */
 .lum-card-meta { margin-top: .3rem; }
 
 .lum-card-meta span {
@@ -166,20 +317,141 @@
   text-align:  center;
   padding:     .2rem .4rem;
   font-size:   .72rem;
-  color:       #495057;
+  color:       var(--lum-head-text);
   line-height: 1.3;
 }
 
-/* Image / sub-category count — light blue accent tint */
 .lum-card-images,
-.lum-card-subcats { background: #e8f0fe; }
+.lum-card-subcats { background: var(--lum-card-tint-blue); }
 
-/* Views / album count — neutral light gray */
 .lum-card-views,
-.lum-card-albums  { background: #f8f9fa; }
+.lum-card-albums  { background: var(--lum-card-tint-gray); }
 
-/* Added date — soft amber tint */
-.lum-card-date { background: #fff8e1; }
+.lum-card-date    { background: var(--lum-card-tint-ambe); }
+
+/* ── Album description ────────────────────────────────────── */
+.lum-album-desc {
+  color: var(--lum-text);
+  background: var(--lum-surface);
+  border-left: 3px solid var(--lum-accent);
+  border-radius: 0 var(--lum-card-radius) var(--lum-card-radius) 0;
+  padding: .75rem 1rem;
+  margin-bottom: 1rem;
+  font-size: .95rem;
+  line-height: 1.6;
+}
+
+/* ── Category description ─────────────────────────────────── */
+.lum-cat-desc {
+  color: var(--lum-text);
+  background: var(--lum-surface);
+  border-left: 3px solid var(--lum-accent);
+  border-radius: 0 var(--lum-card-radius) var(--lum-card-radius) 0;
+  padding: .75rem 1rem;
+  margin-bottom: 1rem;
+  font-size: .95rem;
+  line-height: 1.6;
+}
+
+/* ── Category list (row layout) ───────────────────────────── */
+.lum-catlist {
+  border: 1px solid var(--lum-border);
+  border-radius: var(--lum-card-radius);
+  overflow: hidden;
+  margin-bottom: 1.25rem;
+}
+
+.lum-catlist-header {
+  display: grid;
+  grid-template-columns: 140px 1fr 100px 100px;
+  background: var(--lum-accent);
+  color: #fff;
+  font-size: .75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  align-items: center;
+}
+
+.lum-catlist-header-cell {
+  padding: .5rem .75rem;
+}
+
+.lum-catlist-header-cell--albums,
+.lum-catlist-header-cell--images {
+  text-align: center;
+}
+
+.lum-catlist-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 100px 100px;
+  align-items: center;
+  border-top: 1px solid var(--lum-border);
+  background: var(--lum-surface);
+  transition: background .15s;
+}
+
+.lum-catlist-row:nth-child(even) { background: var(--lum-bg); }
+.lum-catlist-row:hover            { background: var(--lum-card-tint-blue); }
+
+.lum-catlist-col-thumb {
+  padding: .5rem;
+  line-height: 0;
+}
+
+.lum-catlist-col-thumb a { display: block; }
+
+.lum-catlist-col-thumb img.lum-catcard-img {
+  width: 120px;
+  height: 150px;
+  object-fit: cover;
+  border-radius: var(--lum-thumb-radius);
+}
+
+.lum-catlist-col-thumb .lum-catcard-placeholder {
+  width: 120px;
+  height: 150px;
+  border-radius: var(--lum-thumb-radius);
+  background: var(--lum-border);
+  color: var(--lum-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lum-catlist-col-name {
+  padding: .75rem 1rem;
+}
+
+.lum-catlist-col-name a {
+  display: inline-block;
+  font-weight: 700;
+  font-size: 1rem;
+  color: inherit;
+  text-decoration: none;
+  margin-bottom: .2rem;
+}
+
+.lum-catlist-col-name a:hover { color: var(--lum-accent); }
+
+.lum-catlist-desc {
+  font-size: .85rem;
+  color: var(--lum-muted);
+  line-height: 1.4;
+}
+
+.lum-catlist-col-albums,
+.lum-catlist-col-images {
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--lum-head-text);
+  padding: .75rem .5rem;
+}
+
+/* ============================================================
+   Image pages (thumbnail grid + PhotoSwipe lightbox)
+   ============================================================ */
 
 /* ── Thumbnail grid ───────────────────────────────────────── */
 .lum-thumbgrid {
@@ -191,8 +463,8 @@
 
 .lum-thumb-item {
   margin: 0;
-  background: #fff;
-  border: 1px solid #e0e4e8;
+  background: var(--lum-surface);
+  border: 1px solid var(--lum-border);
   border-radius: var(--lum-thumb-radius);
   overflow: hidden;
   transition: box-shadow .2s, transform .2s;
@@ -227,9 +499,9 @@
   align-items: center;
   padding: .3rem .5rem;
   font-size: .72rem;
-  color: #6c757d;
-  background: #fafbfc;
-  border-top: 1px solid #e9ecef;
+  color: var(--lum-muted);
+  background: var(--lum-thumb-cap-bg);
+  border-top: 1px solid var(--lum-thumb-cap-bdr);
   line-height: 1.2;
   gap: .25rem;
 }
@@ -246,11 +518,10 @@
   font-size: .65rem;
 }
 
-/* Added date — own full-width row beneath resolution/views, centred. */
 .lum-thumb-date {
   flex: 1 0 100%;
   text-align: center;
-  color: #6c757d;
+  color: var(--lum-muted);
 }
 
 .lum-thumb-date::before {
@@ -258,59 +529,195 @@
   font-size: .65rem;
 }
 
-/* ── Sort bar ─────────────────────────────────────────────── */
-.lum-sort-bar {
-  background: #fff;
-  border: 1px solid #e0e4e8;
+/* ── PhotoSwipe download button ───────────────────────────── */
+.pswp__button--download-button {
+  width: 50px;
+  height: 60px;
+  padding: 10px;
+}
+
+/* ============================================================
+   Forms (search boxes, future public-facing forms)
+   ============================================================ */
+.lum-main .form-control,
+.lum-main .form-select {
+  background-color: var(--lum-surface);
+  border-color: var(--lum-border);
+  color: var(--lum-text);
+}
+
+.lum-main .form-control:focus,
+.lum-main .form-select:focus {
+  background-color: var(--lum-surface);
+  color: var(--lum-text);
+  border-color: var(--lum-accent);
+  box-shadow: 0 0 0 .2rem rgba(13,110,253,.15);
+}
+
+.lum-main .form-label { color: var(--lum-head-text); font-weight: 600; }
+
+.lum-main .form-check-input:checked {
+  background-color: var(--lum-accent);
+  border-color: var(--lum-accent);
+}
+
+.lum-main .form-text { color: var(--lum-muted); }
+
+.lum-main .is-invalid,
+.lum-main .form-control.is-invalid { border-color: #dc3545; }
+.lum-main .invalid-feedback { color: #dc3545; }
+
+.lum-main .is-valid,
+.lum-main .form-control.is-valid { border-color: #198754; }
+.lum-main .valid-feedback { color: #198754; }
+
+/* ============================================================
+   Buttons
+   ============================================================ */
+.lum-main .btn-primary {
+  --bs-btn-bg: var(--lum-accent);
+  --bs-btn-border-color: var(--lum-accent);
+  --bs-btn-hover-bg: var(--lum-accent-dark);
+  --bs-btn-hover-border-color: var(--lum-accent-dark);
+  --bs-btn-active-bg: var(--lum-accent-dark);
+  --bs-btn-active-border-color: var(--lum-accent-dark);
+}
+
+.lum-main .btn-outline-primary {
+  --bs-btn-color: var(--lum-accent);
+  --bs-btn-border-color: var(--lum-accent);
+  --bs-btn-hover-bg: var(--lum-accent);
+  --bs-btn-hover-border-color: var(--lum-accent);
+  --bs-btn-active-bg: var(--lum-accent-dark);
+  --bs-btn-active-border-color: var(--lum-accent-dark);
+}
+
+.lum-main .btn:disabled,
+.lum-main .btn.disabled { opacity: .55; cursor: not-allowed; }
+
+.lum-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 1px solid var(--lum-border);
+  background: var(--lum-surface);
+  color: var(--lum-text);
+  transition: background .15s, color .15s, border-color .15s;
+}
+
+.lum-icon-btn:hover {
+  background: var(--lum-accent);
+  border-color: var(--lum-accent);
+  color: #fff;
+}
+
+/* ============================================================
+   Tables (search results, future data views)
+   ============================================================ */
+.lum-main .table {
+  color: var(--lum-text);
+  border-color: var(--lum-border);
+}
+
+.lum-main .table > thead {
+  color: var(--lum-head-text);
+  background: var(--lum-card-tint-gray);
+}
+
+.lum-main .table-striped > tbody > tr:nth-of-type(odd) > * {
+  background: var(--lum-bg);
+  color: var(--lum-text);
+}
+
+.lum-main .table-hover > tbody > tr:hover > * {
+  background: var(--lum-card-tint-blue);
+}
+
+.lum-main .table-responsive {
   border-radius: var(--lum-card-radius);
-  padding: .5rem .75rem;
+  overflow: hidden;
+  border: 1px solid var(--lum-border);
 }
 
-/* ── Pagination ───────────────────────────────────────────── */
-.lum-pagination .pagination {
-  margin-bottom: .4rem;
+/* ============================================================
+   Messages / alerts
+   ============================================================ */
+.lum-main .alert { border-radius: var(--lum-card-radius); }
+
+/* ============================================================
+   Utility components
+   ============================================================ */
+.lum-panel {
+  background: var(--lum-surface);
+  border: 1px solid var(--lum-border);
+  border-radius: var(--lum-card-radius);
+  padding: 1rem;
 }
 
-/* ── Breadcrumb ───────────────────────────────────────────── */
-.breadcrumb {
-  background: none;
-  padding: 0;
-  font-size: .9rem;
+.lum-divider {
+  border: none;
+  border-top: 1px solid var(--lum-border);
+  margin: 1.5rem 0;
 }
 
-/* ── Section headings ─────────────────────────────────────── */
-.lum-section-title {
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: #343a40;
-  border-bottom: 2px solid #e0e4e8;
-  padding-bottom: .4rem;
-  margin-bottom: 1rem;
+.lum-main .badge { border-radius: .35rem; font-weight: 600; }
+
+/* ── Empty state ──────────────────────────────────────────── */
+.lum-empty { border-radius: var(--lum-card-radius); }
+
+/* ── Who Is Online strip ──────────────────────────────────── */
+.lum-who-is-online {
+  font-size: .82rem;
 }
 
-/* ── Album description ────────────────────────────────────── */
-.lum-album-desc {
-  color: #495057;
-  background: #f8f9fa;
-  border-left: 3px solid var(--lum-accent);
-  border-radius: 0 var(--lum-card-radius) var(--lum-card-radius) 0;
-  padding: .75rem 1rem;
-  margin-bottom: 1rem;
-  font-size: .95rem;
-  line-height: 1.6;
+/* ============================================================
+   Media — hover overlays
+   ============================================================ */
+.lum-hover-overlay { position: relative; }
+
+.lum-hover-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0);
+  transition: background .2s ease;
+  pointer-events: none;
 }
 
-/* ── Category description ─────────────────────────────────── */
-.lum-cat-desc {
-  color: #495057;
-  background: #f8f9fa;
-  border-left: 3px solid var(--lum-accent);
-  border-radius: 0 var(--lum-card-radius) var(--lum-card-radius) 0;
-  padding: .75rem 1rem;
-  margin-bottom: 1rem;
-  font-size: .95rem;
-  line-height: 1.6;
+.lum-hover-overlay:hover::after { background: rgba(0,0,0,.15); }
+
+/* ============================================================
+   Loading indicator
+   ============================================================ */
+.lum-spinner {
+  display: inline-block;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: .2rem solid var(--lum-border);
+  border-top-color: var(--lum-accent);
+  border-radius: 50%;
+  animation: lum-spin .7s linear infinite;
 }
+
+@keyframes lum-spin { to { transform: rotate(360deg); } }
+
+/* ============================================================
+   Print styles
+   ============================================================ */
+@media print {
+  .lum-navbar, .lum-footer, .lum-sort-bar,
+  .lum-pagination, .lum-admin-link, .lum-color-toggle {
+    display: none !important;
+  }
+  .lum-main { padding: 0 !important; }
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
 
 /* ── Responsive tweaks ────────────────────────────────────── */
 @media (max-width: 575px) {
@@ -320,13 +727,6 @@
   }
   .lum-stat-num { font-size: 1.2rem; }
 
-  /*
-   * Sort bar: Bootstrap's .btn-group is a single non-wrapping flex item,
-   * so on narrow phones the sort buttons overflow past the viewport edge
-   * instead of wrapping. Force the group to wrap and undo the joined-
-   * button negative margins / squared-off corners that only make sense
-   * in a single unbroken row.
-   */
   .lum-sort-bar { padding: .4rem .55rem; }
 
   .lum-sort-bar .btn-group {
@@ -347,109 +747,6 @@
 
 @media (min-width: 1200px) {
   :root { --lum-thumb-min: 180px; }
-}
-
-/* ── PhotoSwipe download button ───────────────────────────── */
-.pswp__button--download-button {
-  width: 50px;
-  height: 60px;
-  padding: 10px;
-}
-
-/* ── Category list (row layout) ───────────────────────────── */
-.lum-catlist {
-  border: 1px solid #e0e4e8;
-  border-radius: var(--lum-card-radius);
-  overflow: hidden;
-  margin-bottom: 1.25rem;
-}
-
-.lum-catlist-header {
-  display: grid;
-  grid-template-columns: 140px 1fr 100px 100px;
-  background: var(--lum-accent);
-  color: #fff;
-  font-size: .75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .05em;
-  align-items: center;
-}
-
-.lum-catlist-header-cell {
-  padding: .5rem .75rem;
-}
-
-.lum-catlist-header-cell--albums,
-.lum-catlist-header-cell--images {
-  text-align: center;
-}
-
-.lum-catlist-row {
-  display: grid;
-  grid-template-columns: 140px 1fr 100px 100px;
-  align-items: center;
-  border-top: 1px solid #e0e4e8;
-  background: #fff;
-  transition: background .15s;
-}
-
-.lum-catlist-row:nth-child(even) { background: #f8f9fa; }
-.lum-catlist-row:hover            { background: #eef2ff; }
-
-.lum-catlist-col-thumb {
-  padding: .5rem;
-  line-height: 0;
-}
-
-.lum-catlist-col-thumb a { display: block; }
-
-.lum-catlist-col-thumb img.lum-catcard-img {
-  width: 120px;
-  height: 150px;
-  object-fit: cover;
-  border-radius: var(--lum-thumb-radius);
-}
-
-.lum-catlist-col-thumb .lum-catcard-placeholder {
-  width: 120px;
-  height: 150px;
-  border-radius: var(--lum-thumb-radius);
-  background: #e9ecef;
-  color: #adb5bd;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.lum-catlist-col-name {
-  padding: .75rem 1rem;
-}
-
-.lum-catlist-col-name a {
-  display: inline-block;
-  font-weight: 700;
-  font-size: 1rem;
-  color: inherit;
-  text-decoration: none;
-  margin-bottom: .2rem;
-}
-
-.lum-catlist-col-name a:hover { color: var(--lum-accent); }
-
-.lum-catlist-desc {
-  font-size: .85rem;
-  color: #6c757d;
-  line-height: 1.4;
-}
-
-.lum-catlist-col-albums,
-.lum-catlist-col-images {
-  text-align: center;
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #343a40;
-  padding: .75rem .5rem;
 }
 
 @media (max-width: 575px) {
@@ -476,16 +773,10 @@
     padding: .5rem .25rem;
   }
 
-  /*
-   * Header labels ("ALBUMS" / "IMAGES") inherit the full-width .75rem
-   * font-size + .75rem horizontal padding + .05em letter-spacing from
-   * .lum-catlist-header-cell, which doesn't fit in a 56px column and
-   * overflows past the card/viewport edge. Shrink to match the row cells.
-   */
   .lum-catlist-header-cell--albums,
   .lum-catlist-header-cell--images {
     font-size:      .6rem;
-    padding:         .5rem .15rem;
-    letter-spacing:  0;
+    padding:        .5rem .15rem;
+    letter-spacing: 0;
   }
 }

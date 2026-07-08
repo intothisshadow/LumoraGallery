@@ -8,22 +8,55 @@ declare(strict_types=1);
  *
  * For large albums (thousands of images) the page uses chunked AJAX calls to
  * process in groups and report progress.
+ *
+ * Album scope: 'manage_albums' holders (admin/moderator) see every album.
+ * Contributors ('batch_add' without 'manage_albums') only see and may only
+ * batch-add into albums explicitly assigned to them via
+ * AlbumAssignmentService — both the dropdown list and the ?album= GET
+ * parameter are scoped/re-validated server-side.
  */
 define('LUMORA_ENTRY', true);
 require_once dirname(__DIR__) . '/include/bootstrap.php';
 require_once __DIR__ . '/includes/admin_helpers.php';
-lumora_require_admin();
+lumora_require_permission('batch_add');
+
+$can_manage_all  = lumora_has_permission('manage_albums');
+$current_user    = lumora_current_user();
+$current_user_id = (int) ($current_user['user_id'] ?? 0);
 
 // ── Build album list ──────────────────────────────────────────────────────────
-$all_albums = LumoraDB::fetchAll(
-    'SELECT a.id, a.title, a.folder, c.name AS cat_name,
-            (SELECT COUNT(*) FROM `{PREFIX}images` i WHERE i.album_id = a.id) AS img_count
-     FROM `{PREFIX}albums` a
-     LEFT JOIN `{PREFIX}categories` c ON c.id = a.category_id
-     ORDER BY c.name ASC, a.title ASC'
-);
+if ($can_manage_all) {
+    $all_albums = LumoraDB::fetchAll(
+        'SELECT a.id, a.title, a.folder, c.name AS cat_name,
+                (SELECT COUNT(*) FROM `{PREFIX}images` i WHERE i.album_id = a.id) AS img_count
+         FROM `{PREFIX}albums` a
+         LEFT JOIN `{PREFIX}categories` c ON c.id = a.category_id
+         ORDER BY c.name ASC, a.title ASC'
+    );
+} else {
+    $assigned_ids = AlbumAssignmentService::getAssignedAlbumIds($current_user_id);
+    if (empty($assigned_ids)) {
+        $all_albums = [];
+    } else {
+        $ph = implode(',', array_fill(0, count($assigned_ids), '?'));
+        $all_albums = LumoraDB::fetchAll(
+            "SELECT a.id, a.title, a.folder, c.name AS cat_name,
+                    (SELECT COUNT(*) FROM `{PREFIX}images` i WHERE i.album_id = a.id) AS img_count
+             FROM `{PREFIX}albums` a
+             LEFT JOIN `{PREFIX}categories` c ON c.id = a.category_id
+             WHERE a.id IN ({$ph})
+             ORDER BY c.name ASC, a.title ASC",
+            $assigned_ids
+        );
+    }
+}
 
 $album_id = lumora_int($_GET['album'] ?? 0, 0, 1);
+if ($album_id > 0) {
+    // Re-validated server-side (not just filtered out of the dropdown) so a
+    // contributor cannot reach an unassigned album by editing the URL.
+    lumora_require_album_access($album_id);
+}
 $selected = null;
 if ($album_id > 0) {
     foreach ($all_albums as $a) {
@@ -52,6 +85,15 @@ foreach ($all_albums as $a) {
         . '</option>';
 }
 if ($cur_cat !== null) $sel_opts .= '</optgroup>';
+
+// No-assignments empty state for contributors (kept separate from the normal
+// selector so the message is unambiguous rather than an empty dropdown).
+$no_albums_notice = (!$can_manage_all && empty($all_albums))
+    ? '<div class="alert alert-info py-2 mb-0">'
+      . "You haven't been assigned any albums yet. Contact an administrator "
+      . 'or moderator to get access.'
+      . '</div>'
+    : '';
 
 // ── Scan info ─────────────────────────────────────────────────────────────────
 // Initialise $new_count before the conditional so the JS heredoc below never
@@ -91,6 +133,7 @@ if ($selected) {
 $content = <<<HTML
 <div class="lum-adm-card mb-3">
   <h5 class="mb-3">Select Album</h5>
+  {$no_albums_notice}
   <form method="get" action="" class="d-flex gap-2 flex-wrap">
     <select name="album" class="form-select" style="max-width:420px">
       {$sel_opts}

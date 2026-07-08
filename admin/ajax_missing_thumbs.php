@@ -47,7 +47,7 @@ require_once dirname(__DIR__) . '/include/bootstrap.php';
 header('Content-Type: application/json; charset=utf-8');
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
-if (!lumora_is_admin()) {
+if (!lumora_has_permission('maintenance_tools')) {
     http_response_code(403);
     echo json_encode(['error' => 'Not authorised']);
     exit;

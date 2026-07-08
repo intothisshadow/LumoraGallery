@@ -53,4 +53,59 @@ class LumoraConfig
             [$key, (string) $value]
         );
     }
+
+    /**
+     * Boolean-style config keys: stored as '1' or '0' only.
+     * Shared by sanitizeValue() below.
+     */
+    private const BOOL_KEYS = ['count_album_views', 'gallery_offline', 'show_powered_by'];
+
+    /**
+     * Validate and normalise a raw config value for a known config key,
+     * applying the same enum/range constraints regardless of where the
+     * value originated (the settings form, an imported JSON config file,
+     * or any future caller).
+     *
+     * Centralising this here (rather than duplicating the per-key rules in
+     * every caller) ensures a value can never bypass validation through one
+     * entry point but not another — see TODO-security.md #11, where
+     * admin/config.php's `import` action previously stored values with only
+     * a key-name whitelist check, skipping the enum/range validation the
+     * `save` action applied.
+     *
+     * Unknown keys fall through to a plain trim(), matching the previous
+     * per-page `default` match arm.
+     *
+     * @param string $key      Config key name.
+     * @param mixed  $rawValue Raw value from POST data or an imported JSON file.
+     */
+    public static function sanitizeValue(string $key, mixed $rawValue): string
+    {
+        $raw = (string) $rawValue;
+
+        if (in_array($key, self::BOOL_KEYS, true)) {
+            return $raw === '1' ? '1' : '0';
+        }
+
+        return match ($key) {
+            'thumb_width', 'thumb_height'      => (string) max(1, (int) $raw),
+            'per_page'                         => (string) max(1, (int) $raw),
+            'base_url'                         => rtrim(trim($raw), '/') . '/',
+            'thumb_quality'                    => (string) max(1, min(100, (int) $raw)),
+            'max_upload_size_mb',
+            'max_image_width',
+            'max_image_height'                 => (string) max(0, (int) $raw),
+            'latest_albums_count'              => (string) max(0, min(50, (int) $raw)),
+            'who_is_online_duration'           => (string) max(1, min(60, (int) $raw)),
+            'log_mode'                         => in_array($raw, ['off', 'errors', 'all'], true)
+                                                    ? $raw : 'off',
+            'timezone'                         => in_array(trim($raw), \DateTimeZone::listIdentifiers(), true)
+                                                    ? trim($raw) : 'UTC',
+            'category_layout'                  => in_array($raw, ['grid', 'list'], true)
+                                                    ? $raw : 'grid',
+            'default_color_mode'               => in_array($raw, ['auto', 'light', 'dark'], true)
+                                                    ? $raw : 'auto',
+            default                            => trim($raw),
+        };
+    }
 }
