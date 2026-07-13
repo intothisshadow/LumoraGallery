@@ -25,6 +25,16 @@
   --fs-accent-light:       #6d3a9e;
   --fs-accent-text:        #ffffff;
 
+  /* Foreground/text-safe accent tokens — used wherever the accent sits */
+  /* on text, a link, or an interactive-control border rather than as   */
+  /* a filled background (where --fs-accent's own contrast against its  */
+  /* white/light foreground text is what matters, not this token).      */
+  /* Identical to --fs-accent/--fs-accent-light in light mode; swapped   */
+  /* for lighter tints in dark mode — see the dark-mode block below for  */
+  /* why this matters. */
+  --fs-accent-ink:         var(--fs-accent);
+  --fs-accent-ink-hover:   var(--fs-accent-light);
+
   /* Page shell */
   --fs-page-bg:            #1a1a2a;
   --fs-body-bg:            #f0eef5;
@@ -71,6 +81,9 @@
   --fs-card-tint-warm:     #f5f0e8;
   --fs-catlist-even:       #f7f5fc;
   --fs-catlist-hover:      #ede8f5;
+
+  /* Keyboard focus ring — its own token so it can be tuned per mode. */
+  --fs-focus-ring:         var(--fs-accent);
 }
 
 /* ── Dark mode overrides ──────────────────────────────────── */
@@ -94,12 +107,52 @@ html[data-bs-theme="dark"] {
   --fs-catlist-hover:      #1e1a35;
   /* Slightly darker outer frame in dark mode */
   --fs-page-bg:            #12121a;
+
+  /* --fs-accent (#4a1f6e) is a deep, near-black purple — well under  */
+  /* 2:1 contrast against the dark content-area surfaces above when   */
+  /* used as text/link colour, though it works fine as a *background* */
+  /* (--fs-section-bg, .lum-catlist-header, filled buttons) since its  */
+  /* own white foreground text stays high-contrast regardless of mode. */
+  /* These lighter lavender tints keep every text/link/border use of   */
+  /* the accent at 5.8:1+ against both --fs-body-bg and --fs-panel-bg. */
+  --fs-accent-ink:         #b98ee8;
+  --fs-accent-ink-hover:   #d4b8f0;
+  --fs-focus-ring:         #b98ee8;
 }
 
 /* ── Reset / base ─────────────────────────────────────────── */
 *,
 *::before,
 *::after { box-sizing: border-box; }
+
+/* ============================================================
+   Accessibility — keyboard focus visibility
+   ============================================================ */
+/* Bootstrap's default focus rings are easy to lose against this      */
+/* theme's dark nav/footer and (in dark mode) dark content panels.    */
+/* Give every interactive element a clearly visible, theme-aware      */
+/* outline on keyboard focus. */
+.fs-body a:focus-visible,
+.fs-body button:focus-visible,
+.fs-body input:focus-visible,
+.fs-body select:focus-visible,
+.fs-body textarea:focus-visible,
+.fs-body [tabindex]:focus-visible {
+  outline: 2px solid var(--fs-focus-ring);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* The nav and footer sit on a dark background in both colour modes,  */
+/* so their focus rings stay a fixed light colour rather than the     */
+/* adaptive --fs-focus-ring (which would be too dark against          */
+/* --fs-nav-bg/--fs-footer-bg in light mode). */
+.fs-nav a:focus-visible,
+.fs-nav button:focus-visible,
+.fs-footer a:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
 
 /* ============================================================
    Layout
@@ -299,8 +352,8 @@ html[data-bs-theme="dark"] {
   color: var(--fs-head-text);
 }
 
-.fs-main a { color: var(--fs-accent); }
-.fs-main a:hover, .fs-main a:focus { color: var(--fs-accent-light); }
+.fs-main a { color: var(--fs-accent-ink); }
+.fs-main a:hover, .fs-main a:focus { color: var(--fs-accent-ink-hover); }
 
 .fs-main ul, .fs-main ol { color: var(--fs-text); }
 
@@ -361,7 +414,7 @@ html[data-bs-theme="dark"] {
 .lum-stat-num {
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--fs-accent);
+  color: var(--fs-accent-ink);
   line-height: 1.1;
 }
 
@@ -388,7 +441,7 @@ html[data-bs-theme="dark"] {
 }
 
 .lum-catcard .card-title a {
-  color: var(--fs-accent);
+  color: var(--fs-accent-ink);
   text-decoration: none;
   font-weight: 600;
 }
@@ -408,7 +461,7 @@ html[data-bs-theme="dark"] {
   width: 100%;
   height: 110px;
   background: var(--fs-card-tint-blue);
-  color: var(--fs-accent-light);
+  color: var(--fs-accent-ink);
 }
 
 .lum-card-desc {
@@ -528,7 +581,7 @@ html[data-bs-theme="dark"] {
 }
 
 .breadcrumb-item a {
-  color: var(--fs-accent);
+  color: var(--fs-accent-ink);
   text-decoration: none;
 }
 
@@ -537,10 +590,10 @@ html[data-bs-theme="dark"] {
 /* ── Pagination (Bootstrap colour overrides) ──────────────── */
 .lum-pagination .pagination { margin-bottom: .4rem; }
 
-.page-link { color: var(--fs-accent); }
+.page-link { color: var(--fs-accent-ink); }
 
 .page-link:hover,
-.page-link:focus { color: var(--fs-accent-light); }
+.page-link:focus { color: var(--fs-accent-ink-hover); }
 
 .page-item.active .page-link {
   background-color: var(--fs-accent);
@@ -550,8 +603,8 @@ html[data-bs-theme="dark"] {
 
 /* ── Primary button (Bootstrap colour override) ───────────── */
 .btn-outline-primary {
-  --bs-btn-color:               var(--fs-accent);
-  --bs-btn-border-color:        var(--fs-accent);
+  --bs-btn-color:               var(--fs-accent-ink);
+  --bs-btn-border-color:        var(--fs-accent-ink);
   --bs-btn-hover-color:         #fff;
   --bs-btn-hover-bg:            var(--fs-accent);
   --bs-btn-hover-border-color:  var(--fs-accent);
@@ -694,7 +747,7 @@ html[data-bs-theme="dark"] {
   height: 150px;
   border-radius: var(--fs-radius);
   background: var(--fs-card-tint-blue);
-  color: var(--fs-accent-light);
+  color: var(--fs-accent-ink);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -708,7 +761,7 @@ html[data-bs-theme="dark"] {
   display: inline-block;
   font-weight: 700;
   font-size: 1rem;
-  color: var(--fs-accent);
+  color: var(--fs-accent-ink);
   text-decoration: none;
   margin-bottom: .2rem;
 }
@@ -726,7 +779,7 @@ html[data-bs-theme="dark"] {
   text-align: center;
   font-size: 1.1rem;
   font-weight: 600;
-  color: var(--fs-accent);
+  color: var(--fs-accent-ink);
   padding: .75rem .5rem;
 }
 
@@ -744,7 +797,7 @@ html[data-bs-theme="dark"] {
 .fs-main .form-select:focus {
   background-color: var(--fs-panel-bg);
   color: var(--fs-text);
-  border-color: var(--fs-accent);
+  border-color: var(--fs-accent-ink);
   box-shadow: 0 0 0 .2rem rgba(74,31,110,.18);
 }
 
@@ -924,4 +977,96 @@ html[data-bs-theme="dark"] {
 
 @media (min-width: 992px) {
   :root { --lum-thumb-min: 170px; }
+}
+
+/* ── Lightbox staff info box (PhotoSwipe) ─────────────────────────────────
+   Admin/staff-only "copy image HTML" panel injected into the PhotoSwipe
+   lightbox (see ThemeRenderer::renderLightboxJs()). Styled to match
+   PhotoSwipe's own always-dark chrome rather than data-bs-theme, since the
+   lightbox itself is unaffected by the site's colour-mode toggle. Identical
+   to the Default theme's block — this is a utility overlay, not a themed
+   component, so it intentionally doesn't follow the fansite aesthetic. */
+.lum-lightbox-info-btn {
+  opacity: .85;
+}
+
+.lum-lightbox-info-btn:hover {
+  opacity: 1;
+}
+
+.lum-lightbox-info {
+  display:  none;
+  position: fixed;
+  z-index:  100000;
+  left:     16px;
+  bottom:   76px;
+  max-width: min(92vw, 420px);
+  background:    rgba(20, 20, 20, .92);
+  color:         #f5f5f5;
+  border:        1px solid rgba(255, 255, 255, .15);
+  border-radius: 8px;
+  padding:       .75rem .875rem;
+  box-shadow:    0 4px 18px rgba(0, 0, 0, .45);
+  font-size:     .8rem;
+}
+
+.lum-lightbox-info.is-open {
+  display: block;
+}
+
+.lum-lightbox-info-label {
+  display:        block;
+  font-size:      .7rem;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  opacity:        .7;
+  margin:         .5rem 0 .15rem;
+}
+
+.lum-lightbox-info-label:first-child {
+  margin-top: 0;
+}
+
+.lum-lightbox-info-url,
+.lum-lightbox-info-html {
+  display:       block;
+  width:         100%;
+  background:    rgba(255, 255, 255, .08);
+  color:         #f5f5f5;
+  border:        1px solid rgba(255, 255, 255, .2);
+  border-radius: 4px;
+  padding:       .25rem .4rem;
+  font-family:   ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size:     .72rem;
+  resize:        none;
+}
+
+.lum-lightbox-info-html {
+  min-height: 3.2em;
+}
+
+.lum-lightbox-info-actions {
+  display:     flex;
+  align-items: center;
+  gap:         .5rem;
+  margin-top:  .5rem;
+}
+
+.lum-lightbox-info-copy {
+  background:    #2d7dfa;
+  color:         #fff;
+  border:        none;
+  border-radius: 4px;
+  padding:       .3rem .75rem;
+  font-size:     .75rem;
+  cursor:        pointer;
+}
+
+.lum-lightbox-info-copy:hover {
+  background: #1c6ce8;
+}
+
+.lum-lightbox-info-feedback {
+  font-size: .75rem;
+  color:     #7cfc9c;
 }

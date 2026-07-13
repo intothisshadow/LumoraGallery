@@ -8,3 +8,12 @@
     --fs-body-bg:      #f5eeee;
     --fs-panel-border: #e8c8c8;
 }
+
+/* Dark mode: style.css's own --fs-accent-ink/--fs-accent-ink-hover default to a  */
+/* neutral lavender tint (chosen only for guaranteed WCAG AA contrast against the */
+/* shared dark content background — see style.css). Override them here too so    */
+/* links/borders in dark mode match this preset's dark-red branding instead.     */
+html[data-bs-theme="dark"] {
+    --fs-accent-ink:       #ff8a80;
+    --fs-accent-ink-hover: #ffb3a8;
+}

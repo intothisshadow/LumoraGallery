@@ -179,11 +179,90 @@ function lumora_album_url(string $folder): string
 }
 
 /**
- * Active theme name (falls back to 'default').
+ * Resolve the theme-preview state for the current request once, caching the
+ * result in a static local so lumora_active_theme() and
+ * lumora_theme_preview_notice() below always agree on the same answer
+ * without recomputing it or drifting apart if called multiple times.
+ *
+ * Admin-only, single-request theme preview via a `?theme=` query parameter
+ * (TODO.md #29): when present, the current visitor is a logged-in admin,
+ * and the named theme actually exists (has a template.html), it wins for
+ * this request only. The configured `theme` setting in the database is
+ * never read from here for writing and is never touched, so no other
+ * visitor or future request is ever affected — the preview is entirely
+ * request-scoped statelessness, not a session or cookie override.
+ *
+ * Falls back to the real configured theme in every other case: no
+ * parameter, a non-admin visitor (silently ignored — see requirement in
+ * TODO.md #29), or an unrecognised/nonexistent theme name.
+ *
+ * @return array{theme: string, requested: string|null, valid: bool}
+ */
+function lumora_theme_preview_state(): array
+{
+    static $state = null;
+    if ($state !== null) return $state;
+
+    $configured = (string) (lumora_config('theme', 'default') ?: 'default');
+    $requested  = $_GET['theme'] ?? null;
+
+    if (is_string($requested) && $requested !== '' && lumora_is_admin()) {
+        $valid = in_array($requested, lumora_list_themes(), true);
+        $state = [
+            'theme'     => $valid ? $requested : $configured,
+            'requested' => $requested,
+            'valid'     => $valid,
+        ];
+        return $state;
+    }
+
+    $state = ['theme' => $configured, 'requested' => null, 'valid' => false];
+    return $state;
+}
+
+/**
+ * Active theme name for the current request (falls back to 'default').
+ *
+ * See lumora_theme_preview_state() above for the admin-only `?theme=`
+ * preview this resolves through — every existing caller (lumora_theme_url(),
+ * lumora_theme_path(), ThemeRenderer::renderPage()) is unaffected by name or
+ * signature and automatically picks up the preview theme's assets for the
+ * duration of the request.
  */
 function lumora_active_theme(): string
 {
-    return lumora_config('theme', 'default') ?: 'default';
+    return lumora_theme_preview_state()['theme'];
+}
+
+/**
+ * Admin-only notice banner HTML for the current request's theme-preview
+ * state (TODO.md #29), or '' when there's nothing to show — including for
+ * every non-admin visitor and every normal request with no `?theme=`
+ * parameter at all, so ordinary page loads are completely unaffected.
+ *
+ * Two cases:
+ *   - An invalid/nonexistent `?theme=` value was supplied (silently ignored
+ *     by lumora_active_theme() above, per TODO.md #29's fallback
+ *     requirement) — tells the admin why they're seeing the real active
+ *     theme instead of their requested preview.
+ *   - A valid `?theme=` preview is currently active — reminds the admin
+ *     this view is temporary, visible only to them, and that no setting
+ *     has actually been changed.
+ */
+function lumora_theme_preview_notice(): string
+{
+    $s = lumora_theme_preview_state();
+    if ($s['requested'] === null) return '';
+
+    if (!$s['valid']) {
+        return '<div class="alert alert-warning lum-theme-preview-notice py-2 px-3 mb-3">'
+            . 'Theme preview: <code>' . h($s['requested']) . '</code> was not found &mdash; showing the active theme instead.'
+            . '</div>';
+    }
+
+    return '<div class="alert alert-info lum-theme-preview-notice py-2 px-3 mb-3">'
+        . 'Previewing theme: <strong>' . h($s['theme']) . '</strong> &mdash; only visible to you; the active theme is unchanged for everyone else.'
+        . '</div>';
 }
 
 /**

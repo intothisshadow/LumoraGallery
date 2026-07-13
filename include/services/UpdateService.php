@@ -4,12 +4,24 @@ declare(strict_types=1);
 /**
  * Lumora Gallery — Update Service
  *
- * Checks for new Lumora releases against the update endpoint hosted
- * on the Lumora website.  Results are cached in the config table for
- * 24 hours so the endpoint is never hit on every page load.
+ * Checks for new Lumora releases via the configured release provider
+ * (see AbstractUpdateProvider::createFromConfig() — GitHubUpdateProvider,
+ * backed by the GitHub Releases API, by default). Results are cached in the
+ * config table for 24 hours so the provider is never hit on every page load.
  *
- * Privacy: only a plain GET request is sent — no gallery content, user
- * data, image data, or analytics information is ever transmitted.
+ * This class previously queried a fixed JSON endpoint hosted on the Lumora
+ * website (coding.unloved-heart.net/lumora/update.json). That dependency has
+ * been removed entirely — release discovery now goes through the same
+ * provider abstraction UpdaterService already used for download URLs and
+ * SHA-256 checksums, so there is exactly one source of truth for "what is
+ * the latest release" rather than two separate mechanisms that could
+ * disagree. The repository queried is configurable via the
+ * `update_github_repo` config key (see GitHubUpdateProvider), so forks can
+ * point this at their own release source without code changes.
+ *
+ * Privacy: only a plain GET request is sent to the provider's public API —
+ * no gallery content, user data, image data, or analytics information is
+ * ever transmitted.
  *
  * @copyright Copyright (C) 2025 Ariane
  * @license   GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
@@ -19,9 +31,6 @@ if (!defined('LUMORA_ENTRY')) exit('Direct access denied.');
 
 class UpdateService
 {
-    /** Remote update endpoint (JSON hosted on the Lumora website). URL is correct - do not modify. */
-    private const ENDPOINT = 'https://coding.unloved-heart.net/lumora/update.json';
-
     /** Cache TTL in seconds (24 hours). */
     private const CACHE_TTL = 86400;
 
@@ -30,9 +39,6 @@ class UpdateService
 
     /** Config key — Unix timestamp of the last fetch attempt. */
     private const CACHE_AT = 'update_check_at';
-
-    /** HTTP request timeout in seconds. */
-    private const FETCH_TIMEOUT = 5;
 
     // ── Cache helpers ─────────────────────────────────────────────────────────
 
@@ -90,13 +96,13 @@ class UpdateService
     }
 
     /**
-     * Return the full update status, refreshing from the remote endpoint when
-     * the cache is expired or $force is true.
+     * Return the full update status, refreshing from the configured release
+     * provider when the cache is expired or $force is true.
      *
      * On network failure the most-recent stale cache is used as a fallback so
      * admins always see the last known state rather than a blank error page.
      *
-     * @param bool $force  Bypass the TTL and always hit the remote endpoint.
+     * @param bool $force  Bypass the TTL and always query the provider.
      *
      * @return array{
      *   status: 'update_available'|'up_to_date'|'error'|'unknown',
@@ -121,7 +127,7 @@ class UpdateService
 
         if ($data === null) {
             // Network failure — fall back to stale cache if one is available.
-            $error = 'Could not reach the update server.';
+            $error = 'Could not reach the release provider.';
             $data  = self::getCachedPayload();
         }
 
@@ -138,18 +144,21 @@ class UpdateService
     }
 
     /**
-     * Return the configured update endpoint URL.
+     * Return a human-readable label for the configured release provider and
+     * source, e.g. "GitHub Releases (intothisshadow/Lumora)". Used in the
+     * admin "About Updates" panel in place of the old fixed endpoint URL.
      */
-    public static function getEndpointUrl(): string
+    public static function getProviderLabel(): string
     {
-        return self::ENDPOINT;
+        $provider = AbstractUpdateProvider::createFromConfig();
+        return $provider->getName() . ' (' . $provider->getSourceLabel() . ')';
     }
 
     // ── Network ───────────────────────────────────────────────────────────────
 
     /**
-     * Fetch the remote endpoint, persist the payload to the config cache,
-     * and return the decoded array.
+     * Query the configured release provider, persist the payload to the
+     * config cache, and return the decoded array.
      *
      * Returns null on any network or parse failure; the cache is only updated
      * on success so a stale entry survives transient network issues.
@@ -160,47 +169,19 @@ class UpdateService
      */
     public static function fetch(): ?array
     {
-        $ctx = stream_context_create([
-            'http' => [
-                'method'          => 'GET',
-                'timeout'         => self::FETCH_TIMEOUT,
-                'follow_location' => 1,
-                'max_redirects'   => 3,
-                'user_agent'      => 'Lumora Gallery/' . LUMORA_VERSION
-                    . ' PHP/' . PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION,
-                'ignore_errors'   => false,
-            ],
-            'ssl' => [
-                'verify_peer'      => true,
-                'verify_peer_name' => true,
-            ],
-        ]);
-
-        // Temporarily install a no-op error handler so that a failed TCP
-        // connection does not write an E_WARNING to the PHP error log.
-        // The return value of file_get_contents() is sufficient to detect failure.
-        set_error_handler(static function (): bool {
-            return true;
-        });
-        try {
-            $raw = file_get_contents(self::ENDPOINT, false, $ctx);
-        } finally {
-            restore_error_handler();
-        }
-
-        if ($raw === false || $raw === '') return null;
+        $provider = AbstractUpdateProvider::createFromConfig();
 
         try {
-            $data = json_decode($raw, associative: true, flags: JSON_THROW_ON_ERROR);
-        } catch (\JsonException) {
+            $data = $provider->fetchMetadata();
+        } catch (\Throwable) {
             return null;
         }
 
-        if (!is_array($data)) return null;
+        if ($data === null) return null;
 
         // Persist to cache (non-fatal if the DB write fails).
         try {
-            LumoraConfig::set(self::CACHE_JSON, $raw);
+            LumoraConfig::set(self::CACHE_JSON, json_encode($data, JSON_THROW_ON_ERROR));
             LumoraConfig::set(self::CACHE_AT,   (string) time());
         } catch (\Throwable) {
             // Proceed — return the payload even if caching fails.
@@ -265,7 +246,7 @@ class UpdateService
                 'changelog_url' => $changelog_url,
                 'minimum_php'   => $minimum_php,
                 'checked_at'    => $checked_at,
-                'error'         => 'Update server returned an unrecognised response.',
+                'error'         => 'Release provider returned an unrecognised response.',
             ];
         }
 

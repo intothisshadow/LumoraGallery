@@ -60,6 +60,8 @@ Lumora/
 │   ├── ajax_update_perform.php AJAX endpoint for multi-stage in-dashboard update (run_stage / rollback / abort)
 │   ├── ajax_run_migrations.php AJAX endpoint for running schema migrations
 │   ├── ajax_installation_health.php  AJAX endpoint for installation health check (9 system checks)
+│   ├── ajax_reorder_categories.php  AJAX endpoint for drag-and-drop category reorder/reparent
+│   ├── ajax_reorder_albums.php AJAX endpoint for drag-and-drop album reorder within a category
 │   ├── categories.php          Category management
 │   ├── config.php              Gallery settings, export/import
 │   ├── dashboard.php           Stats overview
@@ -81,7 +83,7 @@ Lumora/
 │   │   ├── ThumbnailService.php Thumbnail generation, resizing, metadata, batch-add
 │   │   ├── ThemeRenderer.php   All HTML output: pages, grids, breadcrumbs, lightbox
 │   │   ├── MigrationService.php Import status tracking, plugin discovery, event logging
-│   │   ├── UpdateService.php   Remote update check, version comparison, 24-hour cache
+│   │   ├── UpdateService.php   Release check via the configured provider (GitHub Releases by default), version comparison, 24-hour cache
 │   │   ├── SchemaService.php   Schema migration engine — discover, run, rollback PHP class migrations
 │   │   ├── AbstractUpdateProvider.php  Provider interface — fetchMetadata(), buildArchiveUrl(), factory
 │   │   ├── GitHubUpdateProvider.php    GitHub Releases API provider — metadata, SHA-256, archive URL
@@ -89,7 +91,8 @@ Lumora/
 │   │   ├── InstallationService.php  Installation settings detection, migration helpers, health checks, audit logging
 │   │   ├── UserService.php     User CRUD, role constants, permission framework (delegates to GroupService)
 │   │   ├── GroupService.php    Permission groups — CRUD, permission catalog (ALL_PERMISSIONS), system-group safeguards
-│   │   └── AlbumAssignmentService.php  Per-contributor album assignments — assign/unassign/set, userCanAccessAlbum() access check, cascade cleanup
+│   │   ├── AlbumAssignmentService.php  Per-contributor album assignments — assign/unassign/set, userCanAccessAlbum() access check, cascade cleanup
+│   │   └── InstallPingService.php  Opt-in anonymous install ping — UUID generation, ~monthly cadence, dedicated endpoint separate from UpdateService
 │   ├── migrations/             Versioned PHP schema migration classes
 │   │   ├── AbstractMigration.php              Base class — up(), down(), tableExists(), columnExists(), indexExists()
 │   │   ├── Migration0001_CreateMigrationsTable.php  Self-bootstrapping first migration — creates {PREFIX}migrations table
@@ -177,7 +180,7 @@ migration straightforward — point Lumora at the same `albums/` directory and r
 - Category and album browsing with selectable layout (card grid or Coppermine-style list with recursive album and image counts)
 - Album view with sortable thumbnails (position, newest, oldest, most viewed, filename)
 - Pagination (configurable images per page)
-- Full-image lightbox via [PhotoSwipe 5](https://photoswipe.com/) (ESM, no global namespace)
+- Full-image lightbox via [PhotoSwipe 5](https://photoswipe.com/) (ESM, no global namespace); logged-in staff (admin, moderator, contributor) additionally see a copyable image info panel with a direct URL and ready-to-paste embed HTML snippet, with a one-click Copy HTML button
 - Image resolution displayed under each thumbnail
 - Hit counter for albums and images (session-throttled; image counts recorded via lightbox `change` event → `ajax_hit.php`)
 - Special views: Most Viewed, Latest, Random
@@ -186,8 +189,8 @@ migration straightforward — point Lumora at the same `albums/` directory and r
 ### Admin panel
 - **Dashboard** — stats cards + latest images
 - **Users** — paginated staff account list (10/25/50 per page); create accounts with role selector; edit username, email, and role; reset any account's password (no current-password check); enable/disable accounts; delete accounts; guards prevent self-deletion, self-deactivation, and removal of the last active administrator; migration guard redirects to the Updates page if schema migration hasn't run yet. **Role-based page access:** admin, moderator, and contributor accounts can all log in; each admin page and its AJAX endpoints are gated on the permission the role's group holds — moderators get Categories, Albums, Images, and Tools but not Configuration, Installation, Import, Updates, or Users; contributors get Batch Add and Images, plus Albums scoped to whichever albums they've been assigned. The sidebar navigation only shows the pages the current role can access. **Groups** — a companion page (`admin/groups.php`, gated on `user_management`) lets administrators view every permission group (the three built-in system groups plus any custom ones), create new custom groups, rename any group, grant or revoke individual permissions per group, and delete unused custom groups; system groups can't be deleted, a group with active members can't be deleted until they're reassigned, and the admin group can never lose the permissions needed to reach Users/Groups or Configuration. **Contributor album assignments:** an "Assign Albums" link next to each contributor row (and a matching card on the edit-user screen) opens a filterable checkbox picker (`admin/user_albums.php`) for granting access to specific albums — gated on `manage_albums`, so moderators can manage assignments without needing the Users page itself.
-- **Categories** — full parent/child hierarchy tree view (root categories at top; children indented with `└ ` connectors and depth steps; subcategory count indicator); create, edit, delete; nested (parent/child); re-parents children on delete; optional cover image (ID-based, falls back to first image in category's albums)
-- **Albums** — for admin/moderator: hierarchy view by default (albums grouped under their category with subcategories nested beneath their parent; uncategorized albums in a dedicated section; falls back to flat paginated table when search or category filter is active); search albums by name (case-insensitive partial match; search preserved across pagination); paginated flat list (25/50/100 per page, session-persisted; item count summary; category filter); create, edit, delete; auto-generated folder names or custom; filesystem directory creation; empty folder removed automatically on album delete. For contributors: a flat, unpaginated list of only their assigned albums, with no New Album button, no category filter, and no per-row Delete button; they can edit an assigned album's metadata and cover image but not reassign its category. The album edit screen shows an "Assigned to: …" note (visible to admin/moderator only) when the album has contributor assignments.
+- **Categories** — full parent/child hierarchy tree view (root categories at top; children indented with `└ ` connectors and depth steps; subcategory count indicator); drag-and-drop reordering and reparenting (drag a row onto another category to move it under that category; dragging into one of its own descendants is rejected); create, edit, delete; nested (parent/child); re-parents children on delete; optional cover image (ID-based, falls back to first image in category's albums)
+- **Albums** — for admin/moderator: hierarchy view by default (albums grouped under their category with subcategories nested beneath their parent; uncategorized albums in a dedicated section; falls back to flat paginated table when search or category filter is active); drag-and-drop reordering within a category in hierarchy view; search albums by name (case-insensitive partial match; search preserved across pagination); paginated flat list (25/50/100 per page, session-persisted; item count summary; category filter); create, edit, delete; auto-generated folder names or custom; filesystem directory creation; empty folder removed automatically on album delete. For contributors: a flat, unpaginated list of only their assigned albums, with no New Album button, no category filter, and no per-row Delete button; they can edit an assigned album's metadata and cover image but not reassign its category. The album edit screen shows an "Assigned to: …" note (visible to admin/moderator only) when the album has contributor assignments.
 - **Images** — per-album paginated image grid (24/page); search images by filename or title (scoped to an album or across all albums; cross-album results include the category › album path); edit title, sort position, and visibility; optional file replacement via multipart upload (validates type, size, image integrity; regenerates thumbnail and updates dimensions/filesize); single-image delete cleans up disk files and resets album/category cover references; bulk delete and bulk move to another album (up to 500 images per AJAX call); per-image thumbnail regeneration
 - **Batch Add** — scan `albums/{folder}/` for new images, process in 50-image AJAX chunks (handles 9000+ without timeout); album picker scoped to assigned albums for contributors
 - **Configuration** — all settings in one form; theme selector; live image processor status; gallery behavior and upload limit controls
@@ -230,6 +233,8 @@ A theme can optionally declare itself via a CSS header comment at the top of its
 
 Recognized fields are `Theme Name`, `Author`, and `Design URI`. When present, they're shown as the theme's display name in the Active Theme dropdown and in a reference table in Admin → Configuration → Appearance. The header is entirely optional — themes without one still work normally, falling back to the folder name.
 
+**Admin-only theme preview.** A logged-in administrator can append `?theme=folder-name` to any public gallery URL to render that theme for the current request only — the site's configured theme is never changed and no other visitor is affected. An unknown or invalid folder name falls back to the real active theme with an admin-only notice explaining why; a valid preview shows a small admin-only banner as a reminder it's temporary. Admin → Configuration's Themes table includes a **Preview** column that opens this URL in a new tab for each installed theme.
+
 ### Thumbnail generation
 - **Imagick PHP extension** preferred — auto-detected, no path configuration needed. Uses IM7 Q16-HDRI for high-quality Lanczos resizing, EXIF auto-orientation, and metadata stripping.
 - **GD library** fallback if the Imagick extension is not loaded.
@@ -266,6 +271,7 @@ All settings are managed in **Admin → Configuration**. Key options:
 | `who_is_online_duration` | 5 | Visitor window in minutes for the Who Is Online strip (1–60); `0` = disable tracking |
 | `show_powered_by` | 1 | Show a "Powered by Lumora Gallery" credit in the footer (`0` = hidden); uses `{POWERED_BY}` theme token |
 | `default_color_mode` | auto | Site-wide fallback colour mode (`auto` / `light` / `dark`) for visitors with no stored preference |
+| `install_ping_enabled` | 0 | Opt-in anonymous install ping (`0` = off by default, `1` = on) — see **Privacy: Anonymous Install Ping** below |
 
 Settings are stored in the `{PREFIX}config` database table and cached by the `LumoraConfig` static class per request.
 
@@ -288,6 +294,23 @@ The **Coppermine Importer** plugin (`plugins/coppermine-importer/`) automates th
 - **Plugin v1.3.0+** — the credentials form includes an **Auto-Detect** panel: supply the filesystem path to your Coppermine installation and the importer reads `include/config.inc.php` to fill in all five database fields automatically. If multiple Coppermine installations are found under the supplied path, a selection list is shown.
 - **Plugin v1.1.0+** — album and category cover-thumbnail selections are preserved automatically as part of the import wizard itself.
 - The **Metadata Sync** tool (`Admin → Import → Metadata Sync`) remains available as a fallback for re-applying cover assignments after a stopped import or for galleries imported before v1.1.0.
+
+---
+
+## Privacy: Anonymous Install Ping
+
+Lumora includes an **opt-in, off-by-default** mechanism to anonymously count active installs, giving the developer a rough sense of adoption without compromising the privacy expectations of a self-hosted, fansite-oriented audience.
+
+- **Off by default.** Nothing is ever sent unless you explicitly enable **Anonymous Install Ping** in Admin → Configuration → Privacy.
+- **What is sent, and nothing else:**
+  - A randomly generated install UUID, created the first time the feature is enabled. It has no relationship to your domain, gallery contents, admin account, or any other data — there is no way to trace it back to your specific site from the ping alone.
+  - Your installed Lumora version.
+  - Your PHP version.
+- **What is never sent:** your domain or site name, admin email, gallery contents, visitor data, IP addresses, or anything else.
+- **Cadence.** The ping fires once immediately when you enable the feature, then at most roughly once a month afterward. It never fires on every page load.
+- **Independence from the update checker.** This uses a completely separate request from the version-update check described below (`UpdateService`) — enabling or disabling one never affects the other.
+- **Failure handling.** If the request fails for any reason (network issue, unreachable endpoint, etc.), it fails silently. It never shows an error and never blocks any admin action.
+- **Disabling it** at any time in Admin → Configuration simply stops all future pings; the previously generated UUID is left in place (but unused) so re-enabling later doesn't change your install's identifier.
 
 ---
 

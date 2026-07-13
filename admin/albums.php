@@ -143,14 +143,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Build <option> list for the category dropdown on the new/edit form. */
+/**
+ * Build <option> list for the category dropdown on the new/edit form.
+ *
+ * $cats must be in depth-first hierarchical order with a `depth` key on
+ * each row — i.e. GalleryService::getAllCategoriesTreeOrdered(), not
+ * getAllCategoriesFlat()/get_all_categories_flat(). Each option is indented
+ * by repeating the connector once per depth level, so nested categories are
+ * visually distinguishable from their siblings at every level, not just
+ * "has a parent or not".
+ */
 function album_cat_options(array $cats, int $selected = 0): string
 {
     $html = '<option value="0">— No category —</option>';
     foreach ($cats as $c) {
-        $sel  = ((int)$c['id'] === $selected) ? ' selected' : '';
-        $html .= '<option value="' . (int)$c['id'] . '"' . $sel . '>'
-            . h(($c['parent_id'] > 0 ? '— ' : '') . $c['name'])
+        $sel    = ((int) $c['id'] === $selected) ? ' selected' : '';
+        $depth  = (int) ($c['depth'] ?? 0);
+        $prefix = str_repeat('— ', $depth);
+        $html .= '<option value="' . (int) $c['id'] . '"' . $sel . '>'
+            . h($prefix . $c['name'])
             . '</option>';
     }
     return $html;
@@ -183,10 +194,11 @@ function render_album_row(array $a, int $indent_px, string $base_h, string $csrf
     $del_conf   = h('Delete album \'' . $a['title'] . '\'? All DB records will be removed. If the album folder is empty it will also be deleted; otherwise files on disk are kept.');
 
     $title_cell = '<div style="padding-left:' . $indent_px . 'px">'
+        . '<span class="lum-drag-handle" title="Drag to reorder within this category" aria-hidden="true">&#9776;</span>'
         . '<a href="' . $edit_url . '">' . $title_h . '</a>'
         . '</div>';
 
-    return '<tr>'
+    return '<tr class="lum-drag-row" draggable="true" data-album-id="' . (int) $a['id'] . '" data-category-id="' . (int) $a['category_id'] . '">'
         . '<td>' . $title_cell . '</td>'
         . '<td><code class="small">' . $folder_h . '</code></td>'
         . '<td>' . $img_cnt . '</td>'
@@ -323,7 +335,10 @@ if ($action === 'new' || $action === 'edit') {
         lumora_require_album_access($id);
     }
 
-    $all_cats = $can_manage_all ? get_all_categories_flat() : [];
+    // Depth-first hierarchical order (not the flat parent_id-grouped order
+    // from get_all_categories_flat()) so album_cat_options() can indent each
+    // option correctly under its actual ancestor chain. See TODO.md §15.
+    $all_cats = $can_manage_all ? GalleryService::getAllCategoriesTreeOrdered() : [];
 
     $album = ($action === 'edit' && $id > 0)
         ? LumoraDB::fetchOne('SELECT * FROM `{PREFIX}albums` WHERE id = ?', [$id])
@@ -560,10 +575,128 @@ if ($hierarchy_mode) {
         ? 'Hierarchy view &middot; ' . number_format($total_albums) . ' ' . $lbl
         : '0 albums';
 
+    $reorder_url_js = json_encode(lumora_base_url() . 'admin/ajax_reorder_albums.php');
+    $csrf_js        = json_encode($csrf);
+
+    $drag_script = <<<HTML
+<div class="lum-reorder-toast" id="lum-album-reorder-toast" role="status" aria-live="polite">
+  <span class="spinner-border" aria-hidden="true"></span>
+  <span id="lum-album-reorder-toast-text">Saving order&hellip;</span>
+</div>
+<script>
+(function () {
+  'use strict';
+
+  var REORDER_URL = {$reorder_url_js};
+  var CSRF        = {$csrf_js};
+
+  var table = document.querySelector('.lum-adm-table');
+  if (!table) return;
+
+  var toast     = document.getElementById('lum-album-reorder-toast');
+  var toastText = document.getElementById('lum-album-reorder-toast-text');
+
+  function showToast(text, isError) {
+    toastText.textContent = text;
+    toast.classList.toggle('is-error', !!isError);
+    toast.classList.add('is-visible');
+  }
+  function hideToast() {
+    toast.classList.remove('is-visible', 'is-error');
+  }
+
+  var draggedRow = null;
+
+  function allRows() {
+    return Array.prototype.slice.call(table.querySelectorAll('tr.lum-drag-row'));
+  }
+
+  function clearDropClasses() {
+    allRows().forEach(function (r) {
+      r.classList.remove('lum-drop-above', 'lum-drop-below');
+    });
+  }
+
+  table.addEventListener('dragstart', function (e) {
+    var row = e.target.closest('tr.lum-drag-row');
+    if (!row) return;
+    draggedRow = row;
+    row.classList.add('lum-dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', row.dataset.albumId); } catch (err) {}
+  });
+
+  table.addEventListener('dragover', function (e) {
+    var row = e.target.closest('tr.lum-drag-row');
+    if (!row || !draggedRow || row === draggedRow) return;
+    // Albums only reorder within the same category section — dragging over
+    // a row belonging to a different category shows no drop indicator at all.
+    if (row.dataset.categoryId !== draggedRow.dataset.categoryId) return;
+    e.preventDefault();
+
+    var rect = row.getBoundingClientRect();
+    var offset = (e.clientY - rect.top) / rect.height;
+
+    clearDropClasses();
+    row.classList.add(offset < 0.5 ? 'lum-drop-above' : 'lum-drop-below');
+  });
+
+  table.addEventListener('dragend', function () {
+    if (draggedRow) draggedRow.classList.remove('lum-dragging');
+    clearDropClasses();
+    draggedRow = null;
+  });
+
+  table.addEventListener('drop', function (e) {
+    var targetRow = e.target.closest('tr.lum-drag-row');
+    if (!targetRow || !draggedRow || targetRow === draggedRow) return;
+    if (targetRow.dataset.categoryId !== draggedRow.dataset.categoryId) return;
+    e.preventDefault();
+
+    var mode = targetRow.classList.contains('lum-drop-above') ? 'above' : 'below';
+    clearDropClasses();
+
+    var categoryId = parseInt(draggedRow.dataset.categoryId, 10);
+    var movedId    = parseInt(draggedRow.dataset.albumId, 10);
+
+    var siblings = allRows()
+      .filter(function (r) { return parseInt(r.dataset.categoryId, 10) === categoryId && r !== draggedRow; });
+    var targetIndex = siblings.indexOf(targetRow);
+    var insertAt = mode === 'above' ? targetIndex : targetIndex + 1;
+    var orderedIds = siblings.map(function (r) { return parseInt(r.dataset.albumId, 10); });
+    orderedIds.splice(insertAt, 0, movedId);
+
+    showToast('Saving order\u2026', false);
+
+    var body = new URLSearchParams();
+    body.set('csrf_token', CSRF);
+    body.set('category_id', String(categoryId));
+    body.set('ordered_ids', JSON.stringify(orderedIds));
+
+    fetch(REORDER_URL, { method: 'POST', body: body })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data && data.success) {
+          showToast('Order saved \u2014 refreshing\u2026', false);
+          window.location.reload();
+        } else {
+          showToast((data && data.error) || 'Could not save the new order.', true);
+          setTimeout(hideToast, 4000);
+        }
+      })
+      .catch(function () {
+        showToast('Network error \u2014 could not save the new order.', true);
+        setTimeout(hideToast, 4000);
+      });
+  });
+})();
+</script>
+HTML;
+
     $content =
         $search_form
         . '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">'
-        . '<span class="text-muted small">' . $summary_text . '</span>'
+        . '<span class="text-muted small">' . $summary_text . ' &middot; drag rows (&#9776;) to reorder within a category</span>'
         . '<a href="' . $new_h . '" class="btn btn-primary btn-sm">+ New Album</a>'
         . '</div>'
         . '<div class="table-responsive"><table class="table table-hover lum-adm-table align-middle">'
@@ -575,7 +708,8 @@ if ($hierarchy_mode) {
         . '<th>Actions</th>'
         . '<th style="width:50px"></th>'
         . '</tr></thead>'
-        . '<tbody>' . $rows . '</tbody></table></div>';
+        . '<tbody>' . $rows . '</tbody></table></div>'
+        . $drag_script;
 
     lum_admin_page('Albums', $content, 'albums');
 }

@@ -4,6 +4,29 @@ Long-term archive of completed work, migrated from TODO.md on release.
 
 ---
 
+## v1.11.0 — Released 2026-07-13
+
+### Changed
+
+- **Update check now goes through the GitHub Releases provider exclusively** (TODO #12): `UpdateService` previously queried its own separate, hardcoded JSON endpoint (`coding.unloved-heart.net/lumora/update.json`), entirely independent of the `GitHubUpdateProvider`/`AbstractUpdateProvider` abstraction the in-dashboard updater already used for download URLs and checksums — two sources of truth that could disagree. `UpdateService::fetch()` now delegates to `AbstractUpdateProvider::createFromConfig()`, so release discovery, download URL, and checksum verification all come from one GitHub-backed source; the old endpoint dependency was removed entirely. `AbstractUpdateProvider` gained `getSourceLabel()` so the admin Updates page shows the release source (e.g. "GitHub Releases (owner/repo)") in place of the retired endpoint URL.
+- **Update confirmation checkbox on `admin/update.php` made visually prominent** (TODO #24): now sits inside a bordered, tinted callout box with a larger checkbox, bold label, and warning icon, so it's far less likely to be overlooked before an update replaces application files. Checkbox id, label association, and the JS gating "Update Now" on it are unchanged.
+- **`admin/config.php` reorganised into clearly separated sections** (TODO #25): each former sub-heading (plus a new "Basic Information" heading) is now its own card with a prominent heading and inline SVG icon, matching `admin/tools.php`/`admin/installation.php`. All field names, ids, validation attributes, and the single shared form submission are unchanged — layout-only.
+
+### Added
+
+- **Admin-only theme preview via URL** (TODO #29): a logged-in administrator can append `?theme=folder-name` to the public gallery URL to render any installed theme for that request only, without changing the site's configured theme or affecting other visitors. An invalid/unknown theme name falls back to the real active theme with an admin-only notice; a valid preview shows an admin-only banner reminding them it's temporary. Admin → Configuration's Themes table gained a **Preview** column/button per theme.
+- **Copyable image info box in the frontend lightbox, Admin/Staff only** (TODO #28): logged-in staff see an extra PhotoSwipe toolbar button opening a panel with the image's direct URL and a ready-to-paste embed snippet, plus a one-click Copy HTML button with a "Copied!" confirmation.
+- **Drag-and-drop reordering for categories and albums in the admin panel** (TODO #23): `admin/categories.php`'s hierarchy tree and `admin/albums.php`'s hierarchy view can be dragged to reorder; categories can additionally be dragged onto another category to reparent (guarded against moving into a descendant). New `GalleryService::reorderCategories()`/`reorderAlbums()` and two new AJAX endpoints back this, with saving/error toast feedback.
+- **Opt-in anonymous install ping** (TODO #27): a new, off-by-default Privacy section in Admin → Configuration sends a minimal anonymous ping (install UUID, Lumora version, PHP version — nothing else) roughly once a month, fully independent of the update-check request, failing silently on any network error.
+
+### Fixed
+
+- **Dark mode: accent colour used as link/border text failed WCAG AA contrast** in both built-in themes (TODO #16): both themes now have separate `--*-accent-ink`/`--*-accent-ink-hover` tokens for foreground (text/link/border) use, WCAG AA-verified (5.8:1–7.3:1) against dark surfaces, while filled backgrounds keep the original accent unchanged.
+- **Dark mode: no visible keyboard focus outline** in either built-in theme (TODO #16): added a theme-aware `:focus-visible` outline (adaptive per colour mode), plus a fixed light-coloured outline for the always-dark navbar/footer.
+- **Category dropdown in the album creation/edit form displayed categories in the wrong hierarchical order** (TODO #15): `GalleryService::getAllCategoriesTreeOrdered()` now walks the category tree depth-first from the root so every child appears immediately after its own parent at the correct indent level, at any nesting depth. Both `admin/albums.php`'s Category dropdown and `admin/categories.php`'s Parent Category dropdown now use this instead of the flat, unordered list.
+
+---
+
 ## v1.10.0 — Released 2026-07-08
 
 ### Added

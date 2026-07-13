@@ -58,7 +58,7 @@ class LumoraConfig
      * Boolean-style config keys: stored as '1' or '0' only.
      * Shared by sanitizeValue() below.
      */
-    private const BOOL_KEYS = ['count_album_views', 'gallery_offline', 'show_powered_by'];
+    private const BOOL_KEYS = ['count_album_views', 'gallery_offline', 'show_powered_by', 'install_ping_enabled'];
 
     /**
      * Validate and normalise a raw config value for a known config key,

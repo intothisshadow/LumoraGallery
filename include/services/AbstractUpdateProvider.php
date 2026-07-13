@@ -57,6 +57,12 @@ abstract class AbstractUpdateProvider
      */
     abstract public function getName(): string;
 
+    /**
+     * Return a human-readable source identifier for display in the admin UI,
+     * e.g. "owner/repo" for GitHubUpdateProvider.
+     */
+    abstract public function getSourceLabel(): string;
+
     // ── Factory ───────────────────────────────────────────────────────────────
 
     /**

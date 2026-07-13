@@ -57,7 +57,7 @@ $mig_applied = count($mig_status['applied']);
 $csrf_js      = json_encode(lumora_csrf_token());
 $ajax_base_js = json_encode(lumora_base_url() . 'admin/');
 $auto_check_js = $cache_expired ? 'true' : 'false';
-$endpoint_h    = h(UpdateService::getEndpointUrl());
+$provider_h    = h(UpdateService::getProviderLabel());
 
 // ── Latest available version info (for "Update Now" target) ──────────────────
 $latest_h   = $upd['latest'] !== null ? h($upd['latest']) : '';
@@ -221,12 +221,14 @@ HTML;
       default.</strong>
     </p>
 
-    <div class="form-check mb-2">
-      <input class="form-check-input" type="checkbox" id="lum-upd-confirm-chk">
-      <label class="form-check-label small" for="lum-upd-confirm-chk">
-        I understand that this will replace application files. I have verified my server
-        has a backup or am relying on the automatic backup created during the update.
-      </label>
+    <div class="lum-upd-confirm-box mb-3">
+      <div class="form-check mb-0">
+        <input class="form-check-input" type="checkbox" id="lum-upd-confirm-chk">
+        <label class="form-check-label fw-semibold" for="lum-upd-confirm-chk">
+          ⚠️ I understand that this will replace application files. I have verified my server
+          has a backup or am relying on the automatic backup created during the update.
+        </label>
+      </div>
     </div>
 
     <hr class="my-3">
@@ -348,7 +350,7 @@ $content = <<<HTML
   <ul class="small text-muted mb-0">
     <li>Update check results are cached locally for 24 hours; use the button above to force a refresh.</li>
     <li>No gallery content, images, or user data is ever transmitted during an update check.</li>
-    <li>Update endpoint: <code>{$endpoint_h}</code></li>
+    <li>Release source: <code>{$provider_h}</code></li>
     <li>Custom themes and plugins are preserved by default during an update. To replace them with the
         versions bundled in a release, tick the relevant checkboxes on the Install Update form above.</li>
     <li>An automatic database backup and <code>config.php</code> backup are created before any file replacement.

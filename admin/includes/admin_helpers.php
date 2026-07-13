@@ -167,6 +167,17 @@ function lum_admin_pagination(array $pag): string
  */
 function lum_admin_page(string $title, string $content, string $active = ''): never
 {
+    // Opt-in anonymous install ping (TODO.md #27) — a cheap no-op on every
+    // call unless the feature is enabled AND the ~monthly interval has
+    // elapsed; see InstallPingService's class docblock. Wrapped defensively
+    // even though the service already fails silently internally, so a
+    // future change there can never turn into a broken admin panel.
+    try {
+        InstallPingService::maybeSendPing();
+    } catch (\Throwable) {
+        // Never let this affect the admin page render.
+    }
+
     $base_url     = h(lumora_base_url());
     $admin_url    = h(lumora_base_url() . 'admin/');
     $gallery_url  = h(lumora_base_url());

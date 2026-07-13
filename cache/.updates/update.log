@@ -1,0 +1,225 @@
+[2026-07-08 09:39:23] [WARNING] Update session force-aborted by administrator
+[2026-07-08 09:39:23] [INFO] SHA-256 verified for v1.0.0-phptest-6a4e1acb7161c
+[2026-07-08 09:39:23] [ERROR] SHA-256 mismatch — expected 0000000000000000000000000000000000000000000000000000000000000000, got c6b52e32ae8ffdcc40c584dd6f1528f4d0dfebd40c7249c3d34a854f57c0161e
+[2026-07-08 09:39:23] [WARNING] No SHA-256 available for v0.0.0-phptest-6a4e1acb71b78; integrity check skipped
+[2026-07-08 09:39:23] [WARNING] No SHA-256 available for v0.0.0-phptest-6a4e1acb71e5d; integrity check skipped
+[2026-07-08 09:39:23] [INFO] Extracted 3 entries to /workspace/Lumora/cache/.updates/extract/
+[2026-07-08 09:39:23] [INFO] Downloading v0.0.0-phptest-6a4e1acb72e11 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 09:39:23] [INFO] Downloaded 18 B to /workspace/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a4e1acb72e11.zip
+[2026-07-08 09:39:23] [INFO] Downloading v0.0.0-phptest-6a4e1acb72fae from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 09:39:23] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 09:39:23] [INFO] Downloading v0.0.0-phptest-6a4e1acb730e7 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 09:39:23] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 09:39:23] [INFO] Archive already present at /workspace/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a4e1acb73215.zip; skipping download
+[2026-07-08 09:39:23] [INFO] Preflight passed for v9.9.9-phptest via GitHub Releases
+[2026-07-08 09:39:23] [INFO] Preflight passed for v3.3.3-phptest via GitHub Releases
+[2026-07-08 09:39:35] [WARNING] Update session force-aborted by administrator
+[2026-07-08 09:39:35] [INFO] SHA-256 verified for v1.0.0-phptest-6a4e1ad765cf0
+[2026-07-08 09:39:35] [ERROR] SHA-256 mismatch — expected 0000000000000000000000000000000000000000000000000000000000000000, got ef19070839cdbc91195e69c724b3b22f5955396a24f4d9cd0540e8d922e52fc4
+[2026-07-08 09:39:35] [WARNING] No SHA-256 available for v0.0.0-phptest-6a4e1ad766249; integrity check skipped
+[2026-07-08 09:39:35] [WARNING] No SHA-256 available for v0.0.0-phptest-6a4e1ad7665a6; integrity check skipped
+[2026-07-08 09:39:35] [INFO] Extracted 3 entries to /workspace/Lumora/cache/.updates/extract/
+[2026-07-08 09:39:35] [INFO] Downloading v0.0.0-phptest-6a4e1ad7676aa from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 09:39:35] [INFO] Downloaded 18 B to /workspace/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a4e1ad7676aa.zip
+[2026-07-08 09:39:35] [INFO] Downloading v0.0.0-phptest-6a4e1ad767861 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 09:39:35] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 09:39:35] [INFO] Downloading v0.0.0-phptest-6a4e1ad7679bd from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 09:39:35] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 09:39:35] [INFO] Archive already present at /workspace/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a4e1ad767b1a.zip; skipping download
+[2026-07-08 09:39:35] [INFO] Preflight passed for v9.9.9-phptest via GitHub Releases
+[2026-07-08 09:39:35] [INFO] Preflight passed for v3.3.3-phptest via GitHub Releases
+[2026-07-08 09:39:47] [WARNING] Update session force-aborted by administrator
+[2026-07-08 09:39:47] [INFO] SHA-256 verified for v1.0.0-phptest-6a4e1ae35e13f
+[2026-07-08 09:39:47] [ERROR] SHA-256 mismatch — expected 0000000000000000000000000000000000000000000000000000000000000000, got 55526fa518aad35bcedeab5fbab028eb6457ecd09dd8ee3423d51529fb63aaf9
+[2026-07-08 09:39:47] [WARNING] No SHA-256 available for v0.0.0-phptest-6a4e1ae35e625; integrity check skipped
+[2026-07-08 09:39:47] [WARNING] No SHA-256 available for v0.0.0-phptest-6a4e1ae35e8fa; integrity check skipped
+[2026-07-08 09:39:47] [INFO] Extracted 3 entries to /workspace/Lumora/cache/.updates/extract/
+[2026-07-08 09:39:47] [INFO] Downloading v0.0.0-phptest-6a4e1ae35f82a from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 09:39:47] [INFO] Downloaded 18 B to /workspace/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a4e1ae35f82a.zip
+[2026-07-08 09:39:47] [INFO] Downloading v0.0.0-phptest-6a4e1ae35f9eb from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 09:39:47] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 09:39:47] [INFO] Downloading v0.0.0-phptest-6a4e1ae35fb41 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 09:39:47] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 09:39:47] [INFO] Archive already present at /workspace/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a4e1ae35fc91.zip; skipping download
+[2026-07-08 09:39:47] [INFO] Preflight passed for v9.9.9-phptest via GitHub Releases
+[2026-07-08 09:39:47] [INFO] Preflight passed for v3.3.3-phptest via GitHub Releases
+[2026-07-08 12:56:43] [WARNING] Update session force-aborted by administrator
+[2026-07-08 12:56:43] [INFO] SHA-256 verified for v1.0.0-phptest-6a4e490bc1902
+[2026-07-08 12:56:43] [ERROR] SHA-256 mismatch — expected 0000000000000000000000000000000000000000000000000000000000000000, got b014ca02387f540ff94af4bb98178c9252aaf0655d7d2c9aa286830e3f415867
+[2026-07-08 12:56:43] [WARNING] No SHA-256 available for v0.0.0-phptest-6a4e490bc1dd1; integrity check skipped
+[2026-07-08 12:56:43] [WARNING] No SHA-256 available for v0.0.0-phptest-6a4e490bc20aa; integrity check skipped
+[2026-07-08 12:56:43] [INFO] Extracted 3 entries to /workspace/Lumora/cache/.updates/extract/
+[2026-07-08 12:56:43] [INFO] Downloading v0.0.0-phptest-6a4e490bc3006 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 12:56:43] [INFO] Downloaded 18 B to /workspace/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a4e490bc3006.zip
+[2026-07-08 12:56:43] [INFO] Downloading v0.0.0-phptest-6a4e490bc318b from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 12:56:43] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 12:56:43] [INFO] Downloading v0.0.0-phptest-6a4e490bc32c6 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 12:56:43] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 12:56:43] [INFO] Archive already present at /workspace/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a4e490bc3400.zip; skipping download
+[2026-07-08 12:56:43] [INFO] Preflight passed for v9.9.9-phptest via GitHub Releases
+[2026-07-08 12:56:43] [INFO] Preflight passed for v3.3.3-phptest via GitHub Releases
+[2026-07-08 12:56:55] [WARNING] Update session force-aborted by administrator
+[2026-07-08 12:56:55] [INFO] SHA-256 verified for v1.0.0-phptest-6a4e4917ab354
+[2026-07-08 12:56:55] [ERROR] SHA-256 mismatch — expected 0000000000000000000000000000000000000000000000000000000000000000, got 2abdc2b84b1aee81099409932b0c3d3e80b344143df9c63bb83b629cffc8805c
+[2026-07-08 12:56:55] [WARNING] No SHA-256 available for v0.0.0-phptest-6a4e4917ab82f; integrity check skipped
+[2026-07-08 12:56:55] [WARNING] No SHA-256 available for v0.0.0-phptest-6a4e4917abb2f; integrity check skipped
+[2026-07-08 12:56:55] [INFO] Extracted 3 entries to /workspace/Lumora/cache/.updates/extract/
+[2026-07-08 12:56:55] [INFO] Downloading v0.0.0-phptest-6a4e4917acaef from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 12:56:55] [INFO] Downloaded 18 B to /workspace/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a4e4917acaef.zip
+[2026-07-08 12:56:55] [INFO] Downloading v0.0.0-phptest-6a4e4917acc96 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 12:56:55] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 12:56:55] [INFO] Downloading v0.0.0-phptest-6a4e4917acde0 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 12:56:55] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 12:56:55] [INFO] Archive already present at /workspace/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a4e4917acf1e.zip; skipping download
+[2026-07-08 12:56:55] [INFO] Preflight passed for v9.9.9-phptest via GitHub Releases
+[2026-07-08 12:56:55] [INFO] Preflight passed for v3.3.3-phptest via GitHub Releases
+[2026-07-08 12:57:07] [WARNING] Update session force-aborted by administrator
+[2026-07-08 12:57:07] [INFO] SHA-256 verified for v1.0.0-phptest-6a4e4923a8e2f
+[2026-07-08 12:57:07] [ERROR] SHA-256 mismatch — expected 0000000000000000000000000000000000000000000000000000000000000000, got e9c4a95f04731624411dcca3c2f422077ebca7814c2506b8eb69001e35805521
+[2026-07-08 12:57:07] [WARNING] No SHA-256 available for v0.0.0-phptest-6a4e4923a92f2; integrity check skipped
+[2026-07-08 12:57:07] [WARNING] No SHA-256 available for v0.0.0-phptest-6a4e4923a9627; integrity check skipped
+[2026-07-08 12:57:07] [INFO] Extracted 3 entries to /workspace/Lumora/cache/.updates/extract/
+[2026-07-08 12:57:07] [INFO] Downloading v0.0.0-phptest-6a4e4923aa6ac from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 12:57:07] [INFO] Downloaded 18 B to /workspace/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a4e4923aa6ac.zip
+[2026-07-08 12:57:07] [INFO] Downloading v0.0.0-phptest-6a4e4923aa852 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 12:57:07] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 12:57:07] [INFO] Downloading v0.0.0-phptest-6a4e4923aa9b0 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 12:57:07] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 12:57:07] [INFO] Archive already present at /workspace/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a4e4923aaaf7.zip; skipping download
+[2026-07-08 12:57:07] [INFO] Preflight passed for v9.9.9-phptest via GitHub Releases
+[2026-07-08 12:57:07] [INFO] Preflight passed for v3.3.3-phptest via GitHub Releases
+[2026-07-08 13:06:55] [WARNING] Update session force-aborted by administrator
+[2026-07-08 13:06:55] [INFO] SHA-256 verified for v1.0.0-phptest-6a4e4b6f7d835
+[2026-07-08 13:06:55] [ERROR] SHA-256 mismatch — expected 0000000000000000000000000000000000000000000000000000000000000000, got a3107efe71ca51f47769afb49cd288d287d479476c4439c83ba6344019bac0d3
+[2026-07-08 13:06:55] [WARNING] No SHA-256 available for v0.0.0-phptest-6a4e4b6f7dcd8; integrity check skipped
+[2026-07-08 13:06:55] [WARNING] No SHA-256 available for v0.0.0-phptest-6a4e4b6f7df7e; integrity check skipped
+[2026-07-08 13:06:55] [INFO] Extracted 3 entries to /workspace/Lumora/cache/.updates/extract/
+[2026-07-08 13:06:55] [INFO] Downloading v0.0.0-phptest-6a4e4b6f7ed84 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 13:06:55] [INFO] Downloaded 18 B to /workspace/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a4e4b6f7ed84.zip
+[2026-07-08 13:06:55] [INFO] Downloading v0.0.0-phptest-6a4e4b6f7ef12 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 13:06:55] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 13:06:55] [INFO] Downloading v0.0.0-phptest-6a4e4b6f7f047 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 13:06:55] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 13:06:55] [INFO] Archive already present at /workspace/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a4e4b6f7f170.zip; skipping download
+[2026-07-08 13:06:55] [INFO] Preflight passed for v9.9.9-phptest via GitHub Releases
+[2026-07-08 13:06:55] [INFO] Preflight passed for v3.3.3-phptest via GitHub Releases
+[2026-07-08 13:07:07] [WARNING] Update session force-aborted by administrator
+[2026-07-08 13:07:07] [INFO] SHA-256 verified for v1.0.0-phptest-6a4e4b7b34ba7
+[2026-07-08 13:07:07] [ERROR] SHA-256 mismatch — expected 0000000000000000000000000000000000000000000000000000000000000000, got 85a85b6c5a96729654cb0dc4caf817989ad2892723e245bc8f9b624e0434941b
+[2026-07-08 13:07:07] [WARNING] No SHA-256 available for v0.0.0-phptest-6a4e4b7b350b0; integrity check skipped
+[2026-07-08 13:07:07] [WARNING] No SHA-256 available for v0.0.0-phptest-6a4e4b7b353cd; integrity check skipped
+[2026-07-08 13:07:07] [INFO] Extracted 3 entries to /workspace/Lumora/cache/.updates/extract/
+[2026-07-08 13:07:07] [INFO] Downloading v0.0.0-phptest-6a4e4b7b3648a from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 13:07:07] [INFO] Downloaded 18 B to /workspace/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a4e4b7b3648a.zip
+[2026-07-08 13:07:07] [INFO] Downloading v0.0.0-phptest-6a4e4b7b36649 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 13:07:07] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 13:07:07] [INFO] Downloading v0.0.0-phptest-6a4e4b7b3679d from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 13:07:07] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 13:07:07] [INFO] Archive already present at /workspace/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a4e4b7b368ef.zip; skipping download
+[2026-07-08 13:07:07] [INFO] Preflight passed for v9.9.9-phptest via GitHub Releases
+[2026-07-08 13:07:07] [INFO] Preflight passed for v3.3.3-phptest via GitHub Releases
+[2026-07-08 13:07:18] [WARNING] Update session force-aborted by administrator
+[2026-07-08 13:07:18] [INFO] SHA-256 verified for v1.0.0-phptest-6a4e4b86e4a11
+[2026-07-08 13:07:18] [ERROR] SHA-256 mismatch — expected 0000000000000000000000000000000000000000000000000000000000000000, got 8ce800c093228e2aaae3333721d60483b26f2fe79e535d6766e766e5a17505d4
+[2026-07-08 13:07:18] [WARNING] No SHA-256 available for v0.0.0-phptest-6a4e4b86e4eee; integrity check skipped
+[2026-07-08 13:07:18] [WARNING] No SHA-256 available for v0.0.0-phptest-6a4e4b86e51bc; integrity check skipped
+[2026-07-08 13:07:18] [INFO] Extracted 3 entries to /workspace/Lumora/cache/.updates/extract/
+[2026-07-08 13:07:18] [INFO] Downloading v0.0.0-phptest-6a4e4b86e60fb from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 13:07:18] [INFO] Downloaded 18 B to /workspace/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a4e4b86e60fb.zip
+[2026-07-08 13:07:18] [INFO] Downloading v0.0.0-phptest-6a4e4b86e62b3 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 13:07:18] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 13:07:18] [INFO] Downloading v0.0.0-phptest-6a4e4b86e640a from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 13:07:18] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-08 13:07:18] [INFO] Archive already present at /workspace/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a4e4b86e6556.zip; skipping download
+[2026-07-08 13:07:18] [INFO] Preflight passed for v9.9.9-phptest via GitHub Releases
+[2026-07-08 13:07:18] [INFO] Preflight passed for v3.3.3-phptest via GitHub Releases
+[2026-07-13 14:09:30] [WARNING] Update session force-aborted by administrator
+[2026-07-13 14:09:30] [INFO] SHA-256 verified for v1.0.0-phptest-6a54f19a9b254
+[2026-07-13 14:09:30] [ERROR] SHA-256 mismatch — expected 0000000000000000000000000000000000000000000000000000000000000000, got 62150c51bec522f4bd424b0a199f76f7ec2ce1b82bb2f53a589bfa798094cc17
+[2026-07-13 14:09:30] [WARNING] No SHA-256 available for v0.0.0-phptest-6a54f19a9b9bf; integrity check skipped
+[2026-07-13 14:09:30] [WARNING] No SHA-256 available for v0.0.0-phptest-6a54f19a9bc65; integrity check skipped
+[2026-07-13 14:09:30] [INFO] Extracted 3 entries to /mnt/Winterfell/Coding/Github/Scripts/Lumora/Lumora/cache/.updates/extract/
+[2026-07-13 14:09:30] [INFO] Downloading v0.0.0-phptest-6a54f19a9cb06 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:09:30] [INFO] Downloaded 18 B to /mnt/Winterfell/Coding/Github/Scripts/Lumora/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a54f19a9cb06.zip
+[2026-07-13 14:09:30] [INFO] Downloading v0.0.0-phptest-6a54f19a9cc86 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:09:30] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:09:30] [INFO] Downloading v0.0.0-phptest-6a54f19a9cdbb from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:09:30] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:09:30] [INFO] Archive already present at /mnt/Winterfell/Coding/Github/Scripts/Lumora/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a54f19a9cf02.zip; skipping download
+[2026-07-13 14:09:30] [INFO] Preflight passed for v9.9.9-phptest via GitHub Releases
+[2026-07-13 14:09:30] [INFO] Preflight passed for v3.3.3-phptest via GitHub Releases
+[2026-07-13 14:10:05] [WARNING] Update session force-aborted by administrator
+[2026-07-13 14:10:05] [INFO] SHA-256 verified for v1.0.0-phptest-6a54f1bd60982
+[2026-07-13 14:10:05] [ERROR] SHA-256 mismatch — expected 0000000000000000000000000000000000000000000000000000000000000000, got b60badcdecf51d0b4dca49b04b37d168c86f18e46c368201e115e30f520b0358
+[2026-07-13 14:10:05] [WARNING] No SHA-256 available for v0.0.0-phptest-6a54f1bd60f38; integrity check skipped
+[2026-07-13 14:10:05] [WARNING] No SHA-256 available for v0.0.0-phptest-6a54f1bd61231; integrity check skipped
+[2026-07-13 14:10:05] [INFO] Extracted 3 entries to /mnt/Winterfell/Coding/Github/Scripts/Lumora/Lumora/cache/.updates/extract/
+[2026-07-13 14:10:05] [INFO] Downloading v0.0.0-phptest-6a54f1bd62255 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:10:05] [INFO] Downloaded 18 B to /mnt/Winterfell/Coding/Github/Scripts/Lumora/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a54f1bd62255.zip
+[2026-07-13 14:10:05] [INFO] Downloading v0.0.0-phptest-6a54f1bd62406 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:10:05] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:10:05] [INFO] Downloading v0.0.0-phptest-6a54f1bd62576 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:10:05] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:10:05] [INFO] Archive already present at /mnt/Winterfell/Coding/Github/Scripts/Lumora/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a54f1bd626cc.zip; skipping download
+[2026-07-13 14:10:05] [INFO] Preflight passed for v9.9.9-phptest via GitHub Releases
+[2026-07-13 14:10:05] [INFO] Preflight passed for v3.3.3-phptest via GitHub Releases
+[2026-07-13 14:10:37] [WARNING] Update session force-aborted by administrator
+[2026-07-13 14:10:37] [INFO] SHA-256 verified for v1.0.0-phptest-6a54f1ddedea3
+[2026-07-13 14:10:37] [ERROR] SHA-256 mismatch — expected 0000000000000000000000000000000000000000000000000000000000000000, got c2389058f441c090233f09aabc5dd22f9e25762c9bbf037cb0bb95a811198f34
+[2026-07-13 14:10:37] [WARNING] No SHA-256 available for v0.0.0-phptest-6a54f1ddee38a; integrity check skipped
+[2026-07-13 14:10:37] [WARNING] No SHA-256 available for v0.0.0-phptest-6a54f1ddee61d; integrity check skipped
+[2026-07-13 14:10:37] [INFO] Extracted 3 entries to /mnt/Winterfell/Coding/Github/Scripts/Lumora/Lumora/cache/.updates/extract/
+[2026-07-13 14:10:37] [INFO] Downloading v0.0.0-phptest-6a54f1ddef41d from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:10:37] [INFO] Downloaded 18 B to /mnt/Winterfell/Coding/Github/Scripts/Lumora/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a54f1ddef41d.zip
+[2026-07-13 14:10:37] [INFO] Downloading v0.0.0-phptest-6a54f1ddef59e from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:10:37] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:10:37] [INFO] Downloading v0.0.0-phptest-6a54f1ddef6e8 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:10:37] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:10:37] [INFO] Archive already present at /mnt/Winterfell/Coding/Github/Scripts/Lumora/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a54f1ddef81c.zip; skipping download
+[2026-07-13 14:10:37] [INFO] Preflight passed for v9.9.9-phptest via GitHub Releases
+[2026-07-13 14:10:37] [INFO] Preflight passed for v3.3.3-phptest via GitHub Releases
+[2026-07-13 14:11:47] [WARNING] Update session force-aborted by administrator
+[2026-07-13 14:11:47] [INFO] SHA-256 verified for v1.0.0-phptest-6a54f223b6f5a
+[2026-07-13 14:11:47] [ERROR] SHA-256 mismatch — expected 0000000000000000000000000000000000000000000000000000000000000000, got c96fb8fa94d1deff2bfb415ebd0802432a24aec0e45b7e9cdf474836cf4b331f
+[2026-07-13 14:11:47] [WARNING] No SHA-256 available for v0.0.0-phptest-6a54f223b7435; integrity check skipped
+[2026-07-13 14:11:47] [WARNING] No SHA-256 available for v0.0.0-phptest-6a54f223b76f5; integrity check skipped
+[2026-07-13 14:11:47] [INFO] Extracted 3 entries to /workspace/Lumora/cache/.updates/extract/
+[2026-07-13 14:11:47] [INFO] Downloading v0.0.0-phptest-6a54f223b8610 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:11:47] [INFO] Downloaded 18 B to /workspace/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a54f223b8610.zip
+[2026-07-13 14:11:47] [INFO] Downloading v0.0.0-phptest-6a54f223b87bd from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:11:47] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:11:47] [INFO] Downloading v0.0.0-phptest-6a54f223b8909 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:11:47] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:11:47] [INFO] Archive already present at /workspace/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a54f223b8a4b.zip; skipping download
+[2026-07-13 14:11:47] [INFO] Preflight passed for v9.9.9-phptest via GitHub Releases
+[2026-07-13 14:11:47] [INFO] Preflight passed for v3.3.3-phptest via GitHub Releases
+[2026-07-13 14:11:59] [WARNING] Update session force-aborted by administrator
+[2026-07-13 14:11:59] [INFO] SHA-256 verified for v1.0.0-phptest-6a54f22f8d883
+[2026-07-13 14:11:59] [ERROR] SHA-256 mismatch — expected 0000000000000000000000000000000000000000000000000000000000000000, got 9a8214e1b711ff8c43ca8457cd641256b5900a5af9d156f1b0c47effd4d0a74f
+[2026-07-13 14:11:59] [WARNING] No SHA-256 available for v0.0.0-phptest-6a54f22f8ddda; integrity check skipped
+[2026-07-13 14:11:59] [WARNING] No SHA-256 available for v0.0.0-phptest-6a54f22f8e125; integrity check skipped
+[2026-07-13 14:11:59] [INFO] Extracted 3 entries to /workspace/Lumora/cache/.updates/extract/
+[2026-07-13 14:11:59] [INFO] Downloading v0.0.0-phptest-6a54f22f8f222 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:11:59] [INFO] Downloaded 18 B to /workspace/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a54f22f8f222.zip
+[2026-07-13 14:11:59] [INFO] Downloading v0.0.0-phptest-6a54f22f8f3db from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:11:59] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:11:59] [INFO] Downloading v0.0.0-phptest-6a54f22f8f536 from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:11:59] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:11:59] [INFO] Archive already present at /workspace/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a54f22f8f686.zip; skipping download
+[2026-07-13 14:11:59] [INFO] Preflight passed for v9.9.9-phptest via GitHub Releases
+[2026-07-13 14:11:59] [INFO] Preflight passed for v3.3.3-phptest via GitHub Releases
+[2026-07-13 14:12:11] [WARNING] Update session force-aborted by administrator
+[2026-07-13 14:12:11] [INFO] SHA-256 verified for v1.0.0-phptest-6a54f23b67b95
+[2026-07-13 14:12:11] [ERROR] SHA-256 mismatch — expected 0000000000000000000000000000000000000000000000000000000000000000, got 633adf4ffe87efb3132f09139e4a31523689da80ecc0ebe1a63389aeb301e94b
+[2026-07-13 14:12:11] [WARNING] No SHA-256 available for v0.0.0-phptest-6a54f23b6808b; integrity check skipped
+[2026-07-13 14:12:11] [WARNING] No SHA-256 available for v0.0.0-phptest-6a54f23b6837b; integrity check skipped
+[2026-07-13 14:12:11] [INFO] Extracted 3 entries to /workspace/Lumora/cache/.updates/extract/
+[2026-07-13 14:12:11] [INFO] Downloading v0.0.0-phptest-6a54f23b692ca from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:12:11] [INFO] Downloaded 18 B to /workspace/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a54f23b692ca.zip
+[2026-07-13 14:12:11] [INFO] Downloading v0.0.0-phptest-6a54f23b6946e from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:12:11] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:12:11] [INFO] Downloading v0.0.0-phptest-6a54f23b695ba from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:12:11] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-07-13 14:12:11] [INFO] Archive already present at /workspace/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a54f23b69714.zip; skipping download
+[2026-07-13 14:12:11] [INFO] Preflight passed for v9.9.9-phptest via GitHub Releases
+[2026-07-13 14:12:11] [INFO] Preflight passed for v3.3.3-phptest via GitHub Releases

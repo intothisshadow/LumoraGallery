@@ -31,9 +31,11 @@ Then add one line to `template.html` after the existing `style.css` link:
 
 | Variable | Default | What it controls |
 |---|---|---|
-| `--fs-accent` | `#4a1f6e` | Buttons, links, section headers, stat highlights |
-| `--fs-accent-light` | `#6d3a9e` | Hover colour for links and buttons |
+| `--fs-accent` | `#4a1f6e` | Buttons, filled backgrounds (section headers, stat-box top border, category-list header) |
+| `--fs-accent-light` | `#6d3a9e` | Hover colour for filled accent buttons |
 | `--fs-accent-text` | `#ffffff` | Text on accent-coloured backgrounds |
+| `--fs-accent-ink` | `= --fs-accent` (light) / `#b98ee8` (dark) | Links, card titles, and borders where the accent sits directly on the page background rather than as a fill — kept separate from `--fs-accent` so dark mode can swap in a lighter tint for WCAG AA contrast |
+| `--fs-accent-ink-hover` | `= --fs-accent-light` (light) / `#d4b8f0` (dark) | Hover colour for `--fs-accent-ink` uses |
 | `--fs-page-bg` | `#1a1a2a` | Outer page background (visible on wide screens) |
 | `--fs-body-bg` | `#f0eef5` | Content panel background |
 | `--fs-panel-bg` | `#ffffff` | Cards and thumbnail backgrounds |
@@ -55,6 +57,15 @@ Then add one line to `template.html` after the existing `style.css` link:
 
 Copy one of these blocks into your `custom.css` file.
 
+**Dark mode note:** each preset below only sets `--fs-accent`/`--fs-accent-light`,
+which cover buttons and other filled backgrounds. Dark mode's link/border colour
+(`--fs-accent-ink`) defaults to a neutral lavender tint chosen purely for guaranteed
+WCAG AA contrast against the shared dark content background — it won't automatically
+pick up a preset's own hue. For full colour-matching in dark mode, add an
+`html[data-bs-theme="dark"]` block overriding `--fs-accent-ink`/`--fs-accent-ink-hover`
+with a lighter tint of your preset's colour, as shown for the Dark Red preset below
+(and already included in this theme's bundled `custom.css`).
+
 ### Dark red / fantasy / horror
 
 ```css
@@ -67,6 +78,12 @@ Copy one of these blocks into your `custom.css` file.
   --fs-banner-bg:    linear-gradient(135deg, #2d0000 0%, #8b0000 50%, #2d0000 100%);
   --fs-body-bg:      #f5eeee;
   --fs-panel-border: #e8c8c8;
+}
+
+/* Optional: colour-match links/borders in dark mode too (see note above) */
+html[data-bs-theme="dark"] {
+  --fs-accent-ink:       #ff8a80;
+  --fs-accent-ink-hover: #ffb3a8;
 }
 ```
 

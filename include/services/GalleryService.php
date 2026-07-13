@@ -67,6 +67,68 @@ class GalleryService
     }
 
     /**
+     * Get all categories in proper depth-first hierarchical order, each row
+     * augmented with a computed `depth` key (0 = root).
+     *
+     * getAllCategoriesFlat()'s `ORDER BY parent_id ASC` groups categories by
+     * their raw parent_id value, not by where they actually sit in the tree —
+     * a category whose parent_id happens to be numerically low can be listed
+     * before its true ancestor chain, which produced incorrect groupings in
+     * any dropdown that tried to indent from that flat SQL order alone (e.g.
+     * sibling categories under different parents interleaving with each
+     * other). This method instead builds a parent_id => children map once
+     * and walks it depth-first from the root, so a caller can indent purely
+     * by the returned `depth` value and get correct nesting at any depth.
+     *
+     * @return list<array{id: int, name: string, parent_id: int, pos: int,
+     *                     description: string, depth: int}>
+     */
+    public static function getAllCategoriesTreeOrdered(): array
+    {
+        $flat = self::getAllCategoriesFlat();
+
+        $children_of = [];
+        foreach ($flat as $cat) {
+            $children_of[(int) $cat['parent_id']][] = $cat;
+        }
+
+        $ordered = [];
+        $visited = [];
+        self::walkCategoryTree($children_of, 0, 0, $ordered, $visited);
+
+        return $ordered;
+    }
+
+    /**
+     * Depth-first walk helper for getAllCategoriesTreeOrdered(). Appends
+     * each visited category (with its computed depth) to $ordered by
+     * reference. $visited guards against infinite recursion caused by a
+     * corrupt parent_id cycle.
+     *
+     * @param array<int, list<array<string, mixed>>> $children_of parent_id => [category rows]
+     * @param list<array<string, mixed>>              $ordered     Accumulator, passed by ref.
+     * @param array<int, true>                        $visited     Cycle guard, passed by ref.
+     */
+    private static function walkCategoryTree(
+        array $children_of,
+        int   $parent_id,
+        int   $depth,
+        array &$ordered,
+        array &$visited
+    ): void {
+        foreach ($children_of[$parent_id] ?? [] as $cat) {
+            $id = (int) $cat['id'];
+            if (isset($visited[$id])) continue; // cycle guard
+            $visited[$id] = true;
+
+            $cat['depth'] = $depth;
+            $ordered[]    = $cat;
+
+            self::walkCategoryTree($children_of, $id, $depth + 1, $ordered, $visited);
+        }
+    }
+
+    /**
      * Build the breadcrumb trail for a category, from root to $cat_id.
      * Returns array of ['id', 'name'] sorted root-first.
      *
@@ -342,6 +404,99 @@ class GalleryService
         LumoraDB::delete('categories', 'id = ?', [$id]);
 
         return 'Category deleted. Child items moved to parent.';
+    }
+
+    /**
+     * Reorder categories within a single parent bucket, and optionally
+     * reparent one category into a different parent (drag-and-drop admin
+     * UI — TODO.md #23).
+     *
+     * A category can only be moved to a parent that is not itself and not
+     * one of its own descendants — moving a category into its own subtree
+     * would create a parent_id cycle and silently detach the whole branch
+     * from the tree. isCategoryWithinSubtree() below is what enforces this.
+     *
+     * $orderedIds is trusted to list every sibling that should end up under
+     * $newParentId, in their intended final order; each listed ID has its
+     * `pos` renumbered in 10-step increments (matching the gap-tolerant
+     * scheme already used by admin/categories.php's manual Position field)
+     * regardless of which parent it previously belonged to. Only $movedId's
+     * `parent_id` column is actually changed — every other listed ID keeps
+     * its existing parent_id, so a caller must not include an ID that
+     * doesn't already belong to (or isn't $movedId itself moving into)
+     * $newParentId.
+     *
+     * @param int       $movedId      Category being dragged.
+     * @param int       $newParentId  Parent bucket to place it in (0 = root).
+     * @param list<int> $orderedIds   Full ordered list of sibling IDs
+     *                                (including $movedId) that should end up
+     *                                under $newParentId, in display order.
+     * @return string|null Error message on failure (category/parent not
+     *                     found, or a cycle would be created), or null on
+     *                     success.
+     */
+    public static function reorderCategories(int $movedId, int $newParentId, array $orderedIds): ?string
+    {
+        $moved = self::getCategory($movedId);
+        if (!$moved) {
+            return 'Category not found.';
+        }
+
+        if ($newParentId !== 0) {
+            if (!self::getCategory($newParentId)) {
+                return 'Target parent category not found.';
+            }
+            if ($newParentId === $movedId || self::isCategoryWithinSubtree($movedId, $newParentId)) {
+                return 'Cannot move a category into one of its own descendants.';
+            }
+        }
+
+        if ((int) $moved['parent_id'] !== $newParentId) {
+            LumoraDB::update('categories', ['parent_id' => $newParentId], 'id = ?', [$movedId]);
+        }
+
+        $pos = 0;
+        foreach ($orderedIds as $sibling_id) {
+            $sibling_id = (int) $sibling_id;
+            if ($sibling_id <= 0) continue;
+            LumoraDB::update('categories', ['pos' => $pos], 'id = ?', [$sibling_id]);
+            $pos += 10;
+        }
+
+        return null;
+    }
+
+    /**
+     * Return true when $candidateId is $rootId itself, or is anywhere within
+     * $rootId's descendant subtree. Used by reorderCategories() to reject a
+     * drag-and-drop move that would make a category a child of its own
+     * descendant (which would create a parent_id cycle).
+     */
+    private static function isCategoryWithinSubtree(int $rootId, int $candidateId): bool
+    {
+        if ($rootId === $candidateId) {
+            return true;
+        }
+
+        $flat = self::getAllCategoriesFlat();
+        $children_of = [];
+        foreach ($flat as $cat) {
+            $children_of[(int) $cat['parent_id']][] = (int) $cat['id'];
+        }
+
+        $queue   = [$rootId];
+        $visited = [];
+        while (!empty($queue)) {
+            $id = array_shift($queue);
+            if (isset($visited[$id])) continue; // cycle guard
+            $visited[$id] = true;
+            foreach ($children_of[$id] ?? [] as $child_id) {
+                if ($child_id === $candidateId) return true;
+                $queue[] = $child_id;
+            }
+        }
+
+        return false;
     }
 
     // ── Albums ────────────────────────────────────────────────────────────────
@@ -687,6 +842,46 @@ class GalleryService
         }
 
         return 'Album deleted.' . $folder_msg;
+    }
+
+    /**
+     * Reorder albums within a single category bucket (drag-and-drop admin
+     * UI — TODO.md #23). Albums are never reparented to a different category
+     * via this method — only their relative position within the same
+     * category changes; dragging an album into a different category section
+     * is out of scope for this feature (use the album edit form's Category
+     * field for that).
+     *
+     * Each ID's `pos` is renumbered in 10-step increments, matching the
+     * gap-tolerant scheme reorderCategories() uses. The WHERE clause
+     * defensively re-checks category_id = $categoryId for every update, so a
+     * tampered request can't move an album's position value while it
+     * silently lives in a different category than the one it's supposedly
+     * being reordered within.
+     *
+     * @param int       $categoryId  Category bucket being reordered (0 = uncategorized).
+     * @param list<int> $orderedIds  Full ordered list of album IDs belonging
+     *                               to $categoryId, in display order.
+     * @return string|null Error message on failure, or null on success.
+     */
+    public static function reorderAlbums(int $categoryId, array $orderedIds): ?string
+    {
+        if ($categoryId > 0 && !self::getCategory($categoryId)) {
+            return 'Category not found.';
+        }
+
+        $pos = 0;
+        foreach ($orderedIds as $album_id) {
+            $album_id = (int) $album_id;
+            if ($album_id <= 0) continue;
+            LumoraDB::query(
+                'UPDATE `{PREFIX}albums` SET pos = ? WHERE id = ? AND category_id = ?',
+                [$pos, $album_id, $categoryId]
+            );
+            $pos += 10;
+        }
+
+        return null;
     }
 
     // ── Images ────────────────────────────────────────────────────────────────

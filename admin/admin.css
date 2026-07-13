@@ -24,6 +24,10 @@
   --lum-adm-tree-cat:  #eef1ff;
   --lum-adm-tree-bdr:  #c9d1f0;
   --lum-adm-stat-col:  var(--lum-adm-accent);
+
+  /* Update confirmation callout (TODO #24) */
+  --lum-adm-confirm-bg:     #fff8e6;
+  --lum-adm-confirm-border: #f0c869;
 }
 
 /* ── Dark mode overrides ──────────────────────────────────── */
@@ -39,6 +43,8 @@ html[data-bs-theme="dark"] {
   --lum-adm-tree-bdr:  #3040a0;
   --lum-adm-dark:      #0e0f1e;
   --lum-adm-darker:    #090a15;
+  --lum-adm-confirm-bg:     #332a10;
+  --lum-adm-confirm-border: #6b5a1e;
 }
 
 html, body { height: 100%; }
@@ -168,6 +174,52 @@ html, body { height: 100%; }
   margin-bottom: 1rem;
 }
 
+/* ── Section headers with icon (TODO #25) ──────────────────
+   Used for prominent, scannable headings inside .lum-adm-card
+   sections — e.g. admin/config.php, admin/tools.php,
+   admin/installation.php. */
+.lum-adm-section-title {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  color: var(--lum-adm-head);
+  font-weight: 600;
+}
+
+.lum-adm-section-title .lum-adm-section-icon {
+  flex-shrink: 0;
+  width: 1.2rem;
+  height: 1.2rem;
+  color: var(--lum-adm-accent);
+}
+
+/* ── Update confirmation callout (TODO #24) ─────────────────
+   Wraps the "Install Update" confirmation checkbox on
+   admin/update.php so it can't be overlooked before an
+   irreversible file-replacing action. */
+.lum-upd-confirm-box {
+  background: var(--lum-adm-confirm-bg);
+  border: 1px solid var(--lum-adm-confirm-border);
+  border-radius: .5rem;
+  padding: .9rem 1.1rem;
+}
+
+.lum-upd-confirm-box .form-check-input {
+  width: 1.2em;
+  height: 1.2em;
+  margin-top: .15em;
+}
+
+.lum-upd-confirm-box .form-check-input:focus {
+  box-shadow: 0 0 0 .2rem rgba(240, 200, 105, .4);
+}
+
+.lum-upd-confirm-box .form-check-label {
+  font-size: .95rem;
+  line-height: 1.5;
+  padding-left: .2rem;
+}
+
 /* ── Progress bar for batch add ──────────────────────────── */
 #lum-batch-progress {
   display: none;
@@ -205,6 +257,73 @@ html, body { height: 100%; }
 /* First header row needn't have a top border */
 .lum-tree-cat-header:first-child td {
   border-top: none;
+}
+
+/* ── Drag-and-drop reordering (categories.php / albums.php, TODO #23) ──── */
+
+/* Rows that support dragging get a grab cursor on their drag handle. */
+.lum-drag-row {
+  cursor: default;
+}
+
+.lum-drag-handle {
+  cursor: grab;
+  user-select: none;
+  color: var(--lum-adm-muted);
+  padding-right: .4rem;
+  font-size: .9rem;
+  display: inline-block;
+}
+
+.lum-drag-row.lum-dragging {
+  opacity: .4;
+}
+
+/* Drop indicators: a coloured bar above/below the row, or a highlighted
+   background when dropping directly onto a row to reparent (categories only). */
+.lum-drag-row.lum-drop-above {
+  box-shadow: inset 0 2px 0 0 var(--lum-adm-accent);
+}
+
+.lum-drag-row.lum-drop-below {
+  box-shadow: inset 0 -2px 0 0 var(--lum-adm-accent);
+}
+
+.lum-drag-row.lum-drop-into {
+  background-color: var(--lum-adm-drop-into-bg, rgba(13, 110, 253, .12));
+  box-shadow: inset 0 0 0 2px var(--lum-adm-accent);
+}
+
+/* Small "Saving…" overlay shown while a reorder request is in flight. */
+.lum-reorder-toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 2000;
+  background: var(--lum-adm-card-bg, #fff);
+  border: 1px solid var(--lum-adm-border, rgba(0,0,0,.15));
+  border-radius: 8px;
+  padding: .5rem .9rem;
+  font-size: .85rem;
+  box-shadow: 0 4px 14px rgba(0,0,0,.15);
+  display: none;
+  align-items: center;
+  gap: .5rem;
+}
+
+.lum-reorder-toast.is-visible {
+  display: inline-flex;
+}
+
+.lum-reorder-toast.is-error {
+  border-color: var(--bs-danger, #dc3545);
+  color: var(--bs-danger, #dc3545);
+}
+
+.lum-reorder-toast .spinner-border {
+  width: .9rem;
+  height: .9rem;
+  border-width: .15em;
 }
 
 /* ── Responsive ───────────────────────────────────────────── */

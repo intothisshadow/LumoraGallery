@@ -8,6 +8,137 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.11.0] — 2026-07-13
+
+### Changed
+
+- **Update check now goes through the GitHub Releases provider exclusively
+  (TODO #12).** `UpdateService` previously queried its own separate, hardcoded
+  JSON endpoint (`coding.unloved-heart.net/lumora/update.json`) to determine
+  whether a new release was available, entirely independent of the
+  `GitHubUpdateProvider`/`AbstractUpdateProvider` abstraction the in-dashboard
+  updater (`UpdaterService`) already used for download URLs and SHA-256
+  checksums — two separate sources of truth that could in principle disagree.
+  `UpdateService::fetch()` now delegates to
+  `AbstractUpdateProvider::createFromConfig()`, so release discovery, download
+  URL, and checksum verification all come from the same GitHub-backed source.
+  The old endpoint dependency has been removed entirely. `AbstractUpdateProvider`
+  gained a `getSourceLabel()` method (the configured `owner/repo` for
+  `GitHubUpdateProvider`) so the admin Updates page's "About Updates" panel can
+  show the release source in place of the retired endpoint URL. The repository
+  queried remains configurable via the existing `update_github_repo` config key.
+
+### Added
+
+- **Admin-only theme preview via URL.** A logged-in administrator can now
+  append `?theme=folder-name` to the public gallery URL to render any
+  installed theme for that request only — no other visitor is affected and
+  the site's configured theme is never written to. An invalid or unknown
+  theme name falls back to the real active theme with an admin-only notice
+  explaining why; a valid preview shows a similar admin-only banner
+  reminding them it's temporary and visible only to them. Every asset URL
+  (`{THEME_URL}`, `template.html`, an optional `theme.php` override) already
+  resolves through the same `lumora_active_theme()` call this hooks into, so
+  no other rendering code needed to change. Admin → Configuration's Themes
+  table gained a **Preview** column/button per theme that opens the preview
+  in a new tab.
+- **Copyable image info box in the frontend lightbox (Admin/Staff only).**
+  Logged-in staff (admin, moderator, or contributor) now see an extra button
+  in the PhotoSwipe lightbox toolbar that opens a small panel with the
+  current image's direct URL and a ready-to-paste
+  `<a href="..."><img ... /></a>` embed snippet (thumbnail image linking to
+  the full-size original), plus a one-click **Copy HTML** button with a
+  brief "Copied!" confirmation. Regular visitors never see the button or
+  panel. New `.lum-lightbox-info*` styles added to both bundled themes'
+  `style.css`, styled to match PhotoSwipe's own always-dark chrome rather
+  than the site's light/dark colour mode.
+- **Drag-and-drop reordering for categories and albums in the admin panel.**
+  `admin/categories.php`'s hierarchy tree and `admin/albums.php`'s hierarchy
+  view rows can now be dragged to reorder. Categories can additionally be
+  dragged directly onto another category to reparent them (with a guard
+  against moving a category into one of its own descendants); albums can be
+  reordered only within their existing category. New
+  `GalleryService::reorderCategories()`/`reorderAlbums()` persist the new
+  `pos` values (and, for categories, the new `parent_id`), backed by two new
+  AJAX endpoints (`admin/ajax_reorder_categories.php`,
+  `admin/ajax_reorder_albums.php`). A small toast shows saving/error
+  feedback while a reorder request is in flight.
+- **Opt-in anonymous install ping.** A new, off-by-default **Privacy**
+  section in Admin → Configuration lets an administrator opt in to sending
+  a minimal, anonymous ping (a randomly generated install UUID, the Lumora
+  version, and the PHP version — nothing else) to a dedicated endpoint,
+  roughly once a month plus once immediately on enabling the feature. Fully
+  independent of the existing update-check request; fails silently on any
+  network error. New `InstallPingService` class.
+
+### Fixed
+
+- **Dark mode: accent colour used as link/border text failed WCAG AA contrast
+  against dark surfaces in both built-in themes.** Classic Fansite's
+  `--fs-accent` (`#4a1f6e`, a near-black purple) was reused unchanged as the
+  dark-mode link colour, giving roughly 1.2:1 contrast against the dark
+  content background — links, card titles, breadcrumbs, pagination, and
+  category-list numbers were all barely legible. Default theme's
+  `--lum-accent` (`#0d6efd`) was borderline too, at ~3.9:1, just under the
+  4.5:1 normal-text threshold. Both themes now have a separate
+  `--lum-accent-ink`/`--lum-accent-ink-hover` (Default) and
+  `--fs-accent-ink`/`--fs-accent-ink-hover` (Classic Fansite) token pair —
+  identical to the accent colour in light mode, swapped for a lighter,
+  WCAG AA-verified tint in dark mode (5.8:1–7.3:1 against every dark surface
+  in use) — and every text/link/border use of the accent colour now goes
+  through these tokens. Filled backgrounds (buttons, section headers, the
+  category-list header bar) are unaffected, since white text on a dark
+  accent fill was never the contrast problem.
+- **Dark mode: no visible keyboard focus outline in either built-in theme.**
+  Neither theme defined an explicit `:focus-visible` style, relying on
+  browser/Bootstrap defaults that can disappear against the dark navbar (both
+  modes) or dark-mode content panels. Added a theme-aware `:focus-visible`
+  outline (new `--lum-focus-ring`/`--fs-focus-ring` tokens, adaptive per
+  colour mode) across both themes' interactive elements, plus a fixed
+  light-coloured outline for the navbar/footer since those stay dark in both
+  modes.
+- **Category dropdown in the album creation/edit form (`admin/albums.php?action=new`)
+  displayed categories in the wrong hierarchical order**, making a category
+  appear as if it belonged under a completely unrelated category (e.g. three
+  "Photos" categories rendering as if nested under "Season 3 Screencaps"
+  instead of their own actual parent). The underlying cause:
+  `getAllCategoriesFlat()`'s SQL order (`ORDER BY parent_id ASC, pos ASC, name
+  ASC`) groups categories purely by their numeric `parent_id` value, not by
+  where their real parent sits in the list, so a category could visually end
+  up adjacent to an unrelated one; the dropdown's own indent logic only ever
+  checked "has *a* parent" (one dash) rather than the real nesting depth.
+  Added `GalleryService::getAllCategoriesTreeOrdered()`, which walks the
+  category tree depth-first from the root and returns every category with a
+  computed `depth`, so every child is placed immediately after its own
+  parent at the correct indent level, at any nesting depth. Both
+  `admin/albums.php`'s Category dropdown and `admin/categories.php`'s Parent
+  Category dropdown (same underlying bug, same fix) now use this instead of
+  the flat, unordered list.
+
+### Changed
+
+- **Update confirmation checkbox on `admin/update.php` is now visually
+  prominent.** The "I understand that this will replace application files…"
+  checkbox previously blended into the surrounding text as a plain small
+  form-check. It now sits inside a bordered, tinted callout box (new
+  `.lum-upd-confirm-box` style in `admin/admin.css`, with a light-mode and
+  dark-mode colour pair) with a larger checkbox, bold label text, and a
+  warning icon, so administrators are far less likely to overlook it before
+  starting an update that replaces application files. Label association,
+  checkbox id, and the JS that gates the "Update Now" button on it are all
+  unchanged.
+- **`admin/config.php` reorganised into clearly separated sections.** Each
+  former `<h6>` sub-heading (Appearance, Images & Thumbnails, Custom HTML,
+  Gallery Behavior, Upload & Image Limits) — plus a new "Basic Information"
+  heading for the previously header-less top fields — is now its own
+  `.lum-adm-card` with a prominent `<h5>` heading and a dedicated inline SVG
+  icon, matching the section-card layout already used by `admin/tools.php`
+  and `admin/installation.php`. New shared `.lum-adm-section-title` /
+  `.lum-adm-section-icon` styles added to `admin/admin.css` for this and any
+  future admin page. All field names, ids, `required`/`min`/`max`
+  validation attributes, and the single shared `<form>` submission are
+  unchanged — this is a layout-only change.
+
 ## [1.10.0] — 2026-07-08
 
 ### Fixed

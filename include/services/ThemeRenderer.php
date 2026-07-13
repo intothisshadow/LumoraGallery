@@ -42,6 +42,16 @@ class ThemeRenderer
      *                           before first paint (prevents flash-of-wrong-theme)
      *   {COLOR_MODE_TOGGLE}   - toggle button (☀️/🌙/🖥️) for the nav
      *
+     * Admin-only theme preview (TODO.md #29): lumora_active_theme() resolves
+     * an admin's `?theme=` query parameter for this request only (see
+     * lumora_theme_preview_state() in functions.php) — every path below
+     * (template file, {THEME_URL}, theme.php override) automatically follows
+     * whichever theme that resolves to, with no changes needed here. A small
+     * admin-only notice banner (lumora_theme_preview_notice()) is prepended
+     * directly to $content so it renders regardless of which theme's
+     * template.html is active, without requiring a new template token that
+     * every bundled and custom theme would otherwise need to add.
+     *
      * @param string $content   The main page HTML.
      * @param array  $extra     Additional token => value pairs to replace.
      */
@@ -69,6 +79,12 @@ class ThemeRenderer
             $theme      = 'default';
             $theme_path = lumora_theme_path('default');
             $tpl_file   = $theme_path . 'template.html';
+        }
+
+        // ── Admin-only theme preview notice (TODO.md #29) ───────────────────────
+        $preview_notice = lumora_theme_preview_notice();
+        if ($preview_notice !== '') {
+            $content = $preview_notice . $content;
         }
 
         // Allow theme to override rendering functions via theme.php.
@@ -761,8 +777,10 @@ HTML;
      */
     public static function renderLightboxJs(string $base_url = ''): string
     {
-        $hit_url_js = json_encode($base_url . 'ajax_hit.php');
-        $setup = '<script>window.__lumHitUrl = ' . $hit_url_js . ';</script>' . "\n";
+        $hit_url_js  = json_encode($base_url . 'ajax_hit.php');
+        $show_info_js = json_encode(lumora_is_logged_in());
+        $setup = '<script>window.__lumHitUrl = ' . $hit_url_js
+            . ';window.__lumShowInfoBox = ' . $show_info_js . ';</script>' . "\n";
 
         return $setup . <<<'LIGHTBOX'
 <script type="module">
@@ -785,15 +803,19 @@ HTML;
     e.preventDefault();
 
     const items = links.map(function (a) {
+      var thumbEl = a.querySelector('img');
       return {
         src:         a.href,
         width:       parseInt(a.dataset.pswpWidth,  10) || 800,
         height:      parseInt(a.dataset.pswpHeight, 10) || 600,
-        alt:         a.querySelector('img') ? a.querySelector('img').alt : '',
+        alt:         thumbEl ? thumbEl.alt : '',
         downloadUrl: a.dataset.downloadUrl || a.href,
         imageId:     parseInt(a.dataset.imageId, 10) || 0,
+        thumbUrl:    thumbEl ? thumbEl.src : (a.dataset.downloadUrl || a.href),
       };
     });
+
+    const showInfoBox = !!window.__lumShowInfoBox;
 
     const pswp = new PhotoSwipe({
       dataSource:            items,
@@ -818,7 +840,108 @@ HTML;
           });
         },
       });
+
+      if (showInfoBox) {
+        pswp.ui.registerElement({
+          name:     'lum-info-button',
+          title:    'Copy image HTML',
+          order:    9,
+          isButton: true,
+          tagName:  'button',
+          html:     '<svg aria-hidden="true" class="pswp__icn" viewBox="0 0 24 24" width="32" height="32"><path d="M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6zm5.2 0L19.2 12l-4.6-4.6L16 6l6 6-6 6z" fill="currentColor"/></svg>',
+          onInit: function (el) {
+            el.classList.add('lum-lightbox-info-btn');
+            el.addEventListener('click', function (e) {
+              e.preventDefault();
+              lumToggleInfoPanel(pswp);
+            });
+          },
+        });
+      }
     });
+
+    function lumBuildSnippet(fullUrl, thumbUrl, w, h) {
+      var dims = (w && h) ? ' width="' + w + '" height="' + h + '"' : '';
+      return '<a href="' + fullUrl + '"><img class="alignnone size-full" src="' + thumbUrl + '"' + dims + ' /></a>';
+    }
+
+    function lumFallbackCopy(text, cb) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (e) {}
+      document.body.removeChild(ta);
+      cb();
+    }
+
+    function lumEnsureInfoPanel(pswp) {
+      var panel = pswp.element.querySelector('.lum-lightbox-info');
+      if (panel) return panel;
+
+      panel = document.createElement('div');
+      panel.className = 'lum-lightbox-info';
+      panel.innerHTML =
+        '<div class="lum-lightbox-info-inner">' +
+          '<span class="lum-lightbox-info-label">Direct image URL</span>' +
+          '<input type="text" class="lum-lightbox-info-url" readonly>' +
+          '<span class="lum-lightbox-info-label">Embed HTML</span>' +
+          '<textarea class="lum-lightbox-info-html" readonly rows="2"></textarea>' +
+          '<div class="lum-lightbox-info-actions">' +
+            '<button type="button" class="lum-lightbox-info-copy">Copy HTML</button>' +
+            '<span class="lum-lightbox-info-feedback" aria-live="polite"></span>' +
+          '</div>' +
+        '</div>';
+      pswp.element.appendChild(panel);
+
+      var copyBtn   = panel.querySelector('.lum-lightbox-info-copy');
+      var feedback  = panel.querySelector('.lum-lightbox-info-feedback');
+      copyBtn.addEventListener('click', function () {
+        var htmlVal = panel.querySelector('.lum-lightbox-info-html').value;
+        var done = function () {
+          feedback.textContent = 'Copied!';
+          setTimeout(function () { feedback.textContent = ''; }, 2000);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(htmlVal).then(done).catch(function () {
+            lumFallbackCopy(htmlVal, done);
+          });
+        } else {
+          lumFallbackCopy(htmlVal, done);
+        }
+      });
+
+      return panel;
+    }
+
+    function lumUpdateInfoPanel(pswp) {
+      var panel = pswp.element.querySelector('.lum-lightbox-info');
+      if (!panel || !panel.classList.contains('is-open')) return;
+      var data = pswp.currSlide.data;
+
+      panel.querySelector('.lum-lightbox-info-url').value = data.src;
+
+      var htmlField = panel.querySelector('.lum-lightbox-info-html');
+      htmlField.value = lumBuildSnippet(data.src, data.thumbUrl, 0, 0);
+
+      var probe = new Image();
+      probe.onload = function () {
+        // Only apply if the panel is still showing this same slide.
+        if (pswp.currSlide.data === data) {
+          htmlField.value = lumBuildSnippet(data.src, data.thumbUrl, probe.naturalWidth, probe.naturalHeight);
+        }
+      };
+      probe.src = data.thumbUrl;
+    }
+
+    function lumToggleInfoPanel(pswp) {
+      var panel   = lumEnsureInfoPanel(pswp);
+      var willOpen = !panel.classList.contains('is-open');
+      panel.classList.toggle('is-open', willOpen);
+      if (willOpen) lumUpdateInfoPanel(pswp);
+    }
 
     pswp.on('change', function () {
       var imgId = pswp.currSlide && pswp.currSlide.data
@@ -830,6 +953,7 @@ HTML;
         xh.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
         xh.send('image_id=' + encodeURIComponent(imgId));
       }
+      if (showInfoBox) lumUpdateInfoPanel(pswp);
     });
 
     pswp.init();

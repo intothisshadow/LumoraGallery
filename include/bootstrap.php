@@ -18,7 +18,7 @@ declare(strict_types=1);
  *                       MigrationService, UpdateService, SchemaService,
  *                       AbstractUpdateProvider, GitHubUpdateProvider, UpdaterService,
  *                       InstallationService, GroupService, UserService,
- *                       AlbumAssignmentService
+ *                       AlbumAssignmentService, InstallPingService
  *   8. functions.php  (utility helpers + legacy forwarding wrappers)
  *   9. auth.php
  *  10. thumb.php     (legacy forwarding wrappers → ThumbnailService)
@@ -110,6 +110,7 @@ require_once LUMORA_INCLUDE . 'services/InstallationService.php';
 require_once LUMORA_INCLUDE . 'services/GroupService.php';
 require_once LUMORA_INCLUDE . 'services/UserService.php';
 require_once LUMORA_INCLUDE . 'services/AlbumAssignmentService.php';
+require_once LUMORA_INCLUDE . 'services/InstallPingService.php';
 
 // ── 8–11. Legacy includes (wrappers + utilities) ─────────────────────────────
 require_once LUMORA_INCLUDE . 'functions.php';

@@ -95,14 +95,23 @@ $csrf     = h(lumora_csrf_token());
 $base_h   = h($base);
 
 // ── Parent dropdown helper ────────────────────────────────────────────────────
+/**
+ * $cats must be in depth-first hierarchical order with a `depth` key on each
+ * row — i.e. GalleryService::getAllCategoriesTreeOrdered() — not the flat
+ * parent_id-grouped order from getAllCategoriesFlat()/getAllCategoriesWithCounts().
+ * Same underlying fix as albums.php's album_cat_options() — see TODO.md §15.
+ */
 function cat_parent_options(array $cats, int $exclude_id = 0, int $selected = 0): string
 {
     $html = '<option value="0">— Root (no parent) —</option>';
     foreach ($cats as $c) {
-        if ((int)$c['id'] === $exclude_id) continue;
-        $sel  = ((int)$c['id'] === $selected) ? ' selected' : '';
-        $html .= '<option value="' . (int)$c['id'] . '"' . $sel . '>'
-            . h(($c['parent_id'] > 0 ? '— ' : '') . $c['name'])
+        $id = (int) $c['id'];
+        if ($id === $exclude_id) continue;
+        $sel    = ($id === $selected) ? ' selected' : '';
+        $depth  = (int) ($c['depth'] ?? 0);
+        $prefix = str_repeat('— ', $depth);
+        $html .= '<option value="' . $id . '"' . $sel . '>'
+            . h($prefix . $c['name'])
             . '</option>';
     }
     return $html;
@@ -153,6 +162,7 @@ function render_category_tree_rows(
             : '';
 
         $name_cell = '<div class="lum-tree-name" style="padding-left:' . $indent_px . 'px">'
+            . '<span class="lum-drag-handle" title="Drag to reorder or reparent" aria-hidden="true">&#9776;</span>'
             . $connector . $name_h . '</div>';
 
         // Album count badge (shown on every row).
@@ -168,7 +178,7 @@ function render_category_tree_rows(
             : '';
 
         $html .=
-            '<tr>'
+            '<tr class="lum-drag-row" draggable="true" data-cat-id="' . $id . '" data-parent-id="' . $parent_id . '">'
             . '<td>' . $name_cell . $sub_indicator . '</td>'
             . '<td>' . $album_badge . '</td>'
             . '<td class="text-muted small">' . $pos_v . '</td>'
@@ -208,7 +218,10 @@ if ($action === 'new' || $action === 'edit') {
     $pos_v    = (int)($cat['pos']        ?? 0);
     $id_v     = (int)($cat['id']         ?? 0);
     $thumb_v  = (int)($cat['thumb_image_id'] ?? 0);
-    $par_opts = cat_parent_options($all_cats, $id_v, $parent_v);
+    // Depth-first hierarchical order (not $all_cats' flat parent_id-grouped
+    // order) so cat_parent_options() can indent each option correctly under
+    // its actual ancestor chain. See TODO.md §15.
+    $par_opts = cat_parent_options(GalleryService::getAllCategoriesTreeOrdered(), $id_v, $parent_v);
 
     $content = <<<HTML
 <a href="{$base_h}" class="btn btn-sm btn-outline-secondary mb-3">← Back to list</a>
@@ -272,9 +285,142 @@ if ($rows === '') {
 
 $new_h = h($base . '?action=new');
 
+$reorder_url_js = json_encode(lumora_base_url() . 'admin/ajax_reorder_categories.php');
+$csrf_js        = json_encode($csrf);
+
+$drag_script = <<<HTML
+<div class="lum-reorder-toast" id="lum-cat-reorder-toast" role="status" aria-live="polite">
+  <span class="spinner-border" aria-hidden="true"></span>
+  <span id="lum-cat-reorder-toast-text">Saving order&hellip;</span>
+</div>
+<script>
+(function () {
+  'use strict';
+
+  var REORDER_URL = {$reorder_url_js};
+  var CSRF        = {$csrf_js};
+
+  var table = document.querySelector('.lum-adm-table');
+  if (!table) return;
+
+  var toast     = document.getElementById('lum-cat-reorder-toast');
+  var toastText = document.getElementById('lum-cat-reorder-toast-text');
+
+  function showToast(text, isError) {
+    toastText.textContent = text;
+    toast.classList.toggle('is-error', !!isError);
+    toast.classList.add('is-visible');
+  }
+  function hideToast() {
+    toast.classList.remove('is-visible', 'is-error');
+  }
+
+  var draggedRow = null;
+
+  function allRows() {
+    return Array.prototype.slice.call(table.querySelectorAll('tr.lum-drag-row'));
+  }
+
+  function clearDropClasses() {
+    allRows().forEach(function (r) {
+      r.classList.remove('lum-drop-above', 'lum-drop-below', 'lum-drop-into');
+    });
+  }
+
+  table.addEventListener('dragstart', function (e) {
+    var row = e.target.closest('tr.lum-drag-row');
+    if (!row) return;
+    draggedRow = row;
+    row.classList.add('lum-dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', row.dataset.catId); } catch (err) {}
+  });
+
+  table.addEventListener('dragover', function (e) {
+    var row = e.target.closest('tr.lum-drag-row');
+    if (!row || !draggedRow || row === draggedRow) return;
+    e.preventDefault();
+
+    var rect = row.getBoundingClientRect();
+    var offset = (e.clientY - rect.top) / rect.height;
+
+    clearDropClasses();
+    if (offset < 0.25) {
+      row.classList.add('lum-drop-above');
+    } else if (offset > 0.75) {
+      row.classList.add('lum-drop-below');
+    } else {
+      row.classList.add('lum-drop-into');
+    }
+  });
+
+  table.addEventListener('dragend', function () {
+    if (draggedRow) draggedRow.classList.remove('lum-dragging');
+    clearDropClasses();
+    draggedRow = null;
+  });
+
+  table.addEventListener('drop', function (e) {
+    var targetRow = e.target.closest('tr.lum-drag-row');
+    if (!targetRow || !draggedRow || targetRow === draggedRow) return;
+    e.preventDefault();
+
+    var mode = targetRow.classList.contains('lum-drop-above') ? 'above'
+             : targetRow.classList.contains('lum-drop-below') ? 'below'
+             : 'into';
+    clearDropClasses();
+
+    var movedId = parseInt(draggedRow.dataset.catId, 10);
+    var newParentId;
+    var siblingIds;
+
+    if (mode === 'into') {
+      newParentId = parseInt(targetRow.dataset.catId, 10);
+      siblingIds = allRows()
+        .filter(function (r) { return parseInt(r.dataset.parentId, 10) === newParentId && r !== draggedRow; })
+        .map(function (r) { return parseInt(r.dataset.catId, 10); });
+      siblingIds.push(movedId);
+    } else {
+      newParentId = parseInt(targetRow.dataset.parentId, 10);
+      var siblings = allRows()
+        .filter(function (r) { return parseInt(r.dataset.parentId, 10) === newParentId && r !== draggedRow; });
+      var targetIndex = siblings.indexOf(targetRow);
+      var insertAt = mode === 'above' ? targetIndex : targetIndex + 1;
+      siblingIds = siblings.map(function (r) { return parseInt(r.dataset.catId, 10); });
+      siblingIds.splice(insertAt, 0, movedId);
+    }
+
+    showToast('Saving order\u2026', false);
+
+    var body = new URLSearchParams();
+    body.set('csrf_token', CSRF);
+    body.set('moved_id', String(movedId));
+    body.set('new_parent_id', String(newParentId));
+    body.set('ordered_ids', JSON.stringify(siblingIds));
+
+    fetch(REORDER_URL, { method: 'POST', body: body })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data && data.success) {
+          showToast('Order saved \u2014 refreshing\u2026', false);
+          window.location.reload();
+        } else {
+          showToast((data && data.error) || 'Could not save the new order.', true);
+          setTimeout(hideToast, 4000);
+        }
+      })
+      .catch(function () {
+        showToast('Network error \u2014 could not save the new order.', true);
+        setTimeout(hideToast, 4000);
+      });
+  });
+})();
+</script>
+HTML;
+
 $content =
     '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">'
-    . '<span class="text-muted small">' . h($summary) . '</span>'
+    . '<span class="text-muted small">' . h($summary) . ' &middot; drag rows (&#9776;) to reorder or reparent</span>'
     . '<a href="' . $new_h . '" class="btn btn-primary btn-sm">+ New Category</a>'
     . '</div>'
     . '<div class="table-responsive"><table class="table table-hover lum-adm-table align-middle">'
@@ -285,6 +431,7 @@ $content =
     . '<th style="width:70px"></th>'
     . '<th style="width:90px"></th>'
     . '</tr></thead>'
-    . '<tbody>' . $rows . '</tbody></table></div>';
+    . '<tbody>' . $rows . '</tbody></table></div>'
+    . $drag_script;
 
 lum_admin_page('Categories', $content, 'categories');

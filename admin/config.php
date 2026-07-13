@@ -52,11 +52,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'show_powered_by',
             'category_layout',
             'default_color_mode',
+            'install_ping_enabled',
         ];
 
         // Boolean checkbox keys: always save even when not present in POST
         // (unchecked checkbox sends nothing; treated as '0' by sanitizeValue()).
-        $bool_keys = ['count_album_views', 'gallery_offline', 'show_powered_by'];
+        $bool_keys = ['count_album_views', 'gallery_offline', 'show_powered_by', 'install_ping_enabled'];
+
+        // Detect the install-ping opt-in transition before overwriting it, so
+        // an immediate first ping can fire the moment it's switched on rather
+        // than waiting for the next admin page load's periodic check.
+        $ping_was_enabled = InstallPingService::isEnabled();
 
         // Every value is normalised through LumoraConfig::sanitizeValue() so the
         // same enum/range constraints apply here and in the `import` action below
@@ -68,6 +74,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 lumora_set_config($key, LumoraConfig::sanitizeValue($key, $_POST[$key]));
             }
         }
+
+        // Fire the first ping immediately on enable — see class docblock.
+        // Failure is swallowed internally by InstallPingService; this call
+        // can never turn into a user-facing error on the settings page.
+        if (!$ping_was_enabled && InstallPingService::isEnabled()) {
+            try {
+                InstallPingService::sendPing();
+            } catch (\Throwable) {
+                // Non-fatal — the periodic check on the next admin page load
+                // will retry.
+            }
+        }
+
         lum_flash('Settings saved.');
         lumora_redirect($base);
     }
@@ -141,6 +160,7 @@ $cfg = [
     'show_powered_by'        => lumora_config('show_powered_by',        '1'),
     'category_layout'        => lumora_config('category_layout',        'grid'),
     'default_color_mode'     => lumora_config('default_color_mode',     'auto'),
+    'install_ping_enabled'   => lumora_config('install_ping_enabled',   '0'),
 ];
 
 // Detect active image processor.
@@ -166,20 +186,29 @@ if (empty($themes)) {
     $theme_opts = '<option value="default" selected>default (no themes found)</option>';
 }
 
+// Preview links (TODO.md #29): an admin-only, single-request `?theme=`
+// override on the public gallery's own base URL — see
+// lumora_theme_preview_state() in include/functions.php for the resolution
+// logic this points at. Opens in a new tab so the admin's own current
+// admin-panel session/tab is untouched; never touches the `theme` config
+// value itself, so the site's real active theme is completely unaffected
+// for every other visitor.
 $theme_rows = '';
 foreach ($themes as $t) {
-    $m        = $theme_meta[$t];
-    $author_h = $m['author'] !== '' ? h($m['author']) : '<span class="text-muted">&mdash;</span>';
-    $design_h = $m['design_uri'] !== ''
+    $m           = $theme_meta[$t];
+    $author_h    = $m['author'] !== '' ? h($m['author']) : '<span class="text-muted">&mdash;</span>';
+    $design_h    = $m['design_uri'] !== ''
         ? '<a href="' . h($m['design_uri']) . '" target="_blank" rel="noopener">' . h($m['design_uri']) . '</a>'
         : '<span class="text-muted">&mdash;</span>';
+    $preview_url = h(lumora_base_url() . '?theme=' . rawurlencode($t));
+    $preview_h   = '<a href="' . $preview_url . '" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">Preview &#x2197;</a>';
     $theme_rows .= '<tr><td>' . h($m['name']) . '</td><td><code>' . h($t) . '</code></td>'
-        . '<td>' . $author_h . '</td><td>' . $design_h . '</td></tr>';
+        . '<td>' . $author_h . '</td><td>' . $design_h . '</td><td>' . $preview_h . '</td></tr>';
 }
 $theme_table = '';
 if ($theme_rows !== '') {
-    $theme_table = '<table class="table table-sm table-borderless align-middle mb-0 mt-2" style="max-width:680px">'
-        . '<thead><tr><th>Theme</th><th>Folder</th><th>Author</th><th>Design URI</th></tr></thead>'
+    $theme_table = '<table class="table table-sm table-borderless align-middle mb-0 mt-2" style="max-width:780px">'
+        . '<thead><tr><th>Theme</th><th>Folder</th><th>Author</th><th>Design URI</th><th>Preview</th></tr></thead>'
         . '<tbody>' . $theme_rows . '</tbody></table>';
 }
 
@@ -206,6 +235,7 @@ $sel_log_all    = $cfg['log_mode'] === 'all'    ? ' selected' : '';
 $chk_album_views = $cfg['count_album_views'] === '1' ? ' checked' : '';
 $chk_offline      = $cfg['gallery_offline']   === '1' ? ' checked' : '';
 $chk_powered_by   = $cfg['show_powered_by']   === '1' ? ' checked' : '';
+$chk_install_ping = $cfg['install_ping_enabled'] === '1' ? ' checked' : '';
 $sel_cat_grid     = $cfg['category_layout']   === 'grid' ? ' selected' : '';
 $sel_cat_list     = $cfg['category_layout']   === 'list' ? ' selected' : '';
 $sel_cm_auto      = $cfg['default_color_mode'] === 'auto'  ? ' selected' : '';
@@ -216,14 +246,43 @@ $v_who_online_dur = h($cfg['who_is_online_duration']);
 
 $processor_h = h($processor_status);
 
-$content = <<<HTML
-<div class="lum-adm-card mb-4">
-  <h5 class="mb-3">Gallery Settings</h5>
-  <form method="post" action="{$base_h}">
-    <input type="hidden" name="action"     value="save">
-    <input type="hidden" name="csrf_token" value="{$csrf}">
+// Install-ping UUID for display only — never regenerated just to render the
+// settings page; only getOrCreateUuid() (called from InstallPingService::sendPing())
+// actually persists one.
+$v_install_uuid = h((string) lumora_config('install_uuid', ''));
+$install_uuid_html = $v_install_uuid !== ''
+    ? '<div class="form-text mt-1">Install ID: <code>' . $v_install_uuid . '</code></div>'
+    : '';
 
-    <!-- ── Basic ──────────────────────────────────────────────────── -->
+// ── Section-header SVG icons ──────────────────────────────────────────────────
+// Small stroke-based icons (24x24 viewBox, currentColor) rendered inline so no
+// external icon font/library is required. Sized and coloured via the shared
+// .lum-adm-section-icon rule in admin.css (see TODO #25).
+$ic_basic = '<svg class="lum-adm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16.5"></line><circle cx="12" cy="7.75" r="1" fill="currentColor" stroke="none"></circle></svg>';
+
+$ic_appearance = '<svg class="lum-adm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.4-.3-.4-.5-.9-.5-1.4 0-1.1.9-2 2-2h1.5c1.9 0 3.5-1.6 3.5-3.5C20 6.4 16.4 3 12 3z"></path><circle cx="7.5" cy="10.5" r="1" fill="currentColor" stroke="none"></circle><circle cx="10.5" cy="7" r="1" fill="currentColor" stroke="none"></circle><circle cx="15" cy="8" r="1" fill="currentColor" stroke="none"></circle></svg>';
+
+$ic_images = '<svg class="lum-adm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="8.5" cy="9.5" r="1.5"></circle><path d="M21 16l-5-5-4 4-2-2-5 5"></path></svg>';
+
+$ic_html = '<svg class="lum-adm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="8 6 3 12 8 18"></polyline><polyline points="16 6 21 12 16 18"></polyline></svg>';
+
+$ic_behavior = '<svg class="lum-adm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"></line><circle cx="9" cy="6" r="2" fill="currentColor" stroke="none"></circle><line x1="4" y1="12" x2="20" y2="12"></line><circle cx="15" cy="12" r="2" fill="currentColor" stroke="none"></circle><line x1="4" y1="18" x2="20" y2="18"></line><circle cx="7" cy="18" r="2" fill="currentColor" stroke="none"></circle></svg>';
+
+$ic_upload = '<svg class="lum-adm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18a4.5 4.5 0 0 1-1-8.9 5 5 0 0 1 9.8-1.6A4 4 0 0 1 17 15.9"></path><polyline points="9 13 12 10 15 13"></polyline><line x1="12" y1="10" x2="12" y2="19"></line></svg>';
+
+$ic_export = '<svg class="lum-adm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="3" x2="12" y2="21"></line><polyline points="8 7 12 3 16 7"></polyline><polyline points="8 17 12 21 16 17"></polyline></svg>';
+
+$ic_privacy = '<svg class="lum-adm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"></path><path d="M9.5 12l1.8 1.8L15 10"></path></svg>';
+
+$content = <<<HTML
+<form method="post" action="{$base_h}">
+  <input type="hidden" name="action"     value="save">
+  <input type="hidden" name="csrf_token" value="{$csrf}">
+
+  <!-- ── Basic Information ─────────────────────────────────────────── -->
+  <div class="lum-adm-card mb-4">
+    <h5 class="lum-adm-section-title mb-3">{$ic_basic}Basic Information</h5>
+
     <div class="row g-3 mb-3">
       <div class="col-md-6">
         <label class="form-label fw-semibold">Gallery Name</label>
@@ -236,19 +295,20 @@ $content = <<<HTML
       </div>
     </div>
 
-    <div class="mb-3">
+    <div class="mb-0">
       <label class="form-label fw-semibold">Gallery Description</label>
       <textarea name="gallery_description" rows="2" class="form-control">{$v_gallery_desc}</textarea>
     </div>
+  </div>
 
-    <!-- ── Appearance ─────────────────────────────────────────────── -->
-    <hr class="my-4">
-    <h6 class="mb-3 text-muted">Appearance</h6>
+  <!-- ── Appearance ─────────────────────────────────────────────────── -->
+  <div class="lum-adm-card mb-4">
+    <h5 class="lum-adm-section-title mb-3">{$ic_appearance}Appearance</h5>
 
     <div class="mb-3">
       <label class="form-label fw-semibold">Active Theme</label>
       <select name="theme" class="form-select" style="max-width:220px">{$theme_opts}</select>
-      <div class="form-text">Themes are folders inside <code>themes/</code> that contain a <code>template.html</code>. Display name, author, and design URI are read from a <code>Theme Name</code> / <code>Author</code> / <code>Design URI</code> CSS header comment at the top of each theme's primary stylesheet; a theme with no such header falls back to its folder name.</div>
+      <div class="form-text">Themes are folders inside <code>themes/</code> that contain a <code>template.html</code>. Display name, author, and design URI are read from a <code>Theme Name</code> / <code>Author</code> / <code>Design URI</code> CSS header comment at the top of each theme's primary stylesheet; a theme with no such header falls back to its folder name. Use <strong>Preview</strong> to see any installed theme rendered on the live gallery without changing this setting &mdash; only visible to you, in a new tab.</div>
       {$theme_table}
     </div>
 
@@ -274,7 +334,7 @@ $content = <<<HTML
       </div>
     </div>
 
-    <div class="mb-3">
+    <div class="mb-0">
       <div class="form-check form-switch">
         <input type="hidden" name="show_powered_by" value="0">
         <input class="form-check-input" type="checkbox" id="show_powered_by"
@@ -283,10 +343,11 @@ $content = <<<HTML
       </div>
       <div class="form-text">Display a &ldquo;Powered by Lumora Gallery&rdquo; credit in the site footer.</div>
     </div>
+  </div>
 
-    <!-- ── Images & Thumbnails ─────────────────────────────────────── -->
-    <hr class="my-4">
-    <h6 class="mb-3 text-muted">Images &amp; Thumbnails</h6>
+  <!-- ── Images & Thumbnails ───────────────────────────────────────── -->
+  <div class="lum-adm-card mb-4">
+    <h5 class="lum-adm-section-title mb-3">{$ic_images}Images &amp; Thumbnails</h5>
 
     <div class="row g-3 mb-3">
       <div class="col-sm-4">
@@ -309,17 +370,18 @@ $content = <<<HTML
       <div class="form-text">Comma-separated list, e.g. <code>jpg,jpeg,png,gif,webp</code></div>
     </div>
 
-    <div class="mb-3">
+    <div class="mb-0">
       <label class="form-label fw-semibold">Image Processor</label>
       <p class="mb-0"><strong>{$processor_h}</strong></p>
       <div class="form-text">Detected automatically — no configuration needed. Imagick PHP extension is preferred; GD is used as fallback.</div>
     </div>
+  </div>
 
-    <!-- ── Custom HTML ────────────────────────────────────────────── -->
-    <hr class="my-4">
-    <h6 class="mb-3 text-muted">Custom HTML (optional)</h6>
+  <!-- ── Custom HTML ───────────────────────────────────────────────── -->
+  <div class="lum-adm-card mb-4">
+    <h5 class="lum-adm-section-title mb-3">{$ic_html}Custom HTML <span class="text-muted fw-normal">(optional)</span></h5>
 
-    <div class="row g-3 mb-3">
+    <div class="row g-3 mb-0">
       <div class="col-md-6">
         <label class="form-label fw-semibold">Custom Header File Path</label>
         <input type="text" name="custom_header_path" value="{$v_custom_header}" class="form-control font-monospace">
@@ -330,10 +392,11 @@ $content = <<<HTML
         <input type="text" name="custom_footer_path" value="{$v_custom_footer}" class="form-control font-monospace">
       </div>
     </div>
+  </div>
 
-    <!-- ── Gallery Behavior ───────────────────────────────────────── -->
-    <hr class="my-4">
-    <h6 class="mb-3 text-muted">Gallery Behavior</h6>
+  <!-- ── Gallery Behavior ─────────────────────────────────────────── -->
+  <div class="lum-adm-card mb-4">
+    <h5 class="lum-adm-section-title mb-3">{$ic_behavior}Gallery Behavior</h5>
 
     <div class="row g-3 mb-3">
       <div class="col-md-6">
@@ -432,8 +495,7 @@ $content = <<<HTML
       </div>
     </div>
 
-    <!-- ── Upload & Image Limits ──────────────────────────────────── -->
-    <div class="row g-3 mb-3">
+    <div class="row g-3 mb-0">
       <div class="col-md-6">
         <label class="form-label fw-semibold">Latest Updated Albums (home page)</label>
         <input type="number" name="latest_albums_count" value="{$v_latest_albums}"
@@ -447,9 +509,36 @@ $content = <<<HTML
         <div class="form-text">Visitors active within this many minutes are counted as online. Default 5. Range 1–60.</div>
       </div>
     </div>
+  </div>
 
-    <hr class="my-4">
-    <h6 class="mb-3 text-muted">Upload &amp; Image Limits</h6>
+  <!-- ── Privacy ─────────────────────────────────────────────── -->
+  <div class="lum-adm-card mb-4">
+    <h5 class="lum-adm-section-title mb-3">{$ic_privacy}Privacy</h5>
+
+    <div class="mb-0">
+      <div class="form-check form-switch">
+        <input type="hidden" name="install_ping_enabled" value="0">
+        <input class="form-check-input" type="checkbox" id="install_ping_enabled"
+               name="install_ping_enabled" value="1"{$chk_install_ping}>
+        <label class="form-check-label fw-semibold" for="install_ping_enabled">Anonymous Install Ping</label>
+      </div>
+      <div class="form-text">
+        <strong>Off by default.</strong> When enabled, Lumora periodically sends a tiny, anonymous
+        ping (roughly once a month, plus once immediately when you turn this on) to let the
+        developer see a rough count of active installs. The ping contains exactly three values
+        and nothing else: a randomly generated install ID (not tied to your domain, gallery
+        contents, or any personal data), your Lumora version, and your PHP version. It uses a
+        separate request from the update checker above, so turning either one on or off never
+        affects the other. If the request fails for any reason it fails silently — it never
+        shows an error or blocks anything you're doing.
+      </div>
+      {$install_uuid_html}
+    </div>
+  </div>
+
+  <!-- ── Upload & Image Limits ─────────────────────────────── -->
+  <div class="lum-adm-card mb-4">
+    <h5 class="lum-adm-section-title mb-3">{$ic_upload}Upload &amp; Image Limits</h5>
     <p class="text-muted small mb-3">These limits are applied per image during <strong>Batch Add</strong>. Originals that exceed the dimension limits are downscaled in-place (overwriting the source file); originals that exceed the file-size limit are skipped entirely.</p>
 
     <div class="row g-3 mb-3">
@@ -480,11 +569,11 @@ $content = <<<HTML
     </div>
 
     <button type="submit" class="btn btn-primary">Save Settings</button>
-  </form>
-</div>
+  </div>
+</form>
 
 <div class="lum-adm-card">
-  <h5 class="mb-3">Export / Import Configuration</h5>
+  <h5 class="lum-adm-section-title mb-3">{$ic_export}Export / Import Configuration</h5>
   <p class="text-muted small">Export your settings to a JSON file for backup, or to quickly configure another Lumora installation.
      <strong>Note:</strong> base_url is never imported to prevent accidentally breaking an install.</p>
   <div class="d-flex gap-3 flex-wrap align-items-center">

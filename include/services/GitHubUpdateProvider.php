@@ -43,6 +43,15 @@ class GitHubUpdateProvider extends AbstractUpdateProvider
     }
 
     /**
+     * Return the configured repository identifier (owner/repo), e.g.
+     * "intothisshadow/Lumora".
+     */
+    public function getSourceLabel(): string
+    {
+        return $this->repo();
+    }
+
+    /**
      * Fetch the latest release metadata from the GitHub Releases API.
      *
      * GitHub API response fields mapped to the canonical metadata shape:
