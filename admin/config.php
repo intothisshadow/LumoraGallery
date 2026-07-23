@@ -42,7 +42,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'gallery_name', 'gallery_description', 'base_url',
             'theme', 'thumb_width', 'thumb_height', 'per_page',
             'allowed_extensions',
-            'custom_header_path', 'custom_footer_path',
             'timezone',
             'thumb_quality',
             'max_upload_size_mb', 'max_image_width', 'max_image_height',
@@ -53,11 +52,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'category_layout',
             'default_color_mode',
             'install_ping_enabled',
+            'litespeed_cache_purge',
         ];
 
         // Boolean checkbox keys: always save even when not present in POST
         // (unchecked checkbox sends nothing; treated as '0' by sanitizeValue()).
-        $bool_keys = ['count_album_views', 'gallery_offline', 'show_powered_by', 'install_ping_enabled'];
+        $bool_keys = ['count_album_views', 'gallery_offline', 'show_powered_by', 'install_ping_enabled', 'litespeed_cache_purge'];
 
         // Detect the install-ping opt-in transition before overwriting it, so
         // an immediate first ping can fire the moment it's switched on rather
@@ -109,7 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $safe_keys = [
             'gallery_name', 'gallery_description', 'theme',
             'thumb_width', 'thumb_height', 'per_page',
-            'allowed_extensions', 'custom_header_path', 'custom_footer_path',
+            'allowed_extensions',
             'timezone', 'thumb_quality',
             'max_upload_size_mb', 'max_image_width', 'max_image_height',
             'count_album_views', 'log_mode', 'gallery_offline',
@@ -145,8 +145,6 @@ $cfg = [
     'thumb_height'        => lumora_config('thumb_height',        '250'),
     'per_page'            => lumora_config('per_page',            '48'),
     'allowed_extensions'  => lumora_config('allowed_extensions',  'jpg,jpeg,png,gif,webp'),
-    'custom_header_path'  => lumora_config('custom_header_path',  ''),
-    'custom_footer_path'  => lumora_config('custom_footer_path',  ''),
     'timezone'            => lumora_config('timezone',            'UTC'),
     'thumb_quality'       => lumora_config('thumb_quality',       '85'),
     'max_upload_size_mb'  => lumora_config('max_upload_size_mb',  '0'),
@@ -161,7 +159,11 @@ $cfg = [
     'category_layout'        => lumora_config('category_layout',        'grid'),
     'default_color_mode'     => lumora_config('default_color_mode',     'auto'),
     'install_ping_enabled'   => lumora_config('install_ping_enabled',   '0'),
+    'litespeed_cache_purge'  => lumora_config('litespeed_cache_purge',  '0'),
 ];
+
+// Web server detection (LG-033) — informs the LiteSpeed Cache toggle below.
+$server_env = ServerEnvironmentService::detect();
 
 // Detect active image processor.
 $processor_status = extension_loaded('imagick')
@@ -218,8 +220,6 @@ $v_base_url        = h($cfg['base_url']);
 $v_gallery_desc    = h($cfg['gallery_description']);
 $v_per_page        = h($cfg['per_page']);
 $v_allowed_ext     = h($cfg['allowed_extensions']);
-$v_custom_header   = h($cfg['custom_header_path']);
-$v_custom_footer   = h($cfg['custom_footer_path']);
 $v_timezone        = h($cfg['timezone']);
 $v_thumb_quality   = h($cfg['thumb_quality']);
 $v_max_upload      = h($cfg['max_upload_size_mb']);
@@ -236,6 +236,7 @@ $chk_album_views = $cfg['count_album_views'] === '1' ? ' checked' : '';
 $chk_offline      = $cfg['gallery_offline']   === '1' ? ' checked' : '';
 $chk_powered_by   = $cfg['show_powered_by']   === '1' ? ' checked' : '';
 $chk_install_ping = $cfg['install_ping_enabled'] === '1' ? ' checked' : '';
+$chk_litespeed_purge = $cfg['litespeed_cache_purge'] === '1' ? ' checked' : '';
 $sel_cat_grid     = $cfg['category_layout']   === 'grid' ? ' selected' : '';
 $sel_cat_list     = $cfg['category_layout']   === 'list' ? ' selected' : '';
 $sel_cm_auto      = $cfg['default_color_mode'] === 'auto'  ? ' selected' : '';
@@ -245,6 +246,16 @@ $v_latest_albums  = h($cfg['latest_albums_count']);
 $v_who_online_dur = h($cfg['who_is_online_duration']);
 
 $processor_h = h($processor_status);
+
+// LiteSpeed Cache purge note (LG-033) — the toggle itself always saves (so
+// it's ready the moment an admin migrates to a LiteSpeed host) but shows a
+// plain-language status line about whether it's actually doing anything on
+// the current server. See admin/installation.php for the fuller
+// detection/capability breakdown.
+$litespeed_note_h = $server_env['is_litespeed']
+    ? '<span class="text-success">✓ LiteSpeed/OpenLiteSpeed detected on this server — this toggle is active.</span>'
+    : '<span class="text-muted">Detected web server: ' . h($server_env['name']) . ' — this toggle has no effect until Lumora is served by LiteSpeed or OpenLiteSpeed.</span>';
+$installation_url_h = h(lumora_base_url() . 'admin/installation.php');
 
 // Install-ping UUID for display only — never regenerated just to render the
 // settings page; only getOrCreateUuid() (called from InstallPingService::sendPing())
@@ -264,8 +275,6 @@ $ic_appearance = '<svg class="lum-adm-section-icon" viewBox="0 0 24 24" fill="no
 
 $ic_images = '<svg class="lum-adm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="8.5" cy="9.5" r="1.5"></circle><path d="M21 16l-5-5-4 4-2-2-5 5"></path></svg>';
 
-$ic_html = '<svg class="lum-adm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="8 6 3 12 8 18"></polyline><polyline points="16 6 21 12 16 18"></polyline></svg>';
-
 $ic_behavior = '<svg class="lum-adm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"></line><circle cx="9" cy="6" r="2" fill="currentColor" stroke="none"></circle><line x1="4" y1="12" x2="20" y2="12"></line><circle cx="15" cy="12" r="2" fill="currentColor" stroke="none"></circle><line x1="4" y1="18" x2="20" y2="18"></line><circle cx="7" cy="18" r="2" fill="currentColor" stroke="none"></circle></svg>';
 
 $ic_upload = '<svg class="lum-adm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18a4.5 4.5 0 0 1-1-8.9 5 5 0 0 1 9.8-1.6A4 4 0 0 1 17 15.9"></path><polyline points="9 13 12 10 15 13"></polyline><line x1="12" y1="10" x2="12" y2="19"></line></svg>';
@@ -273,6 +282,8 @@ $ic_upload = '<svg class="lum-adm-section-icon" viewBox="0 0 24 24" fill="none" 
 $ic_export = '<svg class="lum-adm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="3" x2="12" y2="21"></line><polyline points="8 7 12 3 16 7"></polyline><polyline points="8 17 12 21 16 17"></polyline></svg>';
 
 $ic_privacy = '<svg class="lum-adm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"></path><path d="M9.5 12l1.8 1.8L15 10"></path></svg>';
+
+$ic_performance = '<svg class="lum-adm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 11 14 10 22 21 10 13 10 13 2"></polygon></svg>';
 
 $content = <<<HTML
 <form method="post" action="{$base_h}">
@@ -374,23 +385,6 @@ $content = <<<HTML
       <label class="form-label fw-semibold">Image Processor</label>
       <p class="mb-0"><strong>{$processor_h}</strong></p>
       <div class="form-text">Detected automatically — no configuration needed. Imagick PHP extension is preferred; GD is used as fallback.</div>
-    </div>
-  </div>
-
-  <!-- ── Custom HTML ───────────────────────────────────────────────── -->
-  <div class="lum-adm-card mb-4">
-    <h5 class="lum-adm-section-title mb-3">{$ic_html}Custom HTML <span class="text-muted fw-normal">(optional)</span></h5>
-
-    <div class="row g-3 mb-0">
-      <div class="col-md-6">
-        <label class="form-label fw-semibold">Custom Header File Path</label>
-        <input type="text" name="custom_header_path" value="{$v_custom_header}" class="form-control font-monospace">
-        <div class="form-text">Path relative to Lumora root, e.g. <code>custom/header.html</code></div>
-      </div>
-      <div class="col-md-6">
-        <label class="form-label fw-semibold">Custom Footer File Path</label>
-        <input type="text" name="custom_footer_path" value="{$v_custom_footer}" class="form-control font-monospace">
-      </div>
     </div>
   </div>
 
@@ -536,6 +530,32 @@ $content = <<<HTML
     </div>
   </div>
 
+  <!-- ── Performance ─────────────────────────────────────────── -->
+  <div class="lum-adm-card mb-4">
+    <h5 class="lum-adm-section-title mb-3">{$ic_performance}Performance</h5>
+
+    <div class="mb-0">
+      <div class="form-check form-switch">
+        <input type="hidden" name="litespeed_cache_purge" value="0">
+        <input class="form-check-input" type="checkbox" id="litespeed_cache_purge"
+               name="litespeed_cache_purge" value="1"{$chk_litespeed_purge}>
+        <label class="form-check-label fw-semibold" for="litespeed_cache_purge">LiteSpeed Cache Purge</label>
+      </div>
+      <div class="form-text">
+        <strong>Off by default.</strong> When enabled, Lumora sends an LSCache purge-all header
+        after content-changing admin actions (image uploads/edits/deletes, album and category
+        changes, theme changes, and configuration saves) so LiteSpeed Cache never serves a stale
+        page after you make a change. It has no effect on Apache, nginx, Caddy, or any server
+        without LiteSpeed Cache active — safe to leave on regardless of your hosting.
+      </div>
+      <div class="form-text mt-1">{$litespeed_note_h}</div>
+      <div class="form-text mt-1">
+        See the <a href="{$installation_url_h}">Installation page</a> for full web server
+        detection details and recommended static-asset cache headers.
+      </div>
+    </div>
+  </div>
+
   <!-- ── Upload & Image Limits ─────────────────────────────── -->
   <div class="lum-adm-card mb-4">
     <h5 class="lum-adm-section-title mb-3">{$ic_upload}Upload &amp; Image Limits</h5>
@@ -567,8 +587,18 @@ $content = <<<HTML
         <div class="form-text">0 = no limit. Aspect ratio is preserved; images are never upscaled.</div>
       </div>
     </div>
+  </div>
 
-    <button type="submit" class="btn btn-primary">Save Settings</button>
+  <!-- ── Save (LG-34: kept out of any one card so it reads as saving the whole
+       page, not just the section it happens to sit next to) ────────────── -->
+  <div class="lum-adm-card lum-adm-save-bar mb-4">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+      <div>
+        <h5 class="mb-1">💾 Save Changes</h5>
+        <p class="text-muted small mb-0">Saves every setting on this page, from Basic Information through Upload &amp; Image Limits above.</p>
+      </div>
+      <button type="submit" class="btn btn-primary btn-lg">Save All Settings</button>
+    </div>
   </div>
 </form>
 

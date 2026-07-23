@@ -56,6 +56,37 @@ function lumora_set_config(string $key, mixed $value): void
     LumoraConfig::set($key, $value);
 }
 
+// ── Session ────────────────────────────────────────────────────────────────────
+
+/**
+ * Start the PHP session if one is not already active, applying the same
+ * hardened cookie parameters bootstrap.php previously set unconditionally
+ * for every request.
+ *
+ * bootstrap.php only starts a session eagerly for admin-panel requests and
+ * requests that already carry a session cookie; a first-time anonymous
+ * visitor to a public page gets no session — no Set-Cookie, no PHP session
+ * cache-limiter headers — so a page cache (LiteSpeed Cache or otherwise) can
+ * actually cache the response. Public code paths that need to write
+ * $_SESSION on demand (CSRF token generation, album/image hit-count
+ * throttling, remember-me auto-login) call this immediately before doing so.
+ * Safe to call unconditionally — a no-op once a session is already active.
+ */
+function lumora_ensure_session(): void
+{
+    if (session_status() !== PHP_SESSION_NONE) {
+        return;
+    }
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path'     => '/',
+        'secure'   => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+    session_start();
+}
+
 // ── Activity logging ──────────────────────────────────────────────────────────
 
 /**
@@ -263,6 +294,37 @@ function lumora_theme_preview_notice(): string
     return '<div class="alert alert-info lum-theme-preview-notice py-2 px-3 mb-3">'
         . 'Previewing theme: <strong>' . h($s['theme']) . '</strong> &mdash; only visible to you; the active theme is unchanged for everyone else.'
         . '</div>';
+}
+
+/**
+ * Append the current admin-only theme-preview parameter (TODO.md #9), if one
+ * is active for this request, to an internal category/album/navigation URL —
+ * so clicking through the gallery (nav links, breadcrumbs, category/album
+ * cards, pagination, sort controls) keeps previewing the same theme for the
+ * rest of the browsing session instead of silently reverting to the real
+ * active theme on the very next click.
+ *
+ * Every URL-building function that generates an internal gallery link routes
+ * its href through this helper: ThemeRenderer::renderNav(),
+ * ::renderBreadcrumb(), ::renderCatgrid(), ::renderCatlist(),
+ * ::renderSortControls(), and lumora_pagination() (which threads it through
+ * prev_url/next_url/url_pattern for every page-number link built from it).
+ *
+ * A no-op — returns $url completely unchanged — whenever no valid `?theme=`
+ * preview is active for the current request (the overwhelming majority of
+ * requests), so ordinary page loads pay no extra cost and see no behaviour
+ * change. Relies on lumora_theme_preview_state() for the admin-only gate and
+ * theme-existence validation already enforced there.
+ */
+function lumora_theme_preview_link(string $url): string
+{
+    $s = lumora_theme_preview_state();
+    if (!$s['valid']) {
+        return $url;
+    }
+
+    $sep = str_contains($url, '?') ? '&' : '?';
+    return $url . $sep . 'theme=' . rawurlencode($s['theme']);
 }
 
 /**
@@ -486,6 +548,12 @@ function lumora_pagination(int $total, int $per_page, int $current_page, string 
     $total_pages  = max(1, (int) ceil($total / $per_page));
     $current_page = max(1, min($current_page, $total_pages));
 
+    // TODO.md #9: fold the admin-only theme-preview parameter (if active)
+    // into the pattern once here, so every page-number link derived from it
+    // below (prev_url, next_url, and each sprintf($url_pattern, $n) call in
+    // ThemeRenderer::renderPagination()) carries it automatically.
+    $url_pattern = lumora_theme_preview_link($url_pattern);
+
     return [
         'total'        => $total,
         'per_page'     => $per_page,
@@ -551,7 +619,10 @@ function get_image_neighbours(int $image_id, int $album_id, string $sort = 'pos'
 // ── Gallery-wide image query wrappers ─────────────────────────────────────────
 
 function get_latest_updated_albums(int $limit = 5): array    { return GalleryService::getLatestUpdatedAlbums($limit); }
-function get_most_viewed_images(int $limit = 48): array      { return GalleryService::getMostViewedImages($limit); }
+function get_most_viewed_images(int $limit = 48, ?int $album_id = null, ?int $cat_id = null): array
+{
+    return GalleryService::getMostViewedImages($limit, $album_id, $cat_id);
+}
 function get_latest_images(int $limit = 48): array           { return GalleryService::getLatestImages($limit); }
 function get_random_images(int $limit = 48): array           { return GalleryService::getRandomImages($limit); }
 

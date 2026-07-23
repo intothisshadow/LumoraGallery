@@ -11,7 +11,7 @@ A modern PHP image gallery designed as a clean, fast replacement for Coppermine 
 | PHP | 8.2+ |
 | MySQL / MariaDB | 5.7+ / 10.3+ |
 | PHP extensions | PDO, PDO_MySQL, Imagick (preferred) or GD |
-| Web server | Apache 2.4+ or Nginx |
+| Web server | Apache 2.4+, LiteSpeed/OpenLiteSpeed, or Nginx |
 
 No Composer required. Upload and go.
 
@@ -66,10 +66,10 @@ Lumora/
 │   ├── config.php              Gallery settings, export/import
 │   ├── dashboard.php           Stats overview
 │   ├── images.php              Image management (edit, delete, move, bulk actions)
-│   ├── installation.php        Installation Settings — update base URL after domain/server migration; nine-item health check; configuration change log
+│   ├── installation.php        Installation Settings — update base URL after domain/server migration; nine-item health check; configuration change log; web server/capability detection; static asset cache header installer
 │   ├── migrate.php             Migration hub — discovers and launches importer plugins
 │   ├── tools.php               Admin tools (File Integrity Check, Reload Dimensions, Regenerate Thumbnails, Regenerate Missing Thumbnails)
-│   ├── update.php              Updates page — version status, in-dashboard updater (10-stage AJAX workflow with rollback), schema migrations, update history
+│   ├── update.php              Updates page — consolidated status/source metadata grid, interactive Latest Release card (checksum bar, Markdown release notes, re-download), Backups panel (create/restore/delete ZIP snapshots), System Status checks, Update Settings (channel/frequency/token), in-dashboard updater (10-stage AJAX workflow with rollback), schema migrations, update history
 │   ├── forgot_password.php  Password recovery — generates a reset link to lumora_recovery.txt
 │   ├── reset_password.php   Password reset — validates token, sets new password
 │   ├── login.php / logout.php
@@ -83,12 +83,15 @@ Lumora/
 │   │   ├── ThumbnailService.php Thumbnail generation, resizing, metadata, batch-add
 │   │   ├── ThemeRenderer.php   All HTML output: pages, grids, breadcrumbs, lightbox
 │   │   ├── MigrationService.php Import status tracking, plugin discovery, event logging
-│   │   ├── UpdateService.php   Release check via the configured provider (GitHub Releases by default), version comparison, 24-hour cache
+│   │   ├── UpdateService.php   Release check via the configured provider (GitHub Releases by default), version comparison, cache TTL follows the check-frequency setting (24h/7d)
 │   │   ├── SchemaService.php   Schema migration engine — discover, run, rollback PHP class migrations
 │   │   ├── AbstractUpdateProvider.php  Provider interface — fetchMetadata(), buildArchiveUrl(), factory
 │   │   ├── GitHubUpdateProvider.php    GitHub Releases API provider — metadata, SHA-256, archive URL
-│   │   ├── UpdaterService.php  Update orchestrator — 10-stage workflow, lock file, backup, rollback
+│   │   ├── UpdaterService.php  Update orchestrator — 10-stage workflow, lock file, backup, rollback, standalone download+verify, system status checks
+│   │   ├── BackupService.php   Full-installation ZIP backups (code + config + DB dump, excluding albums/cache) — create/restore/delete, up to 3 retained
 │   │   ├── InstallationService.php  Installation settings detection, migration helpers, health checks, audit logging
+│   │   ├── ServerEnvironmentService.php  Web server detection (LiteSpeed/OpenLiteSpeed/Apache/nginx/Caddy) and HTTP/2, HTTP/3, Brotli, active-LSCache capability flags
+│   │   ├── CacheHeaderService.php  Managed .htaccess cache-control block for static assets (Apache/LiteSpeed-compatible) and opt-in LiteSpeed Cache purge-header integration
 │   │   ├── UserService.php     User CRUD, role constants, permission framework (delegates to GroupService)
 │   │   ├── GroupService.php    Permission groups — CRUD, permission catalog (ALL_PERMISSIONS), system-group safeguards
 │   │   ├── AlbumAssignmentService.php  Per-contributor album assignments — assign/unassign/set, userCanAccessAlbum() access check, cascade cleanup
@@ -201,8 +204,9 @@ migration straightforward — point Lumora at the same `albums/` directory and r
   - **Regenerate Thumbnails** — regenerates thumbnails via `lumora_generate_thumb()` for every image; runs in 20-image AJAX chunks; respects Imagick/GD availability
   - **Regenerate Missing Thumbnails** — regenerates thumbnails only for images where the thumbnail file is missing or empty, leaving existing valid thumbnails untouched; runs in 500-image AJAX chunks; significantly faster than a full regeneration when only a small fraction of thumbnails are absent (e.g. after manual file additions or a partial batch-add failure)
 - **Account** — update username and email address; change password with current-password verification; **Forgot password** link on the login page generates a secure reset link written to `lumora_recovery.txt` in the gallery root (1-hour single-use token, email attempted if address is set)
-- **Installation Settings** — update the base URL and other installation-specific settings after moving to a new domain, subdirectory, or server; nine-item health check (database connectivity, albums and cache directories, config.php, site URL, PHP version, image processor, PDO MySQL, ZipArchive) runnable on demand via AJAX; configuration change log with full audit trail (last 15 entries from `{PREFIX}config_changes`); JSON environment snapshot export; CSRF and password re-authentication required for all setting changes; Migration Helpers accordion with guided steps for domain changes, subdirectory changes, HTTPS enablement, and server migrations
-- **Updates** — in-dashboard update installer: when a new release is available the Updates page shows an **⬆ Install Update** card with a 10-stage progress UI (`preflight → download → verify → backup → maintenance → extract → validate → replace → migrate → cleanup`); each stage is a separate AJAX call so progress is reported in real time; automatic database and `config.php` backup before any file replacement; one-click Rollback restores the backup on failure; Abort option for stuck sessions; update history table shows the last 10 attempts; custom themes and plugins are preserved by default (`update_preserve_themes` / `update_preserve_plugins` config keys)
+- **Installation Settings** — update the base URL and other installation-specific settings after moving to a new domain, subdirectory, or server; nine-item health check (database connectivity, albums and cache directories, config.php, site URL, PHP version, image processor, PDO MySQL, ZipArchive) runnable on demand via AJAX; configuration change log with full audit trail (last 15 entries from `{PREFIX}config_changes`); JSON environment snapshot export; CSRF and password re-authentication required for all setting changes; Migration Helpers accordion with guided steps for domain changes, subdirectory changes, HTTPS enablement, and server migrations; **System Information** panel showing the detected web server (with a LiteSpeed/OpenLiteSpeed badge) and detected HTTP/2, HTTP/3, Brotli, and active-LSCache capabilities; a **Static Asset Cache Headers** card that installs (or removes) a clearly-marked, additive `mod_expires`/`mod_headers` block in the site's root `.htaccess` for long-lived image/thumbnail/font caching and shorter-lived CSS/JS caching — read identically by Apache and LiteSpeed/OpenLiteSpeed, inert on nginx/Caddy
+- **LiteSpeed Cache (LSCache) purge** — an opt-in toggle (Admin → Configuration → Performance, off by default) that sends an `X-LiteSpeed-Purge` header after admin content changes (image/album/category/theme/configuration changes) so LSCache never serves a stale page; a complete no-op unless both the toggle is on and the current server is detected as LiteSpeed/OpenLiteSpeed
+- **Updates** — a consolidated Installed/Status/Source metadata grid (installed version, database schema version, installed filesystem path, release channel, provider/repository, link to all releases); a Latest Release card with a stability badge (Stable/Prerelease), Markdown-rendered release notes, a checksum verification bar, and a **Re-download release** action that downloads and SHA-256-verifies the archive independently of a full install; when a new release is available, an **⬆ Install Update** card with a 10-stage progress UI (`preflight → download → verify → backup → maintenance → extract → validate → replace → migrate → cleanup`) — each stage is a separate AJAX call so progress is reported in real time, with an automatic database and `config.php` backup before any file replacement, one-click Rollback on failure, and an Abort option for stuck sessions; a **Backups** panel for full-installation ZIP snapshots (code + config + a database dump, excluding `albums/` and `cache/`) with create/restore/delete actions, keeping up to 3; a **System Status** table (PHP version, ZIP/cURL extensions, file permissions, disk space, temp directory writability) as a live pass/fail check independent of update status; **Update Settings** for the release channel (stable/prerelease), automatic-check toggle and frequency (daily/weekly), and an optional GitHub token for a higher API rate limit; update history table shows the last 10 attempts (installs, rollbacks, and backup restores); custom themes and plugins are preserved by default during an install (`update_preserve_themes` / `update_preserve_plugins` config keys)
 
 ### Themes
 Themes live in `themes/{name}/` and require only `template.html`. The active theme is selected in Admin → Configuration. Multiple themes can be installed simultaneously.
@@ -233,7 +237,7 @@ A theme can optionally declare itself via a CSS header comment at the top of its
 
 Recognized fields are `Theme Name`, `Author`, and `Design URI`. When present, they're shown as the theme's display name in the Active Theme dropdown and in a reference table in Admin → Configuration → Appearance. The header is entirely optional — themes without one still work normally, falling back to the folder name.
 
-**Admin-only theme preview.** A logged-in administrator can append `?theme=folder-name` to any public gallery URL to render that theme for the current request only — the site's configured theme is never changed and no other visitor is affected. An unknown or invalid folder name falls back to the real active theme with an admin-only notice explaining why; a valid preview shows a small admin-only banner as a reminder it's temporary. Admin → Configuration's Themes table includes a **Preview** column that opens this URL in a new tab for each installed theme.
+**Admin-only theme preview.** A logged-in administrator can append `?theme=folder-name` to any public gallery URL — the home page, a category page, or an album page — to render that theme for the current request only; the site's configured theme is never changed and no other visitor is affected. An unknown or invalid folder name falls back to the real active theme with an admin-only notice explaining why; a valid preview shows a small admin-only banner as a reminder it's temporary. The preview follows you as you keep browsing: every nav link, breadcrumb, category/album card, pagination link, and sort control generated while a preview is active carries the `theme` parameter forward, so navigating between categories and albums stays on the previewed theme for the whole session instead of reverting after one click. Admin → Configuration's Themes table includes a **Preview** column that opens this URL in a new tab for each installed theme.
 
 ### Thumbnail generation
 - **Imagick PHP extension** preferred — auto-detected, no path configuration needed. Uses IM7 Q16-HDRI for high-quality Lanczos resizing, EXIF auto-orientation, and metadata stripping.
@@ -257,8 +261,6 @@ All settings are managed in **Admin → Configuration**. Key options:
 | `per_page` | 48 | Thumbnails per page |
 | `category_layout` | grid | Category browser layout: `grid` (card grid) or `list` (row-based with recursive album and image counts) |
 | `allowed_extensions` | jpg,jpeg,png,gif,webp | Accepted image types for Batch Add |
-| `custom_header_path` | — | Path to a custom HTML header file (relative to Lumora root) |
-| `custom_footer_path` | — | Path to a custom HTML footer file |
 | `timezone` | UTC | PHP timezone identifier (e.g. `Europe/Helsinki`); applied at bootstrap |
 | `thumb_quality` | 85 | JPEG/WebP thumbnail quality 1–100 |
 | `max_upload_size_mb` | 0 | Max file size in MB for Batch Add; 0 = unlimited |
@@ -272,6 +274,7 @@ All settings are managed in **Admin → Configuration**. Key options:
 | `show_powered_by` | 1 | Show a "Powered by Lumora Gallery" credit in the footer (`0` = hidden); uses `{POWERED_BY}` theme token |
 | `default_color_mode` | auto | Site-wide fallback colour mode (`auto` / `light` / `dark`) for visitors with no stored preference |
 | `install_ping_enabled` | 0 | Opt-in anonymous install ping (`0` = off by default, `1` = on) — see **Privacy: Anonymous Install Ping** below |
+| `litespeed_cache_purge` | 0 | Opt-in LiteSpeed Cache (LSCache) purge-header integration (`0` = off by default, `1` = on) — no effect unless the server is detected as LiteSpeed/OpenLiteSpeed; see **LiteSpeed Support** below |
 
 Settings are stored in the `{PREFIX}config` database table and cached by the `LumoraConfig` static class per request.
 
@@ -299,7 +302,7 @@ The **Coppermine Importer** plugin (`plugins/coppermine-importer/`) automates th
 
 ## Privacy: Anonymous Install Ping
 
-Lumora includes an **opt-in, off-by-default** mechanism to anonymously count active installs, giving the developer a rough sense of adoption without compromising the privacy expectations of a self-hosted, fansite-oriented audience.
+Lumora includes an opt-in, off-by-default mechanism to anonymously count active installs. This provides the developer with a rough, privacy-respecting understanding of real-world adoption, including which PHP versions are still in active use. The information may help guide future compatibility decisions, such as determining when support for older PHP versions can be safely phased out, while preserving the privacy expectations of Lumora’s self-hosted, fansite-oriented community.
 
 - **Off by default.** Nothing is ever sent unless you explicitly enable **Anonymous Install Ping** in Admin → Configuration → Privacy.
 - **What is sent, and nothing else:**
@@ -311,6 +314,19 @@ Lumora includes an **opt-in, off-by-default** mechanism to anonymously count act
 - **Independence from the update checker.** This uses a completely separate request from the version-update check described below (`UpdateService`) — enabling or disabling one never affects the other.
 - **Failure handling.** If the request fails for any reason (network issue, unreachable endpoint, etc.), it fails silently. It never shows an error and never blocks any admin action.
 - **Disabling it** at any time in Admin → Configuration simply stops all future pings; the previously generated UUID is left in place (but unused) so re-enabling later doesn't change your install's identifier.
+
+---
+
+## LiteSpeed Support
+
+Lumora automatically detects LiteSpeed and OpenLiteSpeed and can take advantage of a couple of server-specific optimizations, while remaining fully functional on Apache, nginx, Caddy, or any other web server — none of this requires LiteSpeed, and nothing here is required for normal operation.
+
+- **Detection** (Admin → Installation → System Information) — reports the detected web server (with a LiteSpeed/OpenLiteSpeed badge when applicable) and, where detectable from PHP alone, HTTP/2, HTTP/3, Brotli, and an active LiteSpeed Cache (LSCache). Brotli is a heuristic (LiteSpeed detected + the requesting client advertises `br` support), not a guarantee — verify your server's actual compression modules if it matters for your setup.
+- **Static asset cache headers** (Admin → Installation) — images, thumbnails, and theme CSS/JS are served directly by the web server rather than through PHP, so their Cache-Control/Expires headers have to come from the web server itself. A one-click action installs a clearly-marked, additive `mod_expires`/`mod_headers` block into the site's root `.htaccess` (long-lived immutable caching for images/thumbnails/fonts, a shorter window for CSS/JS) — read identically by Apache and LiteSpeed/OpenLiteSpeed. It never touches any other content already in your `.htaccess`, and can be removed with the same one-click control. Has no effect on nginx/Caddy, which don't read `.htaccess` files at all.
+- **LiteSpeed Cache purge** (Admin → Configuration → Performance) — an opt-in, off-by-default toggle. When enabled, Lumora sends an `X-LiteSpeed-Purge: *` header after admin content changes (image uploads/edits/deletes, album and category changes, theme changes, and configuration saves — anything that reaches an admin page via POST) so LSCache never serves a stale page after you make a change. It's a complete no-op unless both the toggle is on and the current server is detected as LiteSpeed/OpenLiteSpeed, so it's safe to leave on regardless of your hosting.
+- **Lazy public-page sessions** — a first-time anonymous visitor to a public page (home, category, album, latest/most-viewed/random) gets no PHP session at all: no `Set-Cookie`, no session cache-limiter headers. PHP's session start otherwise sends `Cache-Control: no-store` on every response, which would make page-level caching (LiteSpeed Cache or otherwise) impossible regardless of the purge toggle above. A session still starts immediately for the admin panel and for any request that already carries one (an existing login, or an in-progress album/image view hit-count throttle); public code that needs to write to the session on demand (CSRF token generation, hit-count throttling, remember-me auto-login) starts one itself at that point via `lumora_ensure_session()`. Note that a *cached* page response never re-executes PHP, so hit counters and "Who Is Online" naturally undercount for visits served from cache within whatever TTL your LSCache/server-level cache rules use — an inherent tradeoff of page caching, not a bug.
+- **Admin panel cache exclusion** — every admin request starts a session (unaffected by the laziness above) and therefore already carries `Set-Cookie`, which LSCache's default behavior already excludes from caching. `admin/.htaccess` adds an explicit `CacheLookup off` (LiteSpeed-only, silently ignored elsewhere) as defense-in-depth beyond that implicit exclusion, in case a front-end proxy strips cookies or LSCache is ever configured to cache private responses.
+- **Page caching** (Admin → Installation → "LiteSpeed Page Caching (Advanced)") — an opt-in, off-by-default `CacheEnable public /` block with a configurable TTL, for hosts that don't expose LiteSpeed's own cache configuration to the site admin (some DirectAdmin installs and other shared-hosting LiteSpeed setups have no WebAdmin console access). Everything above this point removes Lumora's own blockers to caching; this is the piece that actually turns LSCache page caching on where server-level configuration isn't otherwise available. LiteSpeed-only, a no-op block elsewhere. Installable/removable one-click, independent of the static asset cache-headers block (both live in the same root `.htaccess`, in their own separately-managed sections). Carries the same hit-counter/"Who Is Online" undercounting tradeoff noted above — choose a TTL that balances cache benefit against how much that undercounting matters to you.
 
 ---
 

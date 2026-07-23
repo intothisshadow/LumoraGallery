@@ -105,6 +105,63 @@ html, body { height: 100%; }
   overflow-y: auto;
 }
 
+.lum-admin-nav-heading {
+  padding: 0;
+}
+
+.lum-admin-nav-heading-text,
+.lum-admin-nav-toggle {
+  display: block;
+  padding: .9rem 1rem .3rem;
+  font-size: .7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: rgba(255,255,255,.4);
+}
+
+/* ── Collapsible sidebar sections (LG-32 addendum) ─────────── */
+.lum-admin-nav-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .4rem;
+  width: 100%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color .15s;
+}
+
+.lum-admin-nav-toggle:hover,
+.lum-admin-nav-toggle:focus-visible {
+  color: rgba(255,255,255,.85);
+}
+
+.lum-admin-nav-toggle:focus-visible {
+  outline: 2px solid var(--lum-adm-accent);
+  outline-offset: -2px;
+}
+
+.lum-admin-nav-chevron {
+  width: .8rem;
+  height: .8rem;
+  flex-shrink: 0;
+  transition: transform .15s ease;
+}
+
+.lum-admin-nav-toggle[aria-expanded="false"] .lum-admin-nav-chevron {
+  transform: rotate(-90deg);
+}
+
+.lum-admin-nav-group.lum-admin-nav-collapsed .lum-admin-nav-sub {
+  display: none;
+}
+
+.lum-admin-nav-sub li a {
+  padding-left: 1.75rem;
+}
+
 .lum-admin-nav li a {
   display: block;
   padding: .65rem 1rem;
@@ -172,6 +229,16 @@ html, body { height: 100%; }
   border: 1px solid var(--lum-adm-border);
   padding: 1.25rem;
   margin-bottom: 1rem;
+}
+
+/* ── Save bar (LG-34) ───────────────────────────────────────
+   Deliberately styled apart from a plain .lum-adm-card so a
+   page-wide "Save" action never reads as belonging to whichever
+   section card it happens to sit next to — see admin/config.php. */
+.lum-adm-save-bar {
+  border-color: var(--lum-adm-accent);
+  border-width: 2px;
+  background: var(--lum-adm-active);
 }
 
 /* ── Section headers with icon (TODO #25) ──────────────────
@@ -326,6 +393,84 @@ html, body { height: 100%; }
   border-width: .15em;
 }
 
+/* ── Updates page: metadata grid (TODO #10) ─────────────────
+   Consolidated Installed version / Update status / Update source
+   columns at the top of admin/update.php. */
+.lum-upd-meta-col {
+  min-width: 0;
+}
+
+.lum-upd-meta-col dl {
+  margin-bottom: 0;
+}
+
+.lum-upd-meta-col dt {
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--lum-adm-muted);
+  font-weight: 600;
+  margin-top: .5rem;
+}
+
+.lum-upd-meta-col dt:first-child {
+  margin-top: 0;
+}
+
+.lum-upd-meta-col dd {
+  margin-bottom: 0;
+  word-break: break-word;
+}
+
+/* ── Updates page: checksum / download verification bar ───── */
+.lum-upd-checksum-bar {
+  background: var(--lum-adm-tbl-head);
+  border: 1px solid var(--lum-adm-border);
+  border-radius: .4rem;
+  padding: .6rem .9rem;
+  font-size: .85rem;
+}
+
+.lum-upd-checksum-hash {
+  font-family: monospace;
+  font-size: .78rem;
+  color: var(--lum-adm-muted);
+  word-break: break-all;
+}
+
+/* ── Updates page: rendered release notes ──────────────────── */
+.lum-upd-release-notes {
+  max-height: 360px;
+  overflow-y: auto;
+  background: var(--lum-adm-tbl-head);
+  border: 1px solid var(--lum-adm-border);
+  border-radius: .4rem;
+  padding: .9rem 1.1rem;
+  font-size: .88rem;
+}
+
+.lum-upd-release-notes h4,
+.lum-upd-release-notes h5,
+.lum-upd-release-notes h6 {
+  color: var(--lum-adm-head);
+}
+
+.lum-upd-release-notes p:last-child,
+.lum-upd-release-notes ul:last-child {
+  margin-bottom: 0;
+}
+
+/* ── Updates page: System status badges ─────────────────────── */
+.lum-upd-status-pass {
+  color: var(--bs-success, #198754);
+  font-weight: 600;
+}
+
+.lum-upd-status-fail {
+  color: var(--bs-danger, #dc3545);
+  font-weight: 600;
+}
+
 /* ── Responsive ───────────────────────────────────────────── */
 @media (max-width: 767px) {
   .lum-admin-sidebar {
@@ -350,6 +495,29 @@ html, body { height: 100%; }
   .lum-admin-nav li.active a {
     border-left-color: transparent;
     border-bottom-color: var(--lum-adm-accent);
+  }
+  .lum-admin-nav-heading {
+    display: flex;
+    align-items: center;
+  }
+  .lum-admin-nav-heading-text,
+  .lum-admin-nav-toggle {
+    padding: 0 .5rem;
+    white-space: nowrap;
+  }
+  .lum-admin-nav-group {
+    display: flex;
+  }
+  .lum-admin-nav-sub {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+  }
+  .lum-admin-nav-group.lum-admin-nav-collapsed .lum-admin-nav-sub {
+    display: none;
+  }
+  .lum-admin-nav-sub li a {
+    padding-left: 1rem;
   }
   .lum-admin-main {
     margin-left: 0;

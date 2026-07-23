@@ -35,8 +35,6 @@ file — no registration step is required. The active theme is chosen in
 | `{LUMORA_VERSION}` | Version string, e.g. `"1.9.2"` |
 | `{NAVIGATION}` | Bootstrap navbar-nav `<ul>` (used by the default theme) |
 | `{ADMIN_LINK}` | Admin panel `<a>` link (empty for non-admin visitors) |
-| `{CUSTOM_HEADER}` | Content of the custom header file (may be empty) |
-| `{CUSTOM_FOOTER}` | Content of the custom footer file (may be empty) |
 | `{POWERED_BY}` | "Powered by Lumora Gallery" credit (empty when disabled in config) |
 | `{CONTENT}` | Main page HTML |
 | `{COLOR_MODE_INIT}` | Inline `<script>` that must go first inside `<head>` — see below |
@@ -212,16 +210,16 @@ switches animate.
 
 ### Theme-aware logo (light/dark variants)
 
-There is no dedicated `{LOGO_URL}` token — logos are handled through the
-existing `custom_header_path` / `{CUSTOM_HEADER}` mechanism. To swap a logo
-image between light and dark variants without any PHP changes, include both
-images in your custom header file and toggle their visibility with CSS
+There is no dedicated `{LOGO_URL}` token — add your logo markup directly to
+`template.html` (the sanctioned customisation point for markup like this). To
+swap a logo image between light and dark variants without any PHP changes,
+include both images in `template.html` and toggle their visibility with CSS
 attribute selectors on `data-bs-theme`:
 
 ```html
-<!-- custom header file -->
-<img class="my-logo my-logo-light" src="logo-light.png" alt="Gallery logo">
-<img class="my-logo my-logo-dark"  src="logo-dark.png"  alt="Gallery logo">
+<!-- template.html -->
+<img class="my-logo my-logo-light" src="{THEME_URL}logo-light.png" alt="Gallery logo">
+<img class="my-logo my-logo-dark"  src="{THEME_URL}logo-dark.png"  alt="Gallery logo">
 ```
 
 ```css

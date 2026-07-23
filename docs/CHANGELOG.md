@@ -8,6 +8,209 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.12.0] — 2026-07-23
+
+### Added
+
+- **Collapsible Settings/Maintenance/Users sidebar sections (LG-32
+  addendum).** Each of those three section headings in the admin sidebar
+  (`admin/includes/admin_helpers.php`) is now a toggle button with a
+  rotating chevron indicating expanded/collapsed state; Gallery stays
+  always-expanded and Dashboard has no header to collapse. State persists
+  per-browser via `localStorage`, applied by an inline script immediately
+  after the nav markup so there's no flash of the wrong state on load. A
+  section containing the current page always renders expanded regardless
+  of its stored state, so navigating to a page never hides its own nav
+  item. New `.lum-admin-nav-toggle`/`.lum-admin-nav-chevron`/
+  `.lum-admin-nav-group`/`.lum-admin-nav-sub` styles in `admin/admin.css`,
+  including the existing mobile horizontal-scroll layout.
+- **Opt-in LiteSpeed page caching for hosts without server-level cache
+  config access (LG-033 follow-up).** Some shared/managed hosts (e.g.
+  DirectAdmin without the LiteSpeed WebAdmin console) give admins no way to
+  turn on LSCache page caching themselves. New `CacheHeaderService::recommendedPageCacheRules()` /
+  `writePageCacheRules()` / `pageCacheStatus()` / `removePageCacheRules()`
+  manage a second, independent `.htaccess` block (`CacheEnable public /` +
+  a configurable `TTL`, `<IfModule LiteSpeed>`-gated) alongside the existing
+  static-asset block — installable/removable one-click from a new "LiteSpeed
+  Page Caching (Advanced)" card on the admin Installation page, with a TTL
+  field and an explicit warning about the hit-counter/"Who Is Online"
+  undercounting tradeoff inherent to page caching. New
+  `litespeed_page_cache_ttl` config key (0 = disabled). Deliberately kept
+  free of any database dependency (persisting the TTL is the caller's job,
+  done by `admin/installation.php` after a successful write) so the class
+  stays unit-testable without a DB connection, like the rest of
+  `CacheHeaderService`.
+- **Lazy PHP session start for public pages, and explicit admin LSCache
+  exclusion (LG-033 follow-up).** `bootstrap.php` previously called
+  `session_start()` unconditionally on every request; PHP's session cache
+  limiter then sent `Cache-Control: no-store, no-cache, must-revalidate` and
+  a `Set-Cookie` on every response, which meant LiteSpeed Cache (or any
+  cache) could never actually cache a single page, defeating the point of
+  the LSCache purge integration added just above. A session is now started
+  eagerly only for admin-panel requests and requests that already carry a
+  session cookie (an existing login, or an in-progress hit-count throttle);
+  a first-time anonymous visitor to a public page gets no session, no
+  `Set-Cookie`, and no no-cache headers, so the response is actually
+  cacheable. New `lumora_ensure_session()` (`include/functions.php`) starts
+  a session on demand for the few public code paths that need to write
+  `$_SESSION` — `album.php`'s and `ajax_hit.php`'s hit-count throttling,
+  `lumora_csrf_token()`, and `lumora_check_remember_cookie()`'s
+  auto-login-on-return-visit path — all called immediately before the
+  first `$_SESSION` write, matching the existing hardened cookie
+  parameters. `lumora_is_logged_in()` and friends were already safe to call
+  with no active session (`isset()`/`empty()` don't warn on an unset
+  `$_SESSION`) and needed no changes. The admin panel keeps its previous
+  always-on session and is additionally excluded from LSCache via a new
+  `admin/.htaccess` (`CacheLookup off`, LiteSpeed-only, ignored elsewhere)
+  as defense-in-depth beyond the implicit `Set-Cookie` exclusion.
+- **LiteSpeed/OpenLiteSpeed detection and optional LSCache integration
+  (LG-033).** New `ServerEnvironmentService::detect()` identifies LiteSpeed
+  vs. OpenLiteSpeed/Apache/nginx/Caddy from `$_SERVER['SERVER_SOFTWARE']`
+  (falling back to the LSCache request marker when that string is absent),
+  plus best-effort HTTP/2, HTTP/3, Brotli, and active-LSCache capability
+  flags. The admin Installation page's System Information panel now shows
+  the detected server (with a LiteSpeed badge) and those capabilities. New
+  `CacheHeaderService` manages a clearly-delimited, additive
+  `mod_expires`/`mod_headers` block in the site's root `.htaccess` — images/
+  thumbnails/fonts served directly by the web server (there's no PHP script
+  in that request path) get long-lived immutable caching, CSS/JS get a
+  shorter window; the same block is read identically by Apache and
+  LiteSpeed/OpenLiteSpeed, is a no-op on nginx/Caddy, and is installed/
+  removed on demand from the Installation page without disturbing any other
+  `.htaccess` content. A new opt-in, off-by-default `litespeed_cache_purge`
+  config toggle (Admin → Configuration → Performance) makes Lumora send an
+  `X-LiteSpeed-Purge: *` header after admin content changes — wired once, in
+  `include/bootstrap.php`, for every admin-panel POST request (covering
+  image/album/category/theme/configuration changes uniformly) rather than at
+  each individual mutation call site; `CacheHeaderService::purgeLiteSpeedCache()`
+  itself is a safe no-op unless both the toggle is on and LiteSpeed is
+  detected, so this has no effect on any other server or with the toggle
+  left off.
+- **`?view=most_viewed` now respects the current album or category context
+  (LG-33).** Previously, clicking "Most Viewed" while browsing an album or
+  category always jumped to the gallery-wide most-viewed list, silently
+  dropping that context. `GalleryService::getMostViewedImages()` gained
+  optional `$album_id`/`$cat_id` filter parameters (album takes precedence
+  when both are given), and `index.php`'s `?view=most_viewed` route now
+  accepts `&album=ID` / `&cat=ID` to scope the query accordingly, with the
+  page heading changing to "Most Viewed in This Album" / "Most Viewed in
+  This Category" / "Most Viewed in Gallery" to match. `ThemeRenderer::renderNav()`
+  gained matching optional `$album_id`/`$cat_id` parameters so the "Most
+  Viewed" nav link itself carries the current context forward — `album.php`
+  and `index.php`'s category route now pass their context in via a
+  `{NAVIGATION}` token override, and the most-viewed view page passes its
+  own context back through so the link stays scoped while browsing it.
+- **Admin sidebar navigation reorganized into labeled sections (LG-32).**
+  The flat, organically-grown nav list in `lum_admin_page()`
+  (`admin/includes/admin_helpers.php`) is now grouped under **Gallery**
+  (Batch Add, Categories, Albums, Images), **Settings** (Configuration),
+  **Maintenance** (Import, Updates, Tools, Installation), and **Users** (My
+  Account, Users, Groups), with **Dashboard** remaining a standalone
+  top-level item. Section headers are rendered as new `.lum-admin-nav-heading`
+  list items (styled in `admin/admin.css`, including a mobile/horizontal-scroll
+  variant) and are only shown when at least one item in that section is
+  visible to the current user's role — per-item permission filtering and
+  active-page highlighting are unchanged. The "Account" nav label was renamed
+  to "My Account" to match its new placement under Users.
+- **Admin → Updates page redesigned to align with FanUpdate Redux (TODO #10).**
+  Rebuilt `admin/update.php` around a consolidated Installed/Status/Source
+  metadata grid (adds a Database Schema Version indicator and an "Installed
+  at" filesystem path), an interactive Latest Release card (stability badge,
+  Markdown-rendered release notes via new `UpdateService::renderReleaseNotesHtml()`,
+  a checksum verification bar, and a "Re-download release" action backed by
+  new `UpdaterService::downloadStandalone()`), a Backups panel backed by a
+  new `BackupService` class (full-installation ZIP snapshots of application
+  code + configuration + a database dump, excluding `albums/` and `cache/`;
+  create/restore/delete actions; up to 3 retained with automatic pruning), a
+  System Status table (`UpdaterService::getSystemStatusChecks()` — PHP
+  version, ZIP/cURL extensions, file permissions, disk space, temp directory)
+  and an Update Settings form (release channel, automatic-check toggle,
+  check frequency, optional GitHub token) persisted via four new config
+  keys: `update_channel`, `update_check_frequency`, `update_auto_check`,
+  `update_github_token`. `GitHubUpdateProvider` gained prerelease-channel
+  support (queries the releases list instead of `/releases/latest` when the
+  prerelease channel is selected) and optional Bearer-token auth for a
+  higher GitHub API rate limit, plus a `getReleasesUrl()` method (also added
+  to `AbstractUpdateProvider`'s interface). `UpdateService`'s cache TTL is
+  now driven by the check-frequency setting (24h / 7 days) instead of a
+  fixed constant. The multi-stage "Update Now" workflow, its AJAX endpoints,
+  and the automatic Stage 4 backup are all unchanged.
+- **Theme preview (`?theme=`) now persists across category and album
+  navigation (TODO #9).** The admin-only preview mechanism itself already
+  covered every frontend page type (`index.php`'s home/category views and
+  `album.php`) through one centralised resolver, but clicking any internal
+  gallery link would silently drop back to the real active theme on the very
+  next page load, since none of the generated hrefs carried the `theme`
+  query parameter forward. Added `lumora_theme_preview_link()`
+  (`include/functions.php`), a no-op pass-through unless a valid preview is
+  active for the current request, and routed every internal URL-building
+  function through it: `ThemeRenderer::renderNav()`, `::renderBreadcrumb()`,
+  `::renderCatgrid()`, `::renderCatlist()`, `::renderSortControls()`, and
+  `lumora_pagination()` (which threads it through `prev_url`/`next_url` and
+  every `sprintf($url_pattern, ...)` page-number link built from it), plus
+  the home page's "View all" link. Ordinary page loads with no active
+  preview are completely unaffected.
+
+### Fixed
+
+- **Configuration page's "Save Settings" button looked scoped to the last
+  card on the page (LG-34).** It sat inside "Upload & Image Limits" at the
+  very bottom of `admin/config.php`'s single page-wide `<form>`, which made
+  it read as though it only saved that one card's fields — despite actually
+  submitting every setting above it — and had already caused at least one
+  real instance of changes going unsaved. Moved it into its own dedicated
+  card below all the settings cards (still inside the same `<form>`, so the
+  save behavior itself is unchanged), relabeled "Save Settings" →
+  "Save All Settings" with an explicit "Saves every setting on this page"
+  line, and gave it a distinct `.lum-adm-save-bar` style (`admin/admin.css`)
+  — an accent border and tinted background — so it reads as a page-level
+  action rather than another plain section card.
+
+- **`include/template.php` fatal-on-call dead code left behind by the TODO #30
+  removal.** That session removed `ThemeRenderer::customHeader()`/`customFooter()`
+  entirely, but missed the two forwarding wrappers in `include/template.php`
+  (`lumora_custom_header()`/`lumora_custom_footer()`) that called them —
+  `template.php` wasn't in that ticket's own file list, since its role as a
+  legacy-wrapper layer over `ThemeRenderer` was overlooked. Nothing in the
+  current codebase calls either wrapper (no bundled or custom theme defines a
+  `theme.php` override, and the `{CUSTOM_HEADER}`/`{CUSTOM_FOOTER}` template
+  tokens that would have prompted a call were already removed from every
+  `template.html` in the same session), so this was latent rather than an
+  active bug — but calling either function today would be a fatal "call to
+  undefined method" error. Removed both wrappers from `include/template.php`.
+
+### Removed
+
+- **"Custom HTML (optional)" config feature removed** (Custom Header File Path /
+  Custom Footer File Path, and the `{CUSTOM_HEADER}`/`{CUSTOM_FOOTER}` template
+  tokens). This feature had no real users — all four existing custom themes
+  hardcode their topnav/banner markup directly in `template.html` rather than
+  using `custom_header_path`/`custom_footer_path`, which is now the sanctioned
+  customisation point for markup like this going forward. Removed
+  `ThemeRenderer::customHeader()`/`customFooter()`/`loadCustomFile()`, the
+  `{CUSTOM_HEADER}`/`{CUSTOM_FOOTER}` tokens from `renderPage()`, the
+  "Custom HTML (optional)" card and its two fields from Admin → Configuration
+  (along with the `custom_header_path`/`custom_footer_path` whitelist entries
+  in both the save and import actions), and the literal `{CUSTOM_HEADER}`/
+  `{CUSTOM_FOOTER}` tokens from every bundled and custom theme's
+  `template.html`. Existing installations that already set
+  `custom_header_path`/`custom_footer_path` retain two harmless, unread rows
+  in `{PREFIX}config` — left in place deliberately rather than adding a
+  migration purely to delete unread config rows.
+
+### Fixed
+
+- **Classic Fansite theme: section titles ("Recently Updated", "Categories",
+  "Latest Additions") rendered unreadably dark against their coloured
+  background bar.** `.lum-section-title` and the Typography section's
+  `.fs-main h1, .fs-main h2, ...` rule both targeted the same element (section
+  titles are rendered as `<h2>`s in `index.php`), and the heading rule's
+  higher specificity (one class + one element vs. one class alone) was
+  silently winning, overriding the intended light `--fs-section-text` colour
+  with the dark `--fs-head-text` heading colour. Fixed by scoping the rule to
+  `.fs-main .lum-section-title` (two classes), which now correctly outranks
+  the heading rule. No other styling changed.
+
 ## [1.11.0] — 2026-07-13
 
 ### Changed

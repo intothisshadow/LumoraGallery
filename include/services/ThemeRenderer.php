@@ -33,8 +33,6 @@ class ThemeRenderer
      *   {LUMORA_VERSION}      - software version string
      *   {NAVIGATION}          - site navigation HTML
      *   {ADMIN_LINK}          - admin panel link (if admin is logged in)
-     *   {CUSTOM_HEADER}       - optional custom header HTML
-     *   {CUSTOM_FOOTER}       - optional custom footer HTML
      *   {POWERED_BY}          - Powered By credit HTML (empty when show_powered_by = 0)
      *   {CONTENT}             - main page content
      *   {CHARSET}             - always "utf-8"
@@ -51,6 +49,17 @@ class ThemeRenderer
      * directly to $content so it renders regardless of which theme's
      * template.html is active, without requiring a new template token that
      * every bundled and custom theme would otherwise need to add.
+     *
+     * Category/album preview persistence (TODO.md #9): the preview above
+     * covers index.php (home + category pages) and album.php automatically
+     * since both already render through this one method — no page-type-
+     * specific resolution logic was needed. The remaining piece is that
+     * clicking any internal gallery link (nav, breadcrumb, category/album
+     * card, pagination, sort control) must not silently drop the `?theme=`
+     * parameter on the next page load; every URL-building function in this
+     * class routes its generated hrefs through lumora_theme_preview_link()
+     * (functions.php) to carry the preview forward for the rest of the
+     * browsing session.
      *
      * @param string $content   The main page HTML.
      * @param array  $extra     Additional token => value pairs to replace.
@@ -107,8 +116,6 @@ class ThemeRenderer
             '{ADMIN_LINK}'          => lumora_is_admin()
                 ? '<a href="' . h($base_url . 'admin/') . '" class="lum-admin-link">&#9881; Admin</a>'
                 : '',
-            '{CUSTOM_HEADER}'       => self::customHeader(),
-            '{CUSTOM_FOOTER}'       => self::customFooter(),
             '{POWERED_BY}'          => self::renderPoweredBy(),
             '{CONTENT}'             => $content,
             '{PAGE_TITLE}'          => '',  // caller override expected
@@ -234,31 +241,34 @@ class ThemeRenderer
 
     // ── Navigation ────────────────────────────────────────────────────────────
 
-    public static function renderNav(): string
+    /**
+     * @param int|null $album_id When set, the "Most Viewed" link is scoped to
+     *                           this album (LG-33) — pass when rendering the
+     *                           nav on an album page.
+     * @param int|null $cat_id   When set (and $album_id is not), the "Most
+     *                           Viewed" link is scoped to this category —
+     *                           pass when rendering the nav on a category page.
+     */
+    public static function renderNav(?int $album_id = null, ?int $cat_id = null): string
     {
-        $u   = h(lumora_base_url());
+        $base     = lumora_base_url();
+        $home     = h(lumora_theme_preview_link($base));
+        $latest   = h(lumora_theme_preview_link($base . '?view=latest'));
+        $most_qs  = $album_id !== null ? '&album=' . $album_id : ($cat_id !== null ? '&cat=' . $cat_id : '');
+        $most     = h(lumora_theme_preview_link($base . '?view=most_viewed' . $most_qs));
+        $random   = h(lumora_theme_preview_link($base . '?view=random'));
         $nav = <<<HTML
 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-  <li class="nav-item"><a class="nav-link" href="{$u}">Home</a></li>
-  <li class="nav-item"><a class="nav-link" href="{$u}?view=latest">Latest</a></li>
-  <li class="nav-item"><a class="nav-link" href="{$u}?view=most_viewed">Most Viewed</a></li>
-  <li class="nav-item"><a class="nav-link" href="{$u}?view=random">Random</a></li>
+  <li class="nav-item"><a class="nav-link" href="{$home}">Home</a></li>
+  <li class="nav-item"><a class="nav-link" href="{$latest}">Latest</a></li>
+  <li class="nav-item"><a class="nav-link" href="{$most}">Most Viewed</a></li>
+  <li class="nav-item"><a class="nav-link" href="{$random}">Random</a></li>
 </ul>
 HTML;
         return $nav;
     }
 
-    // ── Custom header / footer ────────────────────────────────────────────────
-
-    public static function customHeader(): string
-    {
-        return self::loadCustomFile((string) LumoraConfig::get('custom_header_path', ''));
-    }
-
-    public static function customFooter(): string
-    {
-        return self::loadCustomFile((string) LumoraConfig::get('custom_footer_path', ''));
-    }
+    // ── Powered by ────────────────────────────────────────────────────────────
 
     public static function renderPoweredBy(): string
     {
@@ -268,30 +278,6 @@ HTML;
         return '<small>Powered by '
             . '<a href="https://coding.unloved-heart.net/scripts/lumora" rel="noopener">Lumora Gallery</a>'
             . '</small>';
-    }
-
-    /**
-     * Load a custom HTML file from a config-supplied relative path.
-     *
-     * Uses realpath() to verify the resolved path is strictly within the gallery
-     * root, preventing directory traversal attacks (e.g. "../../etc/passwd").
-     *
-     * @param string $path Relative path from LUMORA_ROOT (admin-supplied via config).
-     */
-    private static function loadCustomFile(string $path): string
-    {
-        if ($path === '') return '';
-
-        $root     = realpath(LUMORA_ROOT);
-        $resolved = realpath(LUMORA_ROOT . ltrim($path, '/\\'));
-
-        if ($root === false || $resolved === false) return '';
-
-        // The resolved path must be strictly inside the gallery root directory.
-        if (!str_starts_with($resolved, $root . DIRECTORY_SEPARATOR)) return '';
-
-        $content = file_get_contents($resolved);
-        return $content !== false ? $content : '';
     }
 
     // ── Breadcrumb ────────────────────────────────────────────────────────────
@@ -310,11 +296,11 @@ HTML;
     ): string {
         $base = lumora_base_url();
         $html = '<nav aria-label="breadcrumb"><ol class="breadcrumb">';
-        $html .= '<li class="breadcrumb-item"><a href="' . h($base) . '">Home</a></li>';
+        $html .= '<li class="breadcrumb-item"><a href="' . h(lumora_theme_preview_link($base)) . '">Home</a></li>';
 
         foreach ($cat_trail as $crumb) {
             $html .= '<li class="breadcrumb-item"><a href="'
-                . h($base . '?cat=' . (int) $crumb['id']) . '">'
+                . h(lumora_theme_preview_link($base . '?cat=' . (int) $crumb['id'])) . '">'
                 . h($crumb['name']) . '</a></li>';
         }
 
@@ -322,7 +308,7 @@ HTML;
             $html .= '<li class="breadcrumb-item active" aria-current="page">' . h($album['title']) . '</li>';
         } elseif ($album) {
             $html .= '<li class="breadcrumb-item"><a href="'
-                . h($base . 'album.php?album=' . (int) $album['id']) . '">'
+                . h(lumora_theme_preview_link($base . 'album.php?album=' . (int) $album['id'])) . '">'
                 . h($album['title']) . '</a></li>';
         }
 
@@ -541,7 +527,7 @@ HTML;
 
         foreach ($items as $item) {
             if ($type === 'album') {
-                $url      = h($base . 'album.php?album=' . (int) $item['id']);
+                $url      = h(lumora_theme_preview_link($base . 'album.php?album=' . (int) $item['id']));
                 $title    = h($item['title']);
                 $img_n    = isset($item['image_count']) ? (int) $item['image_count'] : null;
                 $hits_val = (int) ($item['hits'] ?? 0);
@@ -566,7 +552,7 @@ HTML;
                 }
                 $meta_html .= '</div>';
             } else {
-                $url   = h($base . '?cat=' . (int) $item['id']);
+                $url   = h(lumora_theme_preview_link($base . '?cat=' . (int) $item['id']));
                 $title = h($item['name']);
 
                 $meta_html = '<div class="lum-card-meta">';
@@ -635,7 +621,7 @@ HTML;
 
         foreach ($items as $item) {
             $cat_id = (int) $item['id'];
-            $url    = h($base . '?cat=' . $cat_id);
+            $url    = h(lumora_theme_preview_link($base . '?cat=' . $cat_id));
             $title  = h($item['name']);
             $desc   = !empty($item['description'])
                 ? '<div class="lum-catlist-desc">' . nl2br(h($item['description'])) . '</div>'
@@ -761,7 +747,7 @@ HTML;
 
         foreach ($sorts as $key => $label) {
             $active = ($key === $current) ? ' active' : '';
-            $html .= '<a href="' . h($base_url . $key) . '" class="btn btn-outline-secondary' . $active . '">' . $label . '</a>';
+            $html .= '<a href="' . h(lumora_theme_preview_link($base_url . $key)) . '" class="btn btn-outline-secondary' . $active . '">' . $label . '</a>';
         }
 
         $html .= '</div></div>';

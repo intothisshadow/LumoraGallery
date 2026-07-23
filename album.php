@@ -44,6 +44,7 @@ if (!$album) {
 
 // ── Album hit counter (session-throttled, honoring count_album_views config) ─
 if (lumora_config('count_album_views', '1') === '1') {
+    lumora_ensure_session();
     $hit_key = 'alb_hit_' . $album_id;
     if (empty($_SESSION[$hit_key])) {
         increment_album_hits($album_id);
@@ -95,4 +96,5 @@ $content = $breadcrumb
 
 lumora_render_page($content, [
     '{PAGE_TITLE}' => h($album['title']) . ' — ',
+    '{NAVIGATION}' => ThemeRenderer::renderNav($album_id),
 ]);

@@ -152,30 +152,35 @@ html[data-bs-theme="dark"] {
 ## Adding a banner image
 
 The banner area displays the gallery name over a CSS gradient by default. To replace
-the gradient with a custom image:
+the gradient with a custom image, edit `template.html` directly — it's the sanctioned
+customisation point for markup like this (no config option or admin-supplied file path
+is involved):
 
 1. **Upload your banner** into the theme folder or anywhere inside the gallery
    (e.g. `themes/classic-fansite/images/banner.jpg`).
 
-2. **Create a custom header HTML file**, for example
-   `themes/classic-fansite/header.html`, containing a single image tag:
+2. **Add an image inside the banner header** in `template.html`, right before
+   `.fs-banner-text`:
 
    ```html
-   <img src="/your-gallery-path/themes/classic-fansite/images/banner.jpg" alt="">
+   <header class="fs-banner">
+     <div class="fs-banner-bg">
+       <img src="{THEME_URL}images/banner.jpg" alt="">
+     </div>
+     <div class="fs-banner-text">
+       <h1 class="fs-banner-title">{GALLERY_NAME}</h1>
+       <p class="fs-banner-desc">{GALLERY_DESCRIPTION}</p>
+     </div>
+   </header>
    ```
 
-   Adjust the `src` path to match your gallery's public URL. No surrounding `<div>`
-   or other markup is needed — `template.html` already wraps this in `.fs-banner-bg`.
+   `.fs-banner-bg` (defined in `style.css`) already positions and sizes an image
+   placed inside it to fill the banner area with `object-fit: cover` and
+   `object-position: center top`, so the top edge stays visible; you don't need
+   any extra CSS for this. Adjust the `src` path to match wherever you uploaded
+   the image.
 
-3. **Set the path in Admin → Config → Custom Header Path:**
-
-   ```
-   themes/classic-fansite/header.html
-   ```
-
-The image will be stretched to fill the banner area with `object-fit: cover` and
-`object-position: center top`, so the top edge is always visible. The gallery name
-is overlaid on top of it via a subtle dark scrim for legibility.
+The gallery name stays overlaid on top via a subtle dark scrim for legibility.
 
 ### Adjusting banner height
 
@@ -252,8 +257,6 @@ a fallback display name.
 | `{LUMORA_VERSION}` | Version string, e.g. `"1.0.0"` |
 | `{NAVIGATION}` | Bootstrap navbar-nav `<ul>` (used by the default theme) |
 | `{ADMIN_LINK}` | Admin panel `<a>` link (empty for non-admin visitors) |
-| `{CUSTOM_HEADER}` | Content of the custom header file (may be empty) |
-| `{CUSTOM_FOOTER}` | Content of the custom footer file (may be empty) |
 | `{POWERED_BY}` | "Powered by Lumora Gallery" credit (empty when disabled in config) |
 | `{CONTENT}` | Main page HTML |
 
@@ -270,6 +273,5 @@ themes/
     ├── template.html   — page structure (banner, nav, content, footer)
     ├── style.css       — styles and customisation variables
     ├── custom.css      — (optional) your overrides; not shipped by default
-    ├── header.html     — (optional) custom banner image tag
     └── README.md       — this file
 ```

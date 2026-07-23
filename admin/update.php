@@ -7,19 +7,40 @@ declare(strict_types=1);
  * latest available Lumora release entirely from within the dashboard:
  *
  *   1. Update check — fetches metadata from the configured release provider
- *      (GitHub Releases API by default) and caches the result for 24 hours.
+ *      (GitHub Releases API by default) and caches the result (24 hours for
+ *      the 'daily' check-frequency setting, 7 days for 'weekly').
  *
- *   2. One-click updater — multi-step workflow:
+ *   2. Standalone download & verify — an independent "Re-download release"
+ *      action that downloads and SHA-256-verifies the release archive without
+ *      committing to a full install, so an administrator can confirm a
+ *      release is intact ahead of time. See UpdaterService::downloadStandalone().
+ *
+ *   3. One-click updater — multi-step workflow:
  *         Pre-flight → Download → Verify → Backup → Maintenance →
  *         Extract → Validate → Replace files → Migrate DB → Cleanup
  *      Each step is a separate AJAX call so the browser can report granular
  *      progress.  Failed stages offer a Rollback option that restores the
- *      database and config.php from the automatic backup.
+ *      database and config.php from the automatic backup taken during Stage 4.
  *
- *   3. Database migrations — independent of the file updater; applies any
+ *   4. Database migrations — independent of the file updater; applies any
  *      pending SchemaService migrations via ajax_run_migrations.php.
  *
- *   4. Update history — last 10 update attempts stored in the config table.
+ *   5. Full-installation backups — separate from the automatic Stage 4
+ *      backup above: manual ZIP snapshots of the whole codebase + a database
+ *      dump (see BackupService), with a create/restore/delete UI. Up to 3
+ *      are retained.
+ *
+ *   6. System status — a live read of hosting-environment requirements
+ *      (PHP version, extensions, permissions, disk space) shown as a
+ *      pass/fail table (see UpdaterService::getSystemStatusChecks()).
+ *
+ *   7. Update settings — release channel (stable/prerelease), automatic
+ *      check toggle + frequency, and an optional GitHub token, all plain
+ *      POST-and-redirect actions handled at the top of this file (the same
+ *      pattern as admin/config.php).
+ *
+ *   8. Update history — last 10 update attempts (installs, rollbacks, and
+ *      backup restores) stored in the config table.
  *
  * @copyright Copyright (C) 2025 Ariane
  * @license   GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
@@ -29,14 +50,81 @@ require_once dirname(__DIR__) . '/include/bootstrap.php';
 require_once __DIR__ . '/includes/admin_helpers.php';
 lumora_require_permission('view_updates');
 
-// Actions that replace application files or run database migrations
-// (Install Update, Run Database Update, rollback/abort) require the
-// stricter 'site_configuration' permission — 'view_updates' alone only
-// grants visibility into version/status information. See
-// ajax_update_perform.php and TODO-security.md #2 for the matching
-// server-side enforcement; this flag only controls what the UI offers,
-// it is not itself a security boundary.
+// Actions that replace application files, run database migrations, manage
+// backups, or change update settings (Install Update, Run Database Update,
+// Back up now, Restore, Delete, Save settings, Re-download release,
+// rollback/abort) require the stricter 'site_configuration' permission —
+// 'view_updates' alone only grants visibility into version/status
+// information. See ajax_update_perform.php and TODO-security.md #2 for the
+// matching server-side enforcement on the multi-stage updater; the POST
+// handler below enforces the same rule for every action added on this page.
 $can_perform_updates = lumora_has_permission('site_configuration');
+$self_url            = lumora_base_url() . 'admin/update.php';
+
+// ── POST actions: settings, backups, standalone download ──────────────────────
+// Plain POST-and-redirect handlers, matching the established pattern used by
+// admin/config.php's export/import actions — no AJAX/JS required for these
+// one-shot actions. The multi-stage "Update Now" workflow below remains
+// AJAX-driven (ajax_update_perform.php) since it needs granular progress.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    lumora_csrf_validate();
+
+    if (!$can_perform_updates) {
+        lum_flash('This action requires the Site Configuration permission.', 'danger');
+        lumora_redirect($self_url);
+    }
+
+    $post_action = (string) $_POST['action'];
+
+    switch ($post_action) {
+        case 'save_update_settings':
+            LumoraConfig::set('update_channel', LumoraConfig::sanitizeValue('update_channel', $_POST['update_channel'] ?? 'stable'));
+            LumoraConfig::set('update_check_frequency', LumoraConfig::sanitizeValue('update_check_frequency', $_POST['update_check_frequency'] ?? 'daily'));
+            LumoraConfig::set('update_auto_check', LumoraConfig::sanitizeValue('update_auto_check', $_POST['update_auto_check'] ?? '0'));
+
+            // Leave-blank-to-keep-current: only overwrite the stored token when
+            // a new non-empty value was submitted, so re-saving the other
+            // settings never accidentally blanks out an already-configured token.
+            $token = trim((string) ($_POST['update_github_token'] ?? ''));
+            if ($token !== '') {
+                LumoraConfig::set('update_github_token', $token);
+            }
+
+            lum_flash('Update settings saved.');
+            lumora_redirect($self_url);
+            break;
+
+        case 'backup_create':
+            $r = BackupService::createBackup();
+            lum_flash($r['message'], $r['success'] ? 'success' : 'danger');
+            lumora_redirect($self_url);
+            break;
+
+        case 'backup_restore':
+            $r = BackupService::restoreBackup((string) ($_POST['filename'] ?? ''));
+            lum_flash($r['message'], $r['success'] ? 'success' : 'danger');
+            lumora_redirect($self_url);
+            break;
+
+        case 'backup_delete':
+            $r = BackupService::deleteBackup((string) ($_POST['filename'] ?? ''));
+            lum_flash($r['message'], $r['success'] ? 'success' : 'danger');
+            lumora_redirect($self_url);
+            break;
+
+        case 'download_release':
+            $ver   = (string) ($_POST['version'] ?? '');
+            $force = isset($_POST['force']) && $_POST['force'] === '1';
+            $r     = UpdaterService::downloadStandalone($ver, $force);
+            lum_flash($r['message'], $r['success'] ? 'success' : 'danger');
+            lumora_redirect($self_url);
+            break;
+
+        default:
+            lum_flash('Unknown action.', 'danger');
+            lumora_redirect($self_url);
+    }
+}
 
 // ── Application update status (cache-only on page load) ───────────────────────
 $upd           = UpdateService::getCachedStatus();
@@ -52,20 +140,31 @@ $update_history  = UpdaterService::getUpdateHistory();
 $mig_status  = SchemaService::getMigrationStatus();
 $mig_pending = count($mig_status['pending']);
 $mig_applied = count($mig_status['applied']);
+$mig_total   = count(SchemaService::discoverMigrations());
+
+// ── Release provider / source info ────────────────────────────────────────────
+$provider      = AbstractUpdateProvider::createFromConfig();
+$provider_h    = h($provider->getName());
+$repo_h        = h($provider->getSourceLabel());
+$releases_url_h = h($provider->getReleasesUrl());
 
 // ── JS variables ──────────────────────────────────────────────────────────────
-$csrf_js      = json_encode(lumora_csrf_token());
-$ajax_base_js = json_encode(lumora_base_url() . 'admin/');
-$auto_check_js = $cache_expired ? 'true' : 'false';
-$provider_h    = h(UpdateService::getProviderLabel());
+$csrf_js       = json_encode(lumora_csrf_token());
+$csrf_h        = h(lumora_csrf_token());
+$ajax_base_js  = json_encode(lumora_base_url() . 'admin/');
+$auto_check_js = ($cache_expired && UpdateService::isAutoCheckEnabled()) ? 'true' : 'false';
 
 // ── Latest available version info (for "Update Now" target) ──────────────────
-$latest_h   = $upd['latest'] !== null ? h($upd['latest']) : '';
-$latest_js  = json_encode($upd['latest'] ?? '');
-$rel_date_h = $upd['release_date'] !== null ? h($upd['release_date']) : 'N/A';
-$dl_url_h   = $upd['download_url']  !== null ? h($upd['download_url'])  : null;
-$cl_url_h   = $upd['changelog_url'] !== null ? h($upd['changelog_url']) : null;
-$min_php_h  = $upd['minimum_php']   !== null ? h($upd['minimum_php'])   : null;
+$latest_h      = $upd['latest'] !== null ? h($upd['latest']) : '';
+$latest_js     = json_encode($upd['latest'] ?? '');
+$rel_date_h    = $upd['release_date'] !== null ? h($upd['release_date']) : 'N/A';
+$release_name_h = $upd['release_name'] !== null ? h($upd['release_name']) : null;
+$dl_url_h      = $upd['download_url']  !== null ? h($upd['download_url'])  : null;
+$cl_url_h      = $upd['changelog_url'] !== null ? h($upd['changelog_url']) : null;
+$min_php_h     = $upd['minimum_php']   !== null ? h($upd['minimum_php'])   : null;
+$stability_badge = $upd['prerelease'] === true
+    ? '<span class="badge bg-warning text-dark">Prerelease</span>'
+    : ($upd['prerelease'] === false ? '<span class="badge bg-success">Stable</span>' : '');
 
 // PHP version compatibility warning.
 $php_compat_warn = ($upd['minimum_php'] !== null && version_compare(PHP_VERSION, $upd['minimum_php'], '<'))
@@ -75,6 +174,22 @@ $php_compat_warn = ($upd['minimum_php'] !== null && version_compare(PHP_VERSION,
       . '. <strong>Do not update</strong> until you have upgraded PHP.</div>'
     : '';
 $php_ok = $php_compat_warn === '';
+
+// ── Standalone download/verify info ───────────────────────────────────────────
+$last_download = UpdaterService::getLastDownloadInfo();
+$checksum_bar   = '';
+if ($last_download !== null && $upd['latest'] !== null && $last_download['version'] === $upd['latest']) {
+    $dl_at_h   = h(date('M j, Y g:i A', $last_download['downloaded_at'])) . ' UTC';
+    $dl_size_h = h(lumora_format_bytes((int) $last_download['size']));
+    $verified_line = $last_download['verified']
+        ? '<div class="lum-upd-checksum-bar mb-2">✓ Downloaded and verified (' . $dl_size_h . ') at ' . $dl_at_h . '.</div>'
+        : '<div class="lum-upd-checksum-bar mb-2">✓ Downloaded (' . $dl_size_h . ') at ' . $dl_at_h
+          . '. <span class="text-muted">No checksum was available from the release to verify against.</span></div>';
+    $sha_line = $last_download['sha256'] !== null
+        ? '<div class="lum-upd-checksum-hash mb-2">SHA-256: ' . h($last_download['sha256']) . '</div>'
+        : '';
+    $checksum_bar = $verified_line . $sha_line;
+}
 
 // ── Build DB updates card ──────────────────────────────────────────────────────
 if ($mig_pending === 0) {
@@ -111,7 +226,7 @@ if ($mig_pending === 0) {
     }
 }
 
-// ── Build application version status block ────────────────────────────────────
+// ── Build consolidated metadata grid (header) ─────────────────────────────────
 $installed_h  = h($upd['installed']);
 $status_badge = match ($upd['status']) {
     'up_to_date'       => '<span class="badge bg-success fs-6">✓ Up to date</span>',
@@ -120,41 +235,101 @@ $status_badge = match ($upd['status']) {
     default            => '<span class="badge bg-secondary fs-6">— Not checked yet</span>',
 };
 $checked_str  = $upd['checked_at'] !== null
-    ? h(date('Y-m-d H:i', $upd['checked_at'])) . ' UTC'
+    ? h(date('M j, Y g:i A', $upd['checked_at'])) . ' UTC'
     : 'Never';
 $error_block  = $upd['error'] !== null
     ? '<div class="alert alert-warning py-2 mt-3 small">' . h($upd['error']) . '</div>'
     : '';
 
-$update_avail_block = '';
-if ($upd_available) {
-    $release_row = $upd['release_date'] !== null
-        ? '<tr><th class="text-muted fw-normal">Released</th><td>' . $rel_date_h . '</td></tr>'
+$channel_h = ((string) LumoraConfig::get('update_channel', 'stable')) === 'prerelease'
+    ? 'Prerelease'
+    : 'Stable';
+
+$installed_at_h = h(rtrim(LUMORA_ROOT, DIRECTORY_SEPARATOR));
+$schema_status_h = $mig_pending === 0
+    ? 'v' . $mig_applied . ' <span class="text-muted small">(up to date)</span>'
+    : 'v' . $mig_applied . ' <span class="text-muted small">(' . $mig_pending . ' of ' . $mig_total . ' pending)</span>';
+
+$header_grid = <<<HTML
+<div class="row g-4">
+  <div class="col-md-4 lum-upd-meta-col">
+    <dl>
+      <dt>Installed version</dt>
+      <dd class="fw-semibold fs-6">Lumora Gallery {$installed_h}</dd>
+      <dt>Database schema version</dt>
+      <dd>{$schema_status_h}</dd>
+      <dt>Installed at</dt>
+      <dd class="small font-monospace text-muted">{$installed_at_h}</dd>
+    </dl>
+  </div>
+  <div class="col-md-4 lum-upd-meta-col">
+    <dl>
+      <dt>Update status</dt>
+      <dd>{$status_badge}</dd>
+      <dt>Release channel</dt>
+      <dd>{$channel_h}</dd>
+      <dt>Last checked</dt>
+      <dd class="small text-muted">{$checked_str}</dd>
+    </dl>
+  </div>
+  <div class="col-md-4 lum-upd-meta-col">
+    <dl>
+      <dt>Update source</dt>
+      <dd>Provider: <strong>{$provider_h}</strong></dd>
+      <dd>Repository: <code>{$repo_h}</code></dd>
+      <dd><a href="{$releases_url_h}" target="_blank" rel="noopener">View all releases ↗</a></dd>
+    </dl>
+  </div>
+</div>
+{$error_block}
+HTML;
+
+// ── Build "Latest release" interactive card ────────────────────────────────────
+$latest_release_card = '';
+if ($upd['latest'] !== null) {
+    $release_title_h = $release_name_h !== null ? $release_name_h : ('v' . $latest_h);
+    $release_notes_html = UpdateService::renderReleaseNotesHtml($upd['release_notes']);
+
+    $notes_btn = $cl_url_h
+        ? '<a href="' . $cl_url_h . '" target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm">View release notes on GitHub</a>'
         : '';
-    $cl_btn = $cl_url_h
-        ? '<a href="' . $cl_url_h . '" target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm">📋 View Changelog</a>'
+    $dl_btn = $dl_url_h
+        ? '<a href="' . $dl_url_h . '" class="btn btn-outline-secondary btn-sm">Download release ZIP</a>'
         : '';
 
-    $update_avail_block = <<<HTML
-<div class="lum-adm-card mt-3">
-  <table class="table table-sm mb-3" style="max-width:400px">
-    <tr><th class="text-muted fw-normal" style="width:150px">New version</th><td class="fw-semibold">{$latest_h}</td></tr>
-    {$release_row}
-  </table>
-  {$cl_btn}
+    $redownload_form = '';
+    if ($can_perform_updates) {
+        $redownload_form = <<<HTML
+<form method="post" action="{$self_url}" class="d-inline">
+  <input type="hidden" name="action" value="download_release">
+  <input type="hidden" name="csrf_token" value="{$csrf_h}">
+  <input type="hidden" name="version" value="{$latest_h}">
+  <input type="hidden" name="force" value="1">
+  <button type="submit" class="btn btn-outline-secondary btn-sm">Re-download release</button>
+</form>
+HTML;
+    }
+
+    $latest_release_card = <<<HTML
+<div class="lum-adm-card mb-4">
+  <h5 class="mb-2">Latest release</h5>
+  <p class="mb-2">
+    <strong>{$release_title_h}</strong> — version {$latest_h} {$stability_badge}
+  </p>
+  <p class="text-muted small mb-3">Published {$rel_date_h}</p>
+  <div class="d-flex gap-2 flex-wrap mb-3">
+    {$notes_btn}
+    {$dl_btn}
+    {$redownload_form}
+  </div>
+  {$checksum_bar}
   {$php_compat_warn}
+  <p class="small text-muted mt-3 mb-1">Release notes:</p>
+  <div class="lum-upd-release-notes">{$release_notes_html}</div>
 </div>
+
 HTML;
 }
-
-$status_block = <<<HTML
-<table class="table table-sm mb-0" style="max-width:400px">
-  <tr><th class="text-muted fw-normal" style="width:150px">Installed</th><td class="fw-semibold">{$installed_h}</td></tr>
-  <tr><th class="text-muted fw-normal">Status</th><td>{$status_badge}</td></tr>
-  <tr><th class="text-muted fw-normal">Last checked</th><td class="text-muted small">{$checked_str}</td></tr>
-</table>
-{$error_block}{$update_avail_block}
-HTML;
 
 // ── Build "Update Now" card (shown only when update is available) ──────────────
 $update_now_card = '';
@@ -257,7 +432,7 @@ HTML;
     <button id="lum-upd-start-btn" class="{$btn_classes}" disabled{$btn_disabled}>
       ⬆ Update to {$latest_h} Now
     </button>
-    <span class="text-muted small ms-2">Provider: <span id="lum-upd-provider-label">GitHub Releases</span></span>
+    <span class="text-muted small ms-2">Provider: <span id="lum-upd-provider-label">{$provider_h}</span></span>
   </div>
 
   <!-- Progress area (hidden until update starts) -->
@@ -282,6 +457,150 @@ HTML;
       <span   id="lum-upd-status-msg"  class="text-muted small"></span>
     </div>
   </div>
+</div>
+
+HTML;
+}
+
+// ── Build Backups card ─────────────────────────────────────────────────────────
+$backups = BackupService::listBackups();
+$backup_rows = '';
+foreach ($backups as $b) {
+    $b_created_h = h(date('M j, Y g:i A', $b['created_at'])) . ' UTC';
+    $b_size_h    = h(lumora_format_bytes((int) $b['size']));
+    $b_ver_h     = h($b['version']);
+    $b_fn_h      = h($b['filename']);
+
+    $restore_btn = $can_perform_updates
+        ? '<form method="post" action="' . $self_url . '" class="d-inline" onsubmit="return confirm(\'Restore this backup? Current application files and database will be overwritten (albums/ and cache/ are left untouched).\');">'
+          . '<input type="hidden" name="action" value="backup_restore">'
+          . '<input type="hidden" name="csrf_token" value="' . $csrf_h . '">'
+          . '<input type="hidden" name="filename" value="' . $b_fn_h . '">'
+          . '<button type="submit" class="btn btn-sm btn-outline-secondary">Restore</button>'
+          . '</form>'
+        : '';
+    $delete_btn = $can_perform_updates
+        ? '<form method="post" action="' . $self_url . '" class="d-inline ms-1" onsubmit="return confirm(\'Delete this backup permanently?\');">'
+          . '<input type="hidden" name="action" value="backup_delete">'
+          . '<input type="hidden" name="csrf_token" value="' . $csrf_h . '">'
+          . '<input type="hidden" name="filename" value="' . $b_fn_h . '">'
+          . '<button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>'
+          . '</form>'
+        : '';
+
+    $backup_rows .= '<tr><td>' . $b_ver_h . '</td><td class="small">' . $b_created_h . '</td>'
+        . '<td class="small">' . $b_size_h . '</td>'
+        . '<td class="text-nowrap">' . $restore_btn . $delete_btn . '</td></tr>';
+}
+$backups_table = $backup_rows !== ''
+    ? '<table class="table table-sm mb-0"><thead><tr><th>Version</th><th>Created</th><th>Size</th><th></th></tr></thead><tbody>' . $backup_rows . '</tbody></table>'
+    : '<p class="text-muted small mb-0">No backups yet.</p>';
+
+$backup_now_btn = $can_perform_updates
+    ? <<<HTML
+<form method="post" action="{$self_url}" class="mb-3">
+  <input type="hidden" name="action" value="backup_create">
+  <input type="hidden" name="csrf_token" value="{$csrf_h}">
+  <button type="submit" class="btn btn-primary btn-sm">Back up now</button>
+</form>
+HTML
+    : '<div class="alert alert-info py-2 small mb-3">Creating backups requires the Site Configuration permission.</div>';
+
+$backups_card = <<<HTML
+<div class="lum-adm-card mb-4">
+  <h5 class="mb-2">Backups</h5>
+  <p class="text-muted small mb-3">
+    A backup is a ZIP snapshot of the application's own code and configuration —
+    not your uploaded images, which a backup or update never touches. Up to 3 backups
+    are kept; creating a new one automatically removes the oldest beyond that.
+  </p>
+  {$backup_now_btn}
+  {$backups_table}
+</div>
+
+HTML;
+
+// ── Build System status card ───────────────────────────────────────────────────
+$status_checks = UpdaterService::getSystemStatusChecks();
+$status_rows = '';
+foreach ($status_checks as $check) {
+    $badge = $check['status'] === 'pass'
+        ? '<span class="lum-upd-status-pass">✓ Pass</span>'
+        : '<span class="lum-upd-status-fail">✗ Fail</span>';
+    $status_rows .= '<tr><td>' . h($check['name']) . '</td><td>' . $badge . '</td>'
+        . '<td class="small text-muted">' . h($check['detail']) . '</td></tr>';
+}
+
+$system_status_card = <<<HTML
+<div class="lum-adm-card mb-4">
+  <h5 class="mb-2">System status</h5>
+  <p class="text-muted small mb-3">
+    These reflect this server's current environment — they can change independently of
+    anything above (e.g. if a host changes a PHP setting or free disk space runs low).
+  </p>
+  <table class="table table-sm mb-0">
+    <thead><tr><th>Check</th><th>Status</th><th>Detail</th></tr></thead>
+    <tbody>{$status_rows}</tbody>
+  </table>
+</div>
+
+HTML;
+
+// ── Build Update settings card ─────────────────────────────────────────────────
+$sel_channel_stable     = $channel_h === 'Stable' ? ' selected' : '';
+$sel_channel_prerelease = $channel_h === 'Prerelease' ? ' selected' : '';
+$chk_auto_check         = UpdateService::isAutoCheckEnabled() ? ' checked' : '';
+$freq                   = (string) LumoraConfig::get('update_check_frequency', 'daily');
+$sel_freq_daily         = $freq === 'daily'  ? ' selected' : '';
+$sel_freq_weekly        = $freq === 'weekly' ? ' selected' : '';
+$has_token              = trim((string) LumoraConfig::get('update_github_token', '')) !== '';
+$token_placeholder      = $has_token ? 'Set — leave blank to keep unchanged' : 'Not set';
+
+$update_settings_card = '';
+if ($can_perform_updates) {
+    $update_settings_card = <<<HTML
+<div class="lum-adm-card mb-4">
+  <h5 class="mb-3">Update settings</h5>
+  <form method="post" action="{$self_url}">
+    <input type="hidden" name="action" value="save_update_settings">
+    <input type="hidden" name="csrf_token" value="{$csrf_h}">
+
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Release channel</label>
+      <select name="update_channel" class="form-select" style="max-width:340px">
+        <option value="stable"{$sel_channel_stable}>Stable (only stable releases)</option>
+        <option value="prerelease"{$sel_channel_prerelease}>Prerelease (include beta/pre-release versions)</option>
+      </select>
+      <div class="form-text">Stable checks GitHub's latest full release only. Prerelease also considers beta/pre-release tags.</div>
+    </div>
+
+    <div class="mb-3">
+      <div class="form-check form-switch">
+        <input type="hidden" name="update_auto_check" value="0">
+        <input class="form-check-input" type="checkbox" id="update_auto_check"
+               name="update_auto_check" value="1"{$chk_auto_check}>
+        <label class="form-check-label fw-semibold" for="update_auto_check">Automatically check for updates</label>
+      </div>
+      <div class="form-text">There's no cron available on typical shared hosting, so this checks opportunistically — the next time this admin page loads a check is due, rather than on a fixed schedule.</div>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Check frequency</label>
+      <select name="update_check_frequency" class="form-select" style="max-width:200px">
+        <option value="daily"{$sel_freq_daily}>Daily</option>
+        <option value="weekly"{$sel_freq_weekly}>Weekly</option>
+      </select>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label fw-semibold">GitHub token (optional)</label>
+      <input type="password" name="update_github_token" class="form-control" style="max-width:340px"
+             placeholder="{$token_placeholder}" autocomplete="off">
+      <div class="form-text">Only needed if update checks start hitting GitHub's unauthenticated rate limit. A fine-grained personal access token with no permissions (public read access only) is sufficient. Leave blank to keep the current token unchanged.</div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Save settings</button>
+  </form>
 </div>
 
 HTML;
@@ -314,11 +633,12 @@ HTML;
 
 // ── Page content ──────────────────────────────────────────────────────────────
 $content = <<<HTML
-<!-- ── Application version status ───────────────────────────────────────────── -->
+<!-- ── Application version status / metadata grid ───────────────────────────── -->
 <div id="lum-update-status" class="lum-adm-card mb-4">
-  {$status_block}
+  {$header_grid}
 </div>
 
+{$latest_release_card}
 {$update_now_card}
 
 <!-- ── Database schema updates ──────────────────────────────────────────────── -->
@@ -331,9 +651,10 @@ $content = <<<HTML
 <div class="lum-adm-card mb-4">
   <h5 class="mb-2">🔄 Check for Updates</h5>
   <p class="text-muted small mb-3">
-    Checks the configured release source for a new Lumora release.  Results are cached for 24 hours.
-    No gallery content, user data, or identifying information is ever transmitted — only a plain GET
-    request is made to the release API.
+    Checks the configured release source for a new Lumora release.  Results are cached
+    (see Update settings below for the check frequency). No gallery content, user data, or
+    identifying information is ever transmitted — only a plain GET request is made to the
+    release API.
   </p>
   <div class="d-flex gap-2 align-items-center flex-wrap">
     <button id="lum-check-btn" class="btn btn-primary">🔄 Check for Updates Now</button>
@@ -342,19 +663,23 @@ $content = <<<HTML
   <div id="lum-check-result" class="mt-3"></div>
 </div>
 
+{$backups_card}
+{$system_status_card}
+{$update_settings_card}
 {$history_card}
 
 <!-- ── Info ──────────────────────────────────────────────────────────────────── -->
 <div class="lum-adm-card">
   <h5 class="mb-2">ℹ️ About Updates</h5>
   <ul class="small text-muted mb-0">
-    <li>Update check results are cached locally for 24 hours; use the button above to force a refresh.</li>
+    <li>Update check results are cached; use the button above to force a refresh, or adjust the check frequency in Update settings.</li>
     <li>No gallery content, images, or user data is ever transmitted during an update check.</li>
-    <li>Release source: <code>{$provider_h}</code></li>
+    <li>Release source: <code>{$provider_h} ({$repo_h})</code></li>
     <li>Custom themes and plugins are preserved by default during an update. To replace them with the
         versions bundled in a release, tick the relevant checkboxes on the Install Update form above.</li>
     <li>An automatic database backup and <code>config.php</code> backup are created before any file replacement.
-        Backups are stored in <code>cache/.updates/backup/</code>.</li>
+        These are stored in <code>cache/.updates/backup/</code>. Separately, the Backups panel above lets you
+        create and restore full-installation ZIP snapshots on demand.</li>
     <li>If the <code>install/</code> directory is present when an update completes, it is automatically
         removed during the cleanup step.</li>
     <li>Cryptographic signature verification is a planned future security enhancement;
@@ -407,7 +732,6 @@ document.addEventListener('DOMContentLoaded', function () {
   const \$checkBtn  = document.getElementById('lum-check-btn');
   const \$checkSpin = document.getElementById('lum-check-spinner');
   const \$checkRes  = document.getElementById('lum-check-result');
-  const \$statusEl  = document.getElementById('lum-update-status');
 
   if (\$checkBtn) {
     \$checkBtn.addEventListener('click', function () { runCheck(); });
@@ -421,13 +745,15 @@ document.addEventListener('DOMContentLoaded', function () {
     try {
       const d = await post('ajax_update_check.php', {});
       if (d.error && !d.latest) throw new Error(d.error);
-      if (\$statusEl) \$statusEl.innerHTML = renderStatus(d);
       if (d.error && \$checkRes) {
         \$checkRes.innerHTML = '<div class="alert alert-warning py-2 small">\u26a0 ' + esc(d.error) + '</div>';
       }
-      // If an update is now available and the Update Now card was not present, reload.
-      if (d.status === 'update_available' && !document.getElementById('lum-upd-start-btn')) {
-        location.reload();
+      // Reload to reflect the fresh status everywhere on the page (metadata
+      // grid, Latest release card, Install Update card, etc.) rather than
+      // re-rendering each piece client-side.
+      if (d.status === 'update_available' || d.status === 'up_to_date') {
+        \$checkRes.innerHTML = '<div class="alert alert-success py-2 small">Status updated \u2014 reloading\u2026</div>';
+        setTimeout(function () { location.reload(); }, 700);
       }
     } catch (err) {
       if (\$checkRes) {
@@ -437,38 +763,6 @@ document.addEventListener('DOMContentLoaded', function () {
       if (\$checkBtn)  { \$checkBtn.disabled = false; \$checkBtn.textContent = '\ud83d\udd04 Check for Updates Now'; }
       if (\$checkSpin)   \$checkSpin.classList.add('d-none');
     }
-  }
-
-  function renderStatus(d) {
-    const inst  = esc(d.installed  || '');
-    const lat   = d.latest ? esc(d.latest) : null;
-    const rDate = d.release_date ? esc(d.release_date) : null;
-    const clUrl = d.changelog_url || '';
-    const chkAt = d.checked_at
-      ? new Date(d.checked_at * 1000).toISOString().replace('T',' ').slice(0,16) + ' UTC'
-      : 'Never';
-    const badge = ({
-      up_to_date:       '<span class="badge bg-success fs-6">&#x2713; Up to date</span>',
-      update_available: '<span class="badge bg-warning text-dark fs-6">&#x1F514; Update available</span>',
-      error:            '<span class="badge bg-danger fs-6">&#x26A0; Error</span>',
-    })[d.status] || '<span class="badge bg-secondary fs-6">&#x2014; Not checked yet</span>';
-
-    let html = '<table class="table table-sm mb-0" style="max-width:400px">'
-      + '<tr><th class="text-muted fw-normal" style="width:150px">Installed</th><td class="fw-semibold">' + inst + '</td></tr>'
-      + '<tr><th class="text-muted fw-normal">Status</th><td>' + badge + '</td></tr>'
-      + '<tr><th class="text-muted fw-normal">Last checked</th><td class="text-muted small">' + esc(chkAt) + '</td></tr>'
-      + '</table>';
-
-    if (d.status === 'update_available' && lat) {
-      const rrRow = rDate ? '<tr><th class="text-muted fw-normal">Released</th><td>' + rDate + '</td></tr>' : '';
-      const clBtn = clUrl
-        ? '<a href="' + escAttr(clUrl) + '" target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm">&#x1F4CB; View Changelog</a>'
-        : '';
-      html += '<div class="lum-adm-card mt-3"><table class="table table-sm mb-3" style="max-width:400px">'
-        + '<tr><th class="text-muted fw-normal" style="width:150px">New version</th><td class="fw-semibold">' + lat + '</td></tr>'
-        + rrRow + '</table>' + clBtn + '</div>';
-    }
-    return html;
   }
 
   // ── Database migration runner ──────────────────────────────────────────────

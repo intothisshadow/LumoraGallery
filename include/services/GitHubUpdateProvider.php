@@ -6,12 +6,22 @@ declare(strict_types=1);
  * Fetches release metadata from the GitHub Releases API and constructs archive
  * download URLs using the standard GitHub archive format.
  *
- * API endpoint:  https://api.github.com/repos/{owner}/{repo}/releases/latest
- * Archive URL:   https://github.com/{owner}/{repo}/archive/refs/tags/v{ver}.zip
+ * Stable channel:     GET /repos/{owner}/{repo}/releases/latest
+ *                     (GitHub excludes prereleases and drafts from this endpoint)
+ * Prerelease channel: GET /repos/{owner}/{repo}/releases  (most recent
+ *                     non-draft entry, whether marked prerelease or not)
  *
- * The repository is configurable via the `update_github_repo` config key
- * (default: intothisshadow/Lumora) so forks and self-hosted mirrors can point
- * to their own release source without code changes.
+ * The active channel is selected via the `update_channel` config key
+ * ('stable' default, or 'prerelease' — see admin/update.php's Update Settings
+ * panel). The repository is configurable via the `update_github_repo` config
+ * key (default: intothisshadow/Lumora) so forks and self-hosted mirrors can
+ * point to their own release source without code changes.
+ *
+ * An optional GitHub personal access token can be supplied via the
+ * `update_github_token` config key to raise the unauthenticated API rate
+ * limit (60/hour) to the authenticated limit; it is sent as a Bearer token
+ * on every API request this class makes. Never required for public repos
+ * under normal usage.
  *
  * SHA-256 checksum: if the release contains an asset whose name ends with
  * `.sha256` or equals `sha256sums.txt`, its content is fetched and parsed to
@@ -52,6 +62,14 @@ class GitHubUpdateProvider extends AbstractUpdateProvider
     }
 
     /**
+     * Return the GitHub releases listing page URL for the configured repository.
+     */
+    public function getReleasesUrl(): string
+    {
+        return self::ARCHIVE_BASE . '/' . $this->repo() . '/releases';
+    }
+
+    /**
      * Fetch the latest release metadata from the GitHub Releases API.
      *
      * GitHub API response fields mapped to the canonical metadata shape:
@@ -59,32 +77,100 @@ class GitHubUpdateProvider extends AbstractUpdateProvider
      *   published_at → release_date    (date portion only, YYYY-MM-DD)
      *   body         → release_notes   (Markdown; trimmed to 2 000 chars)
      *   html_url     → changelog_url   (GitHub release page)
+     *   name         → release_name    (release title, may differ from tag)
+     *   prerelease   → prerelease      (bool)
      *
      * `minimum_php` and `minimum_db` are extracted via simple regex from the
      * release body when present (e.g. "Minimum PHP: 8.2" or "minimum_db: 8").
+     *
+     * The release channel (`update_channel` config key) determines which
+     * endpoint is queried — see class docblock.
      *
      * @return array{
      *   latest_version: string,
      *   release_date:   string|null,
      *   release_notes:  string|null,
+     *   release_name:   string|null,
      *   download_url:   string|null,
      *   changelog_url:  string|null,
      *   minimum_php:    string|null,
      *   minimum_db:     int|null,
-     *   sha256:         string|null
+     *   sha256:         string|null,
+     *   prerelease:     bool
      * }|null
      */
     public function fetchMetadata(): ?array
     {
-        $repo = $this->repo();
-        $url  = self::API_BASE . '/repos/' . $repo . '/releases/latest';
+        $data = $this->channel() === 'prerelease'
+            ? $this->fetchLatestFromList()
+            : $this->fetchLatestStable();
 
-        // GitHub requires a meaningful User-Agent to avoid 403 responses.
-        $raw = $this->httpGet($url, [
+        if ($data === null) return null;
+
+        return $this->mapRelease($data);
+    }
+
+    /**
+     * Build the GitHub source archive download URL for a specific version.
+     *
+     * Format: https://github.com/{repo}/archive/refs/tags/v{version}.zip
+     *
+     * The `v` prefix is always added; any leading `v` in $version is stripped first
+     * so both '1.9.0' and 'v1.9.0' produce the same URL.
+     */
+    public function buildArchiveUrl(string $version): string
+    {
+        $repo = $this->repo();
+        $ver  = ltrim($version, 'v');
+        return self::ARCHIVE_BASE . '/' . $repo . '/archive/refs/tags/v' . $ver . '.zip';
+    }
+
+    // ── Internal helpers ──────────────────────────────────────────────────────
+
+    /** Return the configured repository identifier (owner/repo). */
+    private function repo(): string
+    {
+        return (string) LumoraConfig::get('update_github_repo', self::DEFAULT_REPO);
+    }
+
+    /** Return the configured release channel: 'stable' (default) or 'prerelease'. */
+    private function channel(): string
+    {
+        $channel = (string) LumoraConfig::get('update_channel', 'stable');
+        return $channel === 'prerelease' ? 'prerelease' : 'stable';
+    }
+
+    /**
+     * Standard GitHub API request headers, including an optional Bearer
+     * token from the `update_github_token` config key.
+     *
+     * @return list<string>
+     */
+    private function apiHeaders(): array
+    {
+        $headers = [
             'Accept: application/vnd.github+json',
             'X-GitHub-Api-Version: 2022-11-28',
-        ]);
+        ];
 
+        $token = trim((string) LumoraConfig::get('update_github_token', ''));
+        if ($token !== '') {
+            $headers[] = 'Authorization: Bearer ' . $token;
+        }
+
+        return $headers;
+    }
+
+    /**
+     * Fetch the latest stable release via GitHub's /releases/latest endpoint.
+     * This endpoint already excludes prereleases and drafts.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function fetchLatestStable(): ?array
+    {
+        $url = self::API_BASE . '/repos/' . $this->repo() . '/releases/latest';
+        $raw = $this->httpGet($url, $this->apiHeaders());
         if ($raw === null) return null;
 
         try {
@@ -93,8 +179,57 @@ class GitHubUpdateProvider extends AbstractUpdateProvider
             return null;
         }
 
-        if (!is_array($data) || empty($data['tag_name'])) return null;
+        return (is_array($data) && !empty($data['tag_name'])) ? $data : null;
+    }
 
+    /**
+     * Fetch the most recent non-draft release (stable or prerelease) via
+     * GitHub's /releases listing endpoint, for the 'prerelease' channel.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function fetchLatestFromList(): ?array
+    {
+        $url = self::API_BASE . '/repos/' . $this->repo() . '/releases?per_page=10';
+        $raw = $this->httpGet($url, $this->apiHeaders());
+        if ($raw === null) return null;
+
+        try {
+            $data = json_decode($raw, associative: true, flags: JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return null;
+        }
+
+        if (!is_array($data)) return null;
+
+        foreach ($data as $release) {
+            if (is_array($release) && empty($release['draft']) && !empty($release['tag_name'])) {
+                return $release;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Map a raw GitHub API release object to the canonical metadata shape.
+     *
+     * @param array<string, mixed> $data
+     * @return array{
+     *   latest_version: string,
+     *   release_date:   string|null,
+     *   release_notes:  string|null,
+     *   release_name:   string|null,
+     *   download_url:   string|null,
+     *   changelog_url:  string|null,
+     *   minimum_php:    string|null,
+     *   minimum_db:     int|null,
+     *   sha256:         string|null,
+     *   prerelease:     bool
+     * }
+     */
+    private function mapRelease(array $data): array
+    {
         $tag         = trim((string) $data['tag_name']);
         $version     = ltrim($tag, 'v');
         $releaseDate = null;
@@ -111,8 +246,12 @@ class GitHubUpdateProvider extends AbstractUpdateProvider
             $notes = substr($notes, 0, 1997) . '…';
         }
 
+        $releaseName  = isset($data['name']) ? trim((string) $data['name']) : null;
+        if ($releaseName === '') $releaseName = null;
+
         $changelogUrl = isset($data['html_url']) ? trim((string) $data['html_url']) : null;
         $downloadUrl  = $this->buildArchiveUrl($version);
+        $prerelease   = (bool) ($data['prerelease'] ?? false);
 
         // Extract minimum PHP / DB from release notes.
         $minPhp = null;
@@ -147,35 +286,14 @@ class GitHubUpdateProvider extends AbstractUpdateProvider
             'latest_version' => $version,
             'release_date'   => $releaseDate,
             'release_notes'  => $notes,
+            'release_name'   => $releaseName,
             'download_url'   => $downloadUrl,
             'changelog_url'  => $changelogUrl,
             'minimum_php'    => $minPhp,
             'minimum_db'     => $minDb,
             'sha256'         => $sha256,
+            'prerelease'     => $prerelease,
         ];
-    }
-
-    /**
-     * Build the GitHub source archive download URL for a specific version.
-     *
-     * Format: https://github.com/{repo}/archive/refs/tags/v{version}.zip
-     *
-     * The `v` prefix is always added; any leading `v` in $version is stripped first
-     * so both '1.9.0' and 'v1.9.0' produce the same URL.
-     */
-    public function buildArchiveUrl(string $version): string
-    {
-        $repo = $this->repo();
-        $ver  = ltrim($version, 'v');
-        return self::ARCHIVE_BASE . '/' . $repo . '/archive/refs/tags/v' . $ver . '.zip';
-    }
-
-    // ── Internal helpers ──────────────────────────────────────────────────────
-
-    /** Return the configured repository identifier (owner/repo). */
-    private function repo(): string
-    {
-        return (string) LumoraConfig::get('update_github_repo', self::DEFAULT_REPO);
     }
 
     /**

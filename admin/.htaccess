@@ -1,0 +1,16 @@
+# Lumora Gallery — admin panel cache exclusion (LG-033 follow-up)
+#
+# Every admin request already starts a PHP session and sends a Set-Cookie
+# header, which LiteSpeed Cache's default behaviour already excludes from
+# caching on its own. This directive makes that exclusion explicit rather
+# than relying solely on that implicit behaviour, in case a front-end proxy
+# or CDN strips cookies before the request reaches LiteSpeed, or LSCache is
+# ever configured with "Cache Private" enabled.
+#
+# <IfModule LiteSpeed> is silently skipped on Apache or any other server
+# without the LiteSpeed module — safe there, active only on LiteSpeed/
+# OpenLiteSpeed. nginx and Caddy don't read .htaccess files at all, so this
+# file has no effect on those regardless.
+<IfModule LiteSpeed>
+  CacheLookup off
+</IfModule>

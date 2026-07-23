@@ -58,7 +58,7 @@ class LumoraConfig
      * Boolean-style config keys: stored as '1' or '0' only.
      * Shared by sanitizeValue() below.
      */
-    private const BOOL_KEYS = ['count_album_views', 'gallery_offline', 'show_powered_by', 'install_ping_enabled'];
+    private const BOOL_KEYS = ['count_album_views', 'gallery_offline', 'show_powered_by', 'install_ping_enabled', 'update_auto_check', 'litespeed_cache_purge'];
 
     /**
      * Validate and normalise a raw config value for a known config key,
@@ -105,6 +105,11 @@ class LumoraConfig
                                                     ? $raw : 'grid',
             'default_color_mode'               => in_array($raw, ['auto', 'light', 'dark'], true)
                                                     ? $raw : 'auto',
+            'update_channel'                   => in_array($raw, ['stable', 'prerelease'], true)
+                                                    ? $raw : 'stable',
+            'update_check_frequency'           => in_array($raw, ['daily', 'weekly'], true)
+                                                    ? $raw : 'daily',
+            'litespeed_page_cache_ttl'         => (string) max(0, min(86400, (int) $raw)),
             default                            => trim($raw),
         };
     }

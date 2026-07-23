@@ -7,7 +7,9 @@ declare(strict_types=1);
  *   /              → gallery home: recently updated albums + categories + latest additions + stats + who is online
  *   /?cat=N        → browse a category (sub-categories + albums)
  *   /?view=latest      → most recently added images
- *   /?view=most_viewed → all-time most viewed images
+ *   /?view=most_viewed → all-time most viewed images (gallery-wide)
+ *   /?view=most_viewed&album=N → most viewed images within album N (LG-33)
+ *   /?view=most_viewed&cat=N   → most viewed images within category N (LG-33)
  *   /?view=random      → random selection
  *
  * @copyright Copyright (C) 2025 Ariane
@@ -18,12 +20,19 @@ define('LUMORA_ENTRY', true);
 require_once __DIR__ . '/include/bootstrap.php';
 
 // ── Input sanitisation ────────────────────────────────────────────────────────
-$cat_id  = lumora_int($_GET['cat']  ?? 0, 0, 0);
-$view    = in_array($_GET['view'] ?? '', ['latest', 'most_viewed', 'random'], true)
+$cat_id   = lumora_int($_GET['cat']   ?? 0, 0, 0);
+$album_id = lumora_int($_GET['album'] ?? 0, 0, 0);
+$view     = in_array($_GET['view'] ?? '', ['latest', 'most_viewed', 'random'], true)
     ? $_GET['view']
     : '';
 $per_page = max(12, (int) lumora_config('per_page', 48));
 $page    = lumora_int($_GET['page'] ?? 1, 1, 1);
+
+// Nav context override (LG-33): set when the current page is scoped to a
+// single album or category, so {NAVIGATION}'s "Most Viewed" link can carry
+// that context forward instead of always pointing at the gallery-wide view.
+$nav_album_id = null;
+$nav_cat_id   = null;
 
 // ── Track visitor for "Who Is Online" ─────────────────────────────────────────
 lumora_track_visitor();
@@ -39,11 +48,31 @@ if ($view !== '') {
         'most_viewed' => 'Most Viewed',
         'random'      => 'Random Images',
     ];
+
+    // Most Viewed respects the current album/category context, if any
+    // (LG-33) — album takes precedence when both are present.
+    if ($view === 'most_viewed') {
+        $view_titles['most_viewed'] = match (true) {
+            $album_id > 0 => 'Most Viewed in This Album',
+            $cat_id   > 0 => 'Most Viewed in This Category',
+            default       => 'Most Viewed in Gallery',
+        };
+        if ($album_id > 0) {
+            $nav_album_id = $album_id;
+        } elseif ($cat_id > 0) {
+            $nav_cat_id = $cat_id;
+        }
+    }
+
     $page_title = $view_titles[$view] . ' — ';
 
     $images = match ($view) {
         'latest'      => get_latest_images($per_page),
-        'most_viewed' => get_most_viewed_images($per_page),
+        'most_viewed' => get_most_viewed_images(
+            $per_page,
+            $album_id > 0 ? $album_id : null,
+            $cat_id   > 0 ? $cat_id   : null
+        ),
         default       => get_random_images($per_page),
     };
 
@@ -59,6 +88,7 @@ if ($view !== '') {
         $content = '<div class="alert alert-warning">Category not found.</div>';
     } else {
         $page_title = h($cat['name']) . ' — ';
+        $nav_cat_id = $cat_id;
         $breadcrumb = lumora_render_breadcrumb(get_category_breadcrumb($cat_id));
 
         // Sub-categories
@@ -109,10 +139,10 @@ if ($view !== '') {
 
     // 3. Latest Additions (thumbnail grid)
     if (!empty($latest)) {
-        $base     = h(lumora_base_url());
+        $view_all_url = h(lumora_theme_preview_link(lumora_base_url() . '?view=latest'));
         $content .= '<div class="d-flex justify-content-between align-items-center mt-4 mb-2">'
             . '<h2 class="lum-section-title mb-0">Latest Additions</h2>'
-            . '<a href="' . $base . '?view=latest" class="btn btn-sm btn-outline-primary">View all</a>'
+            . '<a href="' . $view_all_url . '" class="btn btn-sm btn-outline-primary">View all</a>'
             . '</div>'
             . lumora_render_thumbgrid($latest)
             . lumora_render_lightbox_js(lumora_base_url());
@@ -132,4 +162,9 @@ if ($view !== '') {
     $content .= lumora_render_who_is_online();
 }
 
-lumora_render_page($content, ['{PAGE_TITLE}' => $page_title]);
+$extra_tokens = ['{PAGE_TITLE}' => $page_title];
+if ($nav_album_id !== null || $nav_cat_id !== null) {
+    $extra_tokens['{NAVIGATION}'] = ThemeRenderer::renderNav($nav_album_id, $nav_cat_id);
+}
+
+lumora_render_page($content, $extra_tokens);

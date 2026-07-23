@@ -63,6 +63,13 @@ abstract class AbstractUpdateProvider
      */
     abstract public function getSourceLabel(): string;
 
+    /**
+     * Return a URL to the provider's releases listing page for display in
+     * the admin UI (e.g. "View all releases" link), e.g.
+     * "https://github.com/owner/repo/releases" for GitHubUpdateProvider.
+     */
+    abstract public function getReleasesUrl(): string;
+
     // ── Factory ───────────────────────────────────────────────────────────────
 
     /**

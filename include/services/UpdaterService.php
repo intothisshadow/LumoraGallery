@@ -99,7 +99,7 @@ class UpdaterService
     // ── Path helpers ──────────────────────────────────────────────────────────
 
     /** Working directory for all update artefacts. */
-    private static function updatesDir(): string
+    public static function updatesDir(): string
     {
         return LUMORA_ROOT . 'cache' . DIRECTORY_SEPARATOR . '.updates' . DIRECTORY_SEPARATOR;
     }
@@ -111,7 +111,7 @@ class UpdaterService
     }
 
     /** Downloaded archive path for a given version. */
-    private static function archivePath(string $version): string
+    public static function archivePath(string $version): string
     {
         return self::updatesDir() . 'lumora-v' . ltrim($version, 'v') . '.zip';
     }
@@ -1129,6 +1129,263 @@ class UpdaterService
         self::releaseLock();
     }
 
+    // ── Standalone download & verify ──────────────────────────────────────────
+
+    /** Config key — JSON info about the most recent standalone download+verify. */
+    private const LAST_DOWNLOAD_KEY = 'update_last_download';
+
+    /**
+     * Download and verify a release archive independently of the full
+     * multi-stage update workflow — used by the "Re-download release" action
+     * on the Updates admin page so an administrator can confirm a release is
+     * downloadable and intact before committing to a full install.
+     *
+     * Reuses the same archive path the full updater's Download/Verify stages
+     * use, so a standalone download here is transparently picked up (and not
+     * re-downloaded) if a full update is started afterward.
+     *
+     * @param string $version Target version string (e.g. '1.10.0').
+     * @param bool   $force   Discard any existing cached archive and re-download.
+     * @return array{success: bool, message: string, details: list<string>}
+     */
+    public static function downloadStandalone(string $version, bool $force = false): array
+    {
+        if ($version === '') {
+            return ['success' => false, 'message' => 'No target version known.', 'details' => []];
+        }
+
+        if (self::isUpdateRunning()) {
+            return [
+                'success' => false,
+                'message' => 'A full update is currently in progress; cannot download separately while it runs.',
+                'details' => [],
+            ];
+        }
+
+        set_time_limit(180);
+        self::ensureUpdatesDir();
+
+        $archivePath = self::archivePath($version);
+
+        if ($force && file_exists($archivePath)) {
+            @unlink($archivePath);
+        }
+
+        $provider = AbstractUpdateProvider::createFromConfig();
+        $meta     = null;
+        try {
+            $meta = $provider->fetchMetadata();
+        } catch (\Throwable) {
+            // Non-fatal — fall back to the constructed archive URL below.
+        }
+
+        $dlUrl  = $meta['download_url'] ?? null;
+        $sha256 = $meta['sha256']       ?? null;
+        if ($dlUrl === null) {
+            $dlUrl = $provider->buildArchiveUrl($version);
+        }
+
+        $details = [];
+
+        if (!file_exists($archivePath) || filesize($archivePath) === 0) {
+            self::logUpdate('info', "Standalone download of v{$version} from {$dlUrl}");
+
+            $ctx = stream_context_create([
+                'http' => [
+                    'method'          => 'GET',
+                    'timeout'         => 120,
+                    'follow_location' => 1,
+                    'max_redirects'   => 5,
+                    'user_agent'      => 'Lumora Gallery/' . LUMORA_VERSION,
+                    'ignore_errors'   => false,
+                ],
+                'ssl' => [
+                    'verify_peer'      => true,
+                    'verify_peer_name' => true,
+                ],
+            ]);
+
+            set_error_handler(static fn(): bool => true);
+            try {
+                $data = file_get_contents($dlUrl, false, $ctx);
+            } finally {
+                restore_error_handler();
+            }
+
+            if ($data === false || strlen($data) === 0) {
+                self::logUpdate('error', "Standalone download failed from {$dlUrl}");
+                return [
+                    'success' => false,
+                    'message' => 'Download failed. Check server connectivity and try again.',
+                    'details' => [],
+                ];
+            }
+
+            if (file_put_contents($archivePath, $data) === false) {
+                return [
+                    'success' => false,
+                    'message' => 'Could not write downloaded archive to disk. Check permissions.',
+                    'details' => [],
+                ];
+            }
+
+            $details[] = 'Downloaded ' . lumora_format_bytes(strlen($data)) . '.';
+        } else {
+            $details[] = 'Archive already present on disk; re-verifying.';
+        }
+
+        $size       = (int) filesize($archivePath);
+        $actualHash = hash_file('sha256', $archivePath);
+
+        if ($sha256 !== null && $actualHash !== false) {
+            if (!hash_equals(strtolower($sha256), strtolower($actualHash))) {
+                self::logUpdate('error', "Standalone verify: SHA-256 mismatch for v{$version}");
+                return [
+                    'success' => false,
+                    'message' => 'Archive integrity check failed: SHA-256 mismatch. Delete the cached archive and try again.',
+                    'details' => $details,
+                ];
+            }
+            $details[] = 'SHA-256 verified.';
+        }
+
+        if (class_exists('ZipArchive')) {
+            $zip = new \ZipArchive();
+            $res = $zip->open($archivePath, \ZipArchive::RDONLY);
+            if ($res !== true) {
+                return [
+                    'success' => false,
+                    'message' => 'The downloaded file is not a valid ZIP archive.',
+                    'details' => $details,
+                ];
+            }
+            $zip->close();
+        }
+
+        $info = [
+            'version'       => $version,
+            'size'          => $size,
+            'sha256'        => $actualHash ?: null,
+            'verified'      => $sha256 !== null,
+            'downloaded_at' => time(),
+        ];
+
+        try {
+            LumoraConfig::set(self::LAST_DOWNLOAD_KEY, json_encode($info, JSON_THROW_ON_ERROR));
+        } catch (\Throwable) {
+            // Non-fatal — the archive itself is still on disk and usable.
+        }
+
+        self::logUpdate('info', "Standalone download+verify completed for v{$version}");
+
+        return [
+            'success' => true,
+            'message' => 'Downloaded and verified (' . lumora_format_bytes($size) . ').',
+            'details' => $details,
+        ];
+    }
+
+    /**
+     * Return metadata about the most recent standalone download+verify
+     * (see downloadStandalone()), or null if none has been performed yet.
+     *
+     * @return array{version: string, size: int, sha256: string|null, verified: bool, downloaded_at: int}|null
+     */
+    public static function getLastDownloadInfo(): ?array
+    {
+        $raw = (string) LumoraConfig::get(self::LAST_DOWNLOAD_KEY, '');
+        if ($raw === '') return null;
+        try {
+            $data = json_decode($raw, associative: true, flags: JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return null;
+        }
+        return is_array($data) ? $data : null;
+    }
+
+    // ── System status checks ───────────────────────────────────────────────────
+
+    /**
+     * Run the hosting-environment requirement checks shown in the Updates
+     * admin page's "System status" panel. Cheap and side-effect-free (aside
+     * from ensuring the updates working directory exists so its writability
+     * can be tested) — safe to call on every page load.
+     *
+     * @return list<array{name: string, status: 'pass'|'fail', detail: string}>
+     */
+    public static function getSystemStatusChecks(): array
+    {
+        $checks = [];
+
+        // PHP version.
+        $minPhp = '8.2';
+        $phpOk  = version_compare(PHP_VERSION, $minPhp, '>=');
+        $checks[] = [
+            'name'   => 'PHP version',
+            'status' => $phpOk ? 'pass' : 'fail',
+            'detail' => 'Running PHP ' . PHP_VERSION . ' (minimum ' . $minPhp . '.0).',
+        ];
+
+        // ZIP extension.
+        $zipOk = class_exists('ZipArchive');
+        $checks[] = [
+            'name'   => 'ZIP extension',
+            'status' => $zipOk ? 'pass' : 'fail',
+            'detail' => $zipOk
+                ? 'The PHP zip extension is loaded.'
+                : 'The PHP zip extension is not loaded — required for backups and updates.',
+        ];
+
+        // cURL availability.
+        $curlOk = extension_loaded('curl');
+        $checks[] = [
+            'name'   => 'cURL availability',
+            'status' => $curlOk ? 'pass' : 'fail',
+            'detail' => $curlOk
+                ? 'The cURL extension is loaded.'
+                : 'The cURL extension is not loaded; downloads fall back to PHP stream contexts.',
+        ];
+
+        // File permissions.
+        $writable = is_writable(LUMORA_ROOT);
+        $checks[] = [
+            'name'   => 'File permissions',
+            'status' => $writable ? 'pass' : 'fail',
+            'detail' => $writable
+                ? 'The installation directory is writable.'
+                : 'The installation directory is not writable by the web server.',
+        ];
+
+        // Available disk space (require at least 80 MB, matching preflight).
+        $free = @disk_free_space(LUMORA_ROOT);
+        if ($free === false) {
+            $checks[] = [
+                'name'   => 'Available disk space',
+                'status' => 'fail',
+                'detail' => 'Could not determine available disk space.',
+            ];
+        } else {
+            $checks[] = [
+                'name'   => 'Available disk space',
+                'status' => $free >= 83886080 ? 'pass' : 'fail',
+                'detail' => lumora_format_bytes((int) $free) . ' free.',
+            ];
+        }
+
+        // Temporary directory (cache/.updates/).
+        self::ensureUpdatesDir();
+        $tmpWritable = is_writable(self::updatesDir());
+        $checks[] = [
+            'name'   => 'Temporary directory',
+            'status' => $tmpWritable ? 'pass' : 'fail',
+            'detail' => $tmpWritable
+                ? 'The update staging directory is writable.'
+                : 'The update staging directory is not writable.',
+        ];
+
+        return $checks;
+    }
+
     // ── Database backup / restore ─────────────────────────────────────────────
 
     /**
@@ -1139,7 +1396,7 @@ class UpdaterService
      *
      * @return array{success: bool, tables: int, bytes: int, error: string}
      */
-    private static function dumpDatabase(string $outputPath): array
+    public static function dumpDatabase(string $outputPath): array
     {
         try {
             $prefix = LumoraDB::prefix();
@@ -1223,7 +1480,7 @@ class UpdaterService
      *
      * @return array{success: bool, statements: int, error: string}
      */
-    private static function restoreDatabase(string $sqlPath): array
+    public static function restoreDatabase(string $sqlPath): array
     {
         try {
             $sql = file_get_contents($sqlPath);
@@ -1323,7 +1580,7 @@ class UpdaterService
      * @param list<string>         $preserve Top-level entry names to skip entirely.
      * @param array{copied: int, skipped: int, errors: list<string>} $stats  By-reference stat counter.
      */
-    private static function copyDirectory(
+    public static function copyDirectory(
         string $src,
         string $dst,
         array  $preserve,
@@ -1369,7 +1626,7 @@ class UpdaterService
     /**
      * Recursively remove a directory and all its contents.
      */
-    private static function removeDirectory(string $path): void
+    public static function removeDirectory(string $path): void
     {
         if (!is_dir($path)) return;
 
@@ -1498,7 +1755,7 @@ class UpdaterService
      * Create the updates working directory if it does not exist.
      * Also writes a .htaccess file to block direct web access on Apache hosts.
      */
-    private static function ensureUpdatesDir(): void
+    public static function ensureUpdatesDir(): void
     {
         $cacheDir   = LUMORA_ROOT . 'cache';
         $updatesDir = self::updatesDir();

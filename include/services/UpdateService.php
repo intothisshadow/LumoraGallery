@@ -7,7 +7,10 @@ declare(strict_types=1);
  * Checks for new Lumora releases via the configured release provider
  * (see AbstractUpdateProvider::createFromConfig() — GitHubUpdateProvider,
  * backed by the GitHub Releases API, by default). Results are cached in the
- * config table for 24 hours so the provider is never hit on every page load.
+ * config table so the provider is never hit on every page load. The cache
+ * lifetime follows the `update_check_frequency` config key ('daily' — 24
+ * hours, default — or 'weekly' — 7 days; see admin/update.php's Update
+ * Settings panel).
  *
  * This class previously queried a fixed JSON endpoint hosted on the Lumora
  * website (coding.unloved-heart.net/lumora/update.json). That dependency has
@@ -31,8 +34,11 @@ if (!defined('LUMORA_ENTRY')) exit('Direct access denied.');
 
 class UpdateService
 {
-    /** Cache TTL in seconds (24 hours). */
-    private const CACHE_TTL = 86400;
+    /** Cache TTL for the 'daily' check-frequency setting (24 hours). */
+    private const CACHE_TTL_DAILY = 86400;
+
+    /** Cache TTL for the 'weekly' check-frequency setting (7 days). */
+    private const CACHE_TTL_WEEKLY = 604800;
 
     /** Config key — raw JSON payload from the last successful fetch. */
     private const CACHE_JSON = 'update_check_cache';
@@ -43,13 +49,32 @@ class UpdateService
     // ── Cache helpers ─────────────────────────────────────────────────────────
 
     /**
+     * Return the cache lifetime in seconds for the currently configured
+     * `update_check_frequency` ('daily' — the default — or 'weekly').
+     */
+    public static function cacheTtlSeconds(): int
+    {
+        $freq = (string) LumoraConfig::get('update_check_frequency', 'daily');
+        return $freq === 'weekly' ? self::CACHE_TTL_WEEKLY : self::CACHE_TTL_DAILY;
+    }
+
+    /**
      * Return true when no valid cache entry exists or the cache is older
-     * than CACHE_TTL seconds.
+     * than the configured check-frequency interval.
      */
     public static function isCacheExpired(): bool
     {
         $at = (int) LumoraConfig::get(self::CACHE_AT, '0');
-        return $at === 0 || (time() - $at) >= self::CACHE_TTL;
+        return $at === 0 || (time() - $at) >= self::cacheTtlSeconds();
+    }
+
+    /**
+     * Return true when automatic update checks are enabled
+     * (`update_auto_check` config key, default enabled).
+     */
+    public static function isAutoCheckEnabled(): bool
+    {
+        return ((string) LumoraConfig::get('update_auto_check', '1')) === '1';
     }
 
     /**
@@ -83,6 +108,9 @@ class UpdateService
      *   installed: string,
      *   latest: string|null,
      *   release_date: string|null,
+     *   release_name: string|null,
+     *   release_notes: string|null,
+     *   prerelease: bool|null,
      *   download_url: string|null,
      *   changelog_url: string|null,
      *   minimum_php: string|null,
@@ -109,6 +137,9 @@ class UpdateService
      *   installed: string,
      *   latest: string|null,
      *   release_date: string|null,
+     *   release_name: string|null,
+     *   release_notes: string|null,
+     *   prerelease: bool|null,
      *   download_url: string|null,
      *   changelog_url: string|null,
      *   minimum_php: string|null,
@@ -190,6 +221,87 @@ class UpdateService
         return $data;
     }
 
+    // ── Release notes rendering ───────────────────────────────────────────────
+
+    /**
+     * Render release notes Markdown (as returned by the provider) to safe,
+     * lightweight HTML for inline display in the admin UI.
+     *
+     * Supports the subset of Markdown release notes commonly use: `#`/`##`/`###`
+     * headings, `**bold**` emphasis, `- `/`* ` bullet lists, and paragraphs.
+     * The input is HTML-escaped first, so this can never introduce raw HTML
+     * from an untrusted release body.
+     */
+    public static function renderReleaseNotesHtml(?string $notes): string
+    {
+        if ($notes === null || trim($notes) === '') {
+            return '<p class="text-muted mb-0">No release notes provided.</p>';
+        }
+
+        $escaped = h($notes);
+        $lines   = explode("\n", $escaped);
+
+        $html       = '';
+        $inList     = false;
+        $paragraph  = [];
+
+        $flushParagraph = function () use (&$paragraph, &$html): void {
+            if (!empty($paragraph)) {
+                $html .= '<p>' . implode(' ', $paragraph) . '</p>';
+                $paragraph = [];
+            }
+        };
+
+        foreach ($lines as $line) {
+            $trimmed = trim($line);
+
+            // Bold emphasis: **text** → <strong>text</strong>
+            $trimmed = (string) preg_replace('/\*\*(.+?)\*\*/', '<strong>$1</strong>', $trimmed);
+
+            if ($trimmed === '') {
+                $flushParagraph();
+                if ($inList) { $html .= '</ul>'; $inList = false; }
+                continue;
+            }
+
+            // Headings.
+            if (preg_match('/^###\s+(.*)$/', $trimmed, $m)) {
+                $flushParagraph();
+                if ($inList) { $html .= '</ul>'; $inList = false; }
+                $html .= '<h6 class="mt-3">' . $m[1] . '</h6>';
+                continue;
+            }
+            if (preg_match('/^##\s+(.*)$/', $trimmed, $m)) {
+                $flushParagraph();
+                if ($inList) { $html .= '</ul>'; $inList = false; }
+                $html .= '<h5 class="mt-3">' . $m[1] . '</h5>';
+                continue;
+            }
+            if (preg_match('/^#\s+(.*)$/', $trimmed, $m)) {
+                $flushParagraph();
+                if ($inList) { $html .= '</ul>'; $inList = false; }
+                $html .= '<h4 class="mt-3">' . $m[1] . '</h4>';
+                continue;
+            }
+
+            // Bullet list items.
+            if (preg_match('/^[-*]\s+(.*)$/', $trimmed, $m)) {
+                $flushParagraph();
+                if (!$inList) { $html .= '<ul class="mb-2">'; $inList = true; }
+                $html .= '<li>' . $m[1] . '</li>';
+                continue;
+            }
+
+            if ($inList) { $html .= '</ul>'; $inList = false; }
+            $paragraph[] = $trimmed;
+        }
+
+        $flushParagraph();
+        if ($inList) $html .= '</ul>';
+
+        return $html !== '' ? $html : '<p class="text-muted mb-0">No release notes provided.</p>';
+    }
+
     // ── Internal ──────────────────────────────────────────────────────────────
 
     /**
@@ -203,6 +315,9 @@ class UpdateService
      *   installed: string,
      *   latest: string|null,
      *   release_date: string|null,
+     *   release_name: string|null,
+     *   release_notes: string|null,
+     *   prerelease: bool|null,
      *   download_url: string|null,
      *   changelog_url: string|null,
      *   minimum_php: string|null,
@@ -222,6 +337,9 @@ class UpdateService
                 'installed'     => $installed,
                 'latest'        => null,
                 'release_date'  => null,
+                'release_name'  => null,
+                'release_notes' => null,
+                'prerelease'    => null,
                 'download_url'  => null,
                 'changelog_url' => null,
                 'minimum_php'   => null,
@@ -232,9 +350,12 @@ class UpdateService
 
         $latest        = isset($data['latest_version']) ? trim((string) $data['latest_version']) : null;
         $release_date  = isset($data['release_date'])   ? trim((string) $data['release_date'])   : null;
+        $release_name  = isset($data['release_name'])   ? trim((string) $data['release_name'])   : null;
+        $release_notes = isset($data['release_notes'])  ? (string) $data['release_notes']         : null;
         $download_url  = isset($data['download_url'])   ? trim((string) $data['download_url'])   : null;
         $changelog_url = isset($data['changelog_url'])  ? trim((string) $data['changelog_url'])  : null;
         $minimum_php   = isset($data['minimum_php'])    ? trim((string) $data['minimum_php'])    : null;
+        $prerelease    = array_key_exists('prerelease', $data) ? (bool) $data['prerelease']        : null;
 
         if ($latest === null || $latest === '') {
             return [
@@ -242,6 +363,9 @@ class UpdateService
                 'installed'     => $installed,
                 'latest'        => null,
                 'release_date'  => $release_date,
+                'release_name'  => $release_name,
+                'release_notes' => $release_notes,
+                'prerelease'    => $prerelease,
                 'download_url'  => $download_url,
                 'changelog_url' => $changelog_url,
                 'minimum_php'   => $minimum_php,
@@ -259,6 +383,9 @@ class UpdateService
             'installed'     => $installed,
             'latest'        => $latest,
             'release_date'  => $release_date,
+            'release_name'  => $release_name,
+            'release_notes' => $release_notes,
+            'prerelease'    => $prerelease,
             'download_url'  => $download_url,
             'changelog_url' => $changelog_url,
             'minimum_php'   => $minimum_php,

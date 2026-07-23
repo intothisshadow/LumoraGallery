@@ -163,7 +163,7 @@ function lum_admin_pagination(array $pag): string
  *
  * @param string $title   Page title (shown in <title> and <h1>).
  * @param string $content Main content HTML.
- * @param string $active  Active sidebar item key (matches $nav entries).
+ * @param string $active  Active sidebar item key (matches an entry key in $nav_sections).
  */
 function lum_admin_page(string $title, string $content, string $active = ''): never
 {
@@ -233,42 +233,99 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
         ? ' <span class="badge bg-danger" style="font-size:.6rem;vertical-align:middle;line-height:1">!</span>'
         : '';
 
-    $nav_items = [
-        'dashboard'    => ['icon' => '📊', 'label' => 'Dashboard',              'url' => 'dashboard.php',    'permission' => null],
-        'batch'        => ['icon' => '⬆️', 'label' => 'Batch Add',              'url' => 'batch.php',        'permission' => 'batch_add'],
-        'categories'   => ['icon' => '📁', 'label' => 'Categories',             'url' => 'categories.php',   'permission' => 'manage_albums'],
-        'albums'       => ['icon' => '🖼️', 'label' => 'Albums',                 'url' => 'albums.php',       'permission' => 'manage_albums'],
-        'images'       => ['icon' => '📸', 'label' => 'Images',                 'url' => 'images.php',       'permission' => ['manage_images', 'edit_own_images']],
-        'config'       => ['icon' => '⚙️', 'label' => 'Configuration',          'url' => 'config.php',       'permission' => 'site_configuration'],
-        'tools'        => ['icon' => '🔧', 'label' => 'Tools',                  'url' => 'tools.php',        'permission' => 'maintenance_tools'],
-        'installation' => ['icon' => '🖥️', 'label' => 'Installation',           'url' => 'installation.php', 'permission' => 'site_configuration'],
-        'migrate'      => ['icon' => '📥', 'label' => 'Import',                 'url' => 'migrate.php',      'permission' => 'site_configuration'],
-        'updates'      => ['icon' => '🔔', 'label' => 'Updates' . $update_badge, 'url' => 'update.php',       'permission' => 'view_updates'],
-        'account'      => ['icon' => '👤', 'label' => 'Account',                'url' => 'account.php',      'permission' => null],
-        'users'        => ['icon' => '👥', 'label' => 'Users',                  'url' => 'users.php',        'permission' => 'user_management'],
-        'groups'       => ['icon' => '🛡️', 'label' => 'Groups',                'url' => 'groups.php',       'permission' => 'user_management'],
+    // Sidebar nav grouped into sections (LG-32): Gallery for day-to-day content
+    // management, Settings for gallery configuration, Maintenance for admin/system
+    // tasks, and Users for account/permission management. Dashboard stays top-level.
+    $nav_sections = [
+        ['label' => null, 'items' => [
+            'dashboard' => ['icon' => '📊', 'label' => 'Dashboard', 'url' => 'dashboard.php', 'permission' => null],
+        ]],
+        ['label' => 'Gallery', 'items' => [
+            'batch'      => ['icon' => '⬆️', 'label' => 'Batch Add',  'url' => 'batch.php',      'permission' => 'batch_add'],
+            'categories' => ['icon' => '📁', 'label' => 'Categories', 'url' => 'categories.php', 'permission' => 'manage_albums'],
+            'albums'     => ['icon' => '🖼️', 'label' => 'Albums',     'url' => 'albums.php',     'permission' => 'manage_albums'],
+            'images'     => ['icon' => '📸', 'label' => 'Images',     'url' => 'images.php',     'permission' => ['manage_images', 'edit_own_images']],
+        ]],
+        ['label' => 'Settings', 'items' => [
+            'config' => ['icon' => '⚙️', 'label' => 'Configuration', 'url' => 'config.php', 'permission' => 'site_configuration'],
+        ]],
+        ['label' => 'Maintenance', 'items' => [
+            'migrate'      => ['icon' => '📥', 'label' => 'Import',                   'url' => 'migrate.php',      'permission' => 'site_configuration'],
+            'updates'      => ['icon' => '🔔', 'label' => 'Updates' . $update_badge,  'url' => 'update.php',       'permission' => 'view_updates'],
+            'tools'        => ['icon' => '🔧', 'label' => 'Tools',                    'url' => 'tools.php',        'permission' => 'maintenance_tools'],
+            'installation' => ['icon' => '🖥️', 'label' => 'Installation',             'url' => 'installation.php', 'permission' => 'site_configuration'],
+        ]],
+        ['label' => 'Users', 'items' => [
+            'account' => ['icon' => '👤', 'label' => 'My Account', 'url' => 'account.php', 'permission' => null],
+            'users'   => ['icon' => '👥', 'label' => 'Users',      'url' => 'users.php',    'permission' => 'user_management'],
+            'groups'  => ['icon' => '🛡️', 'label' => 'Groups',    'url' => 'groups.php',   'permission' => 'user_management'],
+        ]],
     ];
 
-    // Hide nav items the current user's role does not grant access to.
     // 'permission' === null means every logged-in role may see the item
     // (dashboard, account); an array means any one of the listed permissions
     // is sufficient (mirrors lumora_require_any_permission()).
-    $nav_items = array_filter($nav_items, static function (array $item): bool {
+    $has_nav_permission = static function (array $item): bool {
         $perm = $item['permission'];
         if ($perm === null) return true;
         foreach ((array) $perm as $p) {
             if (lumora_has_permission($p)) return true;
         }
         return false;
-    });
+    };
+
+    // Collapsible sidebar sections (LG-32 addendum) — Gallery stays always
+    // expanded (primary day-to-day workflow); Dashboard has no section
+    // header at all. Expand/collapse state persists per-browser via
+    // localStorage (see the inline script right after the nav markup
+    // below); a section containing the current page always renders
+    // expanded regardless of its stored state, via data-nav-force-open.
+    $collapsible_labels = ['Settings', 'Maintenance', 'Users'];
 
     $nav_html = '';
-    foreach ($nav_items as $key => $item) {
-        $cls = ($key === $active) ? ' class="active"' : '';
-        $nav_html .= '<li' . $cls . '>'
-            . '<a href="' . $admin_url . h($item['url']) . '">'
-            . $item['icon'] . ' ' . $item['label']
-            . '</a></li>';
+    foreach ($nav_sections as $section) {
+        $visible_items = array_filter($section['items'], $has_nav_permission);
+        if (empty($visible_items)) continue;
+
+        $label          = $section['label'];
+        $is_collapsible = $label !== null && in_array($label, $collapsible_labels, true);
+        $slug           = $is_collapsible ? strtolower($label) : '';
+        $contains_active = $is_collapsible && array_key_exists($active, $visible_items);
+
+        if ($label !== null) {
+            if ($is_collapsible) {
+                $nav_html .= '<li class="lum-admin-nav-heading">'
+                    . '<button type="button" class="lum-admin-nav-toggle" data-nav-toggle="' . h($slug) . '"'
+                    . ' aria-expanded="true" aria-controls="lum-nav-group-' . h($slug) . '">'
+                    . '<span>' . h($label) . '</span>'
+                    . '<svg class="lum-admin-nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+                    . ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+                    . '<polyline points="6 9 12 15 18 9"></polyline></svg>'
+                    . '</button></li>';
+            } else {
+                $nav_html .= '<li class="lum-admin-nav-heading"><span class="lum-admin-nav-heading-text">'
+                    . h($label) . '</span></li>';
+            }
+        }
+
+        if ($is_collapsible) {
+            $nav_html .= '<li class="lum-admin-nav-group" id="lum-nav-group-' . h($slug) . '"'
+                . ' data-nav-group="' . h($slug) . '"'
+                . ($contains_active ? ' data-nav-force-open="1"' : '') . '>'
+                . '<ul class="lum-admin-nav-sub list-unstyled m-0 p-0">';
+        }
+
+        foreach ($visible_items as $key => $item) {
+            $cls = ($key === $active) ? ' class="active"' : '';
+            $nav_html .= '<li' . $cls . '>'
+                . '<a href="' . $admin_url . h($item['url']) . '">'
+                . $item['icon'] . ' ' . $item['label']
+                . '</a></li>';
+        }
+
+        if ($is_collapsible) {
+            $nav_html .= '</ul></li>';
+        }
     }
 
     echo <<<HTML
@@ -339,6 +396,39 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
     <ul class="lum-admin-nav list-unstyled m-0 p-0">
       {$nav_html}
     </ul>
+    <script>
+    (function () {
+      'use strict';
+      var STORAGE_KEY = 'lum_adm_nav_collapsed';
+      var state = {};
+      try { state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {}; } catch (e) { state = {}; }
+
+      document.querySelectorAll('.lum-admin-nav-toggle').forEach(function (btn) {
+        var slug  = btn.getAttribute('data-nav-toggle');
+        var group = document.getElementById('lum-nav-group-' + slug);
+        if (!group) return;
+
+        // A section containing the current page always starts expanded,
+        // regardless of its stored collapsed state, so you never land on a
+        // page whose own nav item is hidden.
+        var forceOpen = group.hasAttribute('data-nav-force-open');
+        var collapsed = !forceOpen && !!state[slug];
+
+        function apply(isCollapsed) {
+          btn.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+          group.classList.toggle('lum-admin-nav-collapsed', isCollapsed);
+        }
+        apply(collapsed);
+
+        btn.addEventListener('click', function () {
+          collapsed = !collapsed;
+          apply(collapsed);
+          state[slug] = collapsed;
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+        });
+      });
+    })();
+    </script>
   </aside>
 
   <!-- Main -->

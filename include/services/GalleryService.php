@@ -1186,17 +1186,36 @@ class GalleryService
         );
     }
 
-    /** Most-viewed approved images (public albums only). */
-    public static function getMostViewedImages(int $limit = 48): array
+    /**
+     * Most-viewed approved images (public albums only), optionally scoped to
+     * a single album or category. $album_id takes precedence over $cat_id
+     * when both are given.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function getMostViewedImages(int $limit = 48, ?int $album_id = null, ?int $cat_id = null): array
     {
+        $where  = ['i.approved = 1', 'a.visibility = 0'];
+        $params = [];
+
+        if ($album_id !== null) {
+            $where[]  = 'i.album_id = ?';
+            $params[] = $album_id;
+        } elseif ($cat_id !== null) {
+            $where[]  = 'a.category_id = ?';
+            $params[] = $cat_id;
+        }
+
+        $params[] = $limit;
+
         return LumoraDB::fetchAll(
             'SELECT i.*, a.folder, a.title AS album_title
              FROM `{PREFIX}images` i
              JOIN `{PREFIX}albums` a ON a.id = i.album_id
-             WHERE i.approved = 1 AND a.visibility = 0
+             WHERE ' . implode(' AND ', $where) . '
              ORDER BY i.hits DESC
              LIMIT ?',
-            [$limit]
+            $params
         );
     }
 

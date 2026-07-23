@@ -4,6 +4,65 @@ Long-term archive of completed work, migrated from TODO.md on release.
 
 ---
 
+## v1.12.0 — Released 2026-07-23
+
+### Added
+
+- **LiteSpeed/OpenLiteSpeed support** (LG-033): new `ServerEnvironmentService::detect()`
+  identifies the current web server plus HTTP/2, HTTP/3, Brotli, and active-LSCache
+  capabilities, shown on the admin Installation page's System Information panel. New
+  `CacheHeaderService` manages two independent, additive `.htaccess` blocks: standard
+  browser cache-control headers for static assets (long-lived immutable caching for
+  images/thumbnails/fonts, a shorter window for CSS/JS — Apache/LiteSpeed compatible),
+  and a separate opt-in LSCache page-caching block (`CacheEnable`/configurable `TTL`) for
+  hosts without server-level cache configuration access (e.g. some DirectAdmin setups).
+  A new opt-in `litespeed_cache_purge` config toggle (Admin → Configuration →
+  Performance) sends an `X-LiteSpeed-Purge` header after any admin content change,
+  wired once for every admin-panel POST request rather than at each individual
+  mutation call site. Follow-up fixes found via live testing: public pages now start a
+  PHP session lazily (only for admin requests or requests already carrying a session
+  cookie) via new `lumora_ensure_session()`, since the previous unconditional
+  `session_start()` sent `Cache-Control: no-store` on every response and defeated all
+  caching regardless of the purge toggle; new `admin/.htaccess` (`CacheLookup off`)
+  adds explicit LSCache exclusion for the admin panel as defense-in-depth.
+- **`?view=most_viewed` now respects the current album or category context** (LG-33):
+  `GalleryService::getMostViewedImages()` gained optional `$album_id`/`$cat_id`
+  filters; the "Most Viewed" nav link and page heading now reflect whichever album or
+  category is currently being browsed instead of always showing the gallery-wide list.
+- **Admin sidebar reorganized into Gallery/Settings/Maintenance/Users sections**
+  (LG-32), with Settings/Maintenance/Users collapsible — toggle button with a rotating
+  chevron indicator, state persisted per-browser via `localStorage`, and the section
+  containing the current page always auto-expanding regardless of stored state.
+- **Admin → Updates page redesigned to align with FanUpdate Redux** (TODO #10):
+  consolidated Installed/Status/Source metadata grid, an interactive Latest Release
+  card (stability badge, Markdown-rendered release notes, checksum verification,
+  re-download action), a Backups panel (create/restore/delete ZIP snapshots, up to 3
+  retained), a System Status table, and an Update Settings form (release channel,
+  automatic-check toggle/frequency, optional GitHub token).
+- **Theme preview (`?theme=`) now persists across category and album navigation**
+  (TODO #9): every internal category/album/nav/pagination link now carries the
+  `theme` query parameter forward for the rest of the preview session.
+
+### Fixed
+
+- **Configuration page's "Save Settings" button moved out of "Upload & Image Limits"**
+  (LG-34) into its own clearly-labeled, distinctly-styled card, so it no longer reads
+  as scoped to just that one section despite always having saved the whole page.
+- **Dead forwarding wrappers removed from `include/template.php`**
+  (`lumora_custom_header()`/`lumora_custom_footer()`) — leftover from the Custom HTML
+  removal below; would have fatally errored if ever called.
+- **Classic Fansite theme: section titles unreadable against their background bar** —
+  a CSS specificity conflict between `.lum-section-title` and the theme's own heading
+  rule was silently overriding the intended light text colour.
+
+### Removed
+
+- **"Custom HTML (optional)" config feature** (Custom Header/Footer File Path,
+  `{CUSTOM_HEADER}`/`{CUSTOM_FOOTER}` template tokens) — theme authors now edit
+  `template.html` directly, which every existing custom theme already did in practice.
+
+---
+
 ## v1.11.0 — Released 2026-07-13
 
 ### Changed

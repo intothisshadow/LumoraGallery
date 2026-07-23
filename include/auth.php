@@ -10,7 +10,11 @@ declare(strict_types=1);
  * UserService::ROLE_PERMISSIONS. lumora_require_admin() remains available
  * for pages that are strictly admin-only (site configuration, user
  * management, updates, installation, import).
- * Sessions are started by bootstrap.php before these functions are called.
+ * Sessions are started eagerly by bootstrap.php for admin-panel requests and
+ * any request that already carries a session cookie; public-page functions
+ * that write $_SESSION on demand (lumora_csrf_token(),
+ * lumora_check_remember_cookie()) call lumora_ensure_session() themselves
+ * first — see functions.php and bootstrap.php's step 12 comment.
  *
  * Persistent "Remember Me" uses a split-token scheme:
  *   - Cookie value:  selector (32 hex chars) + ':' + validator (64 hex chars)
@@ -330,9 +334,16 @@ function lumora_require_image_access(int $imageId): void
 
 /**
  * Return (and create if absent) the CSRF token for this session.
+ *
+ * Every current caller is under admin/, where bootstrap.php already starts
+ * a session eagerly — lumora_ensure_session() here is a defensive no-op for
+ * those, and only matters if a future public page ever needs a CSRF-
+ * protected form, where the session must exist before the token can be
+ * generated and actually persisted.
  */
 function lumora_csrf_token(): string
 {
+    lumora_ensure_session();
     if (empty($_SESSION['lumora_csrf'])) {
         $_SESSION['lumora_csrf'] = bin2hex(random_bytes(32));
     }
@@ -483,6 +494,12 @@ function lumora_check_remember_cookie(): bool
 
     // Update last-login and rebuild the session.
     LumoraDB::query('UPDATE `{PREFIX}users` SET last_login = NOW() WHERE id = ?', [$user['id']]);
+
+    // A visitor with a valid remember-me cookie but no active session yet
+    // (e.g. their PHPSESSID cookie expired at browser close, or bootstrap.php
+    // never started one for this request because it's a public page) still
+    // needs a real session to be auto-logged back in — start one on demand.
+    lumora_ensure_session();
 
     $_SESSION[LUMORA_SESSION_KEY] = [
         'user_id'  => (int) $user['id'],

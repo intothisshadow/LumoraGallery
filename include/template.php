@@ -26,10 +26,8 @@ function lumora_render_page(string $content, array $extra = []): void
 
 function lumora_render_nav(): string               { return ThemeRenderer::renderNav(); }
 
-// ── Custom header / footer ────────────────────────────────────────────────────
+// ── Powered by ────────────────────────────────────────────────────────────────
 
-function lumora_custom_header(): string            { return ThemeRenderer::customHeader(); }
-function lumora_custom_footer(): string            { return ThemeRenderer::customFooter(); }
 function lumora_render_powered_by(): string        { return ThemeRenderer::renderPoweredBy(); }
 
 // ── Breadcrumb ────────────────────────────────────────────────────────────────

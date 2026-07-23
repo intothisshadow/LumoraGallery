@@ -54,6 +54,7 @@ if ($image_id === 0) {
 }
 
 // Session throttle: count at most once per image per session.
+lumora_ensure_session();
 $session_key = 'img_hit_' . $image_id;
 
 if (empty($_SESSION[$session_key])) {

@@ -48,6 +48,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    // ── Static asset cache headers (LG-033) ─────────────────────────────────────
+    if ($act === 'write_cache_headers') {
+        $result = CacheHeaderService::writeRules();
+        lum_flash(
+            $result['success'] ? 'Cache-control rules written to .htaccess.' : $result['error'],
+            $result['success'] ? 'success' : 'danger'
+        );
+        lumora_redirect($self);
+    }
+
+    if ($act === 'remove_cache_headers') {
+        $result = CacheHeaderService::removeRules();
+        lum_flash(
+            $result['success'] ? 'Cache-control rules removed from .htaccess.' : $result['error'],
+            $result['success'] ? 'success' : 'danger'
+        );
+        lumora_redirect($self);
+    }
+
+    // ── LiteSpeed page caching, opt-in (LG-033 follow-up) ───────────────────────
+    if ($act === 'write_page_cache') {
+        $ttl = (int) LumoraConfig::sanitizeValue('litespeed_page_cache_ttl', $_POST['page_cache_ttl'] ?? '0');
+        if ($ttl <= 0) {
+            lum_flash('Enter a TTL greater than 0 seconds to enable page caching.', 'danger');
+            lumora_redirect($self);
+        }
+        $result = CacheHeaderService::writePageCacheRules($ttl);
+        if ($result['success']) {
+            LumoraConfig::set('litespeed_page_cache_ttl', (string) $ttl);
+        }
+        lum_flash(
+            $result['success'] ? 'Page caching enabled (' . $ttl . 's TTL).' : $result['error'],
+            $result['success'] ? 'success' : 'danger'
+        );
+        lumora_redirect($self);
+    }
+
+    if ($act === 'remove_page_cache') {
+        $result = CacheHeaderService::removePageCacheRules();
+        if ($result['success']) {
+            LumoraConfig::set('litespeed_page_cache_ttl', '0');
+        }
+        lum_flash(
+            $result['success'] ? 'Page caching disabled.' : $result['error'],
+            $result['success'] ? 'success' : 'danger'
+        );
+        lumora_redirect($self);
+    }
+
     // ── Apply settings ────────────────────────────────────────────────────────
     if ($act === 'update') {
         $password = isset($_POST['current_password']) ? (string) $_POST['current_password'] : '';
@@ -101,10 +150,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ── Data preparation ──────────────────────────────────────────────────────────
-$env    = InstallationService::detectEnvironment();
-$stored = InstallationService::getStoredConfig();
-$diffs  = InstallationService::detectChanges();
-$recent = InstallationService::getRecentChanges(15);
+$env        = InstallationService::detectEnvironment();
+$stored     = InstallationService::getStoredConfig();
+$diffs      = InstallationService::detectChanges();
+$recent     = InstallationService::getRecentChanges(15);
+$server_env = ServerEnvironmentService::detect();
+$cache_hdrs = CacheHeaderService::status();
+$page_cache = CacheHeaderService::pageCacheStatus();
 
 // Pre-escaped values for HTML attributes and content.
 $v_stored_url   = h($stored['base_url']);
@@ -132,6 +184,38 @@ $cache_badge = $cache_ok
 $https_badge = $env['https']
     ? '<span class="badge bg-success ms-2">HTTPS active</span>'
     : '<span class="badge bg-secondary ms-2">HTTP only</span>';
+
+// ── Web server & capability detection (LG-033) ──────────────────────────────
+$v_server_name = h($server_env['name']);
+$v_server_raw  = h($server_env['raw']);
+$litespeed_badge = $server_env['is_litespeed']
+    ? '<span class="badge bg-success ms-2">LiteSpeed detected</span>'
+    : '<span class="badge bg-secondary ms-2">Not LiteSpeed</span>';
+
+$capability_badge = static function (bool $supported, string $label): string {
+    return $supported
+        ? '<span class="badge bg-success me-1">✓ ' . h($label) . '</span>'
+        : '<span class="badge bg-secondary me-1">— ' . h($label) . '</span>';
+};
+$capabilities_html = $capability_badge($server_env['http2'], 'HTTP/2')
+    . $capability_badge($server_env['http3'], 'HTTP/3')
+    . $capability_badge($server_env['brotli'], 'Brotli')
+    . $capability_badge($server_env['lscache_active'], 'LSCache active');
+
+$cache_hdrs_badge = $cache_hdrs['managed_present']
+    ? '<span class="badge bg-success ms-2">✓ installed</span>'
+    : '<span class="badge bg-secondary ms-2">not installed</span>';
+$v_cache_hdrs_path = h($cache_hdrs['path']);
+$cache_hdrs_action_label   = $cache_hdrs['managed_present'] ? '↻ Update' : '⬇ Install';
+$cache_hdrs_remove_disabled = $cache_hdrs['managed_present'] ? '' : ' disabled';
+
+$page_cache_badge = $page_cache['managed_present']
+    ? '<span class="badge bg-success ms-2">✓ enabled</span>'
+    : '<span class="badge bg-secondary ms-2">disabled</span>';
+$stored_page_cache_ttl = (int) lumora_config('litespeed_page_cache_ttl', '0');
+$v_page_cache_ttl = h((string) ($stored_page_cache_ttl > 0 ? $stored_page_cache_ttl : 600));
+$page_cache_action_label    = $page_cache['managed_present'] ? '↻ Update' : '⚡ Enable';
+$page_cache_remove_disabled = $page_cache['managed_present'] ? '' : ' disabled';
 
 // Detected-changes notice.
 $diffs_html = '';
@@ -283,7 +367,11 @@ $content = <<<HTML
         </tr>
         <tr>
           <th class="text-muted small">Web server</th>
-          <td class="small">{$v_web_server}</td>
+          <td class="small">{$v_web_server}{$litespeed_badge}</td>
+        </tr>
+        <tr>
+          <th class="text-muted small">Detected capabilities</th>
+          <td class="small">{$capabilities_html}</td>
         </tr>
       </tbody>
     </table>
@@ -291,6 +379,83 @@ $content = <<<HTML
 </div>
 
 {$diffs_html}
+
+<!-- ── Static Asset Cache Headers (LG-033) ────────────────────────────────── -->
+<div class="lum-adm-card mb-4">
+  <h5 class="mb-1">🚀 Static Asset Cache Headers{$cache_hdrs_badge}</h5>
+  <p class="text-muted small mb-3">
+    Images, thumbnails, and theme CSS/JS are served directly by the web server rather than
+    through PHP, so their browser-caching headers have to come from the web server itself.
+    This installs a clearly-marked, removable block of standard <code>mod_expires</code> /
+    <code>mod_headers</code> directives into the site's root <code>.htaccess</code> — read
+    identically by Apache and LiteSpeed/OpenLiteSpeed (<code>{$v_server_name}</code> detected
+    on this server). It sets long-lived immutable caching for images/thumbnails/fonts and a
+    shorter cache window for CSS/JS, and never touches any other content already in your
+    <code>.htaccess</code>. Has no effect on nginx or Caddy, which don't read
+    <code>.htaccess</code> files — configure caching at the server level on those instead.
+  </p>
+  <p class="text-muted small mb-3">Managed file: <code class="small">{$v_cache_hdrs_path}</code></p>
+  <div class="d-flex gap-2 flex-wrap">
+    <form method="post" action="{$self_h}" class="d-inline">
+      <input type="hidden" name="action"     value="write_cache_headers">
+      <input type="hidden" name="csrf_token" value="{$csrf}">
+      <button type="submit" class="btn btn-sm btn-outline-primary">
+        {$cache_hdrs_action_label} Recommended Rules
+      </button>
+    </form>
+    <form method="post" action="{$self_h}" class="d-inline">
+      <input type="hidden" name="action"     value="remove_cache_headers">
+      <input type="hidden" name="csrf_token" value="{$csrf}">
+      <button type="submit" class="btn btn-sm btn-outline-secondary"{$cache_hdrs_remove_disabled}>
+        ✕ Remove Rules
+      </button>
+    </form>
+  </div>
+  <p class="text-muted small mt-3 mb-0">
+    Public gallery pages now start a PHP session (and its accompanying no-cache headers) only
+    when one is actually needed — an existing login, or an album/image view hit-count throttle
+    — so a first-time anonymous visit can be cached by LiteSpeed Cache or a browser. The admin
+    panel always starts a session and is additionally excluded from LSCache via
+    <code>admin/.htaccess</code> (<code>CacheLookup off</code>), independent of the session
+    cookie already doing so implicitly.
+  </p>
+</div>
+
+<!-- ── LiteSpeed Page Caching, opt-in (LG-033 follow-up) ──────────────────── -->
+<div class="lum-adm-card mb-4">
+  <h5 class="mb-1">⚡ LiteSpeed Page Caching (Advanced){$page_cache_badge}</h5>
+  <p class="text-muted small mb-3">
+    Turns on actual LiteSpeed Cache page caching for the public gallery via a
+    <code>CacheEnable</code> directive in the site's root <code>.htaccess</code> — for hosts
+    where server-level LSCache configuration isn't available to you (e.g. some
+    DirectAdmin/shared-hosting LiteSpeed setups with no WebAdmin console access). LiteSpeed-only
+    (<code>&lt;IfModule LiteSpeed&gt;</code>); a no-op block on Apache, nginx, or Caddy. Public
+    pages already send no session cookie for anonymous visitors, and the admin panel is excluded
+    via <code>admin/.htaccess</code> above — this directive only turns caching on for what's
+    already safe to cache.
+  </p>
+  <div class="alert alert-warning py-2 small mb-3">
+    <strong>Tradeoff:</strong> a page served from cache never re-executes PHP, so the album/image
+    hit counters and "Who Is Online" will undercount visits served from cache within the TTL
+    below. Pick a TTL that balances the performance benefit against how much that undercounting
+    matters to you — shorter TTLs undercount less but cache less.
+  </div>
+  <form method="post" action="{$self_h}" class="d-flex gap-2 align-items-end flex-wrap mb-0">
+    <input type="hidden" name="csrf_token" value="{$csrf}">
+    <div>
+      <label class="form-label small mb-1" for="page_cache_ttl">Cache TTL (seconds)</label>
+      <input type="number" name="page_cache_ttl" id="page_cache_ttl" min="1" max="86400"
+             value="{$v_page_cache_ttl}" class="form-control form-control-sm" style="width:140px">
+    </div>
+    <button type="submit" name="action" value="write_page_cache" class="btn btn-sm btn-outline-primary">
+      {$page_cache_action_label}
+    </button>
+    <button type="submit" name="action" value="remove_page_cache"
+            class="btn btn-sm btn-outline-secondary"{$page_cache_remove_disabled}>
+      ✕ Disable
+    </button>
+  </form>
+</div>
 
 <!-- ── Migration Scenarios ────────────────────────────────────────────────── -->
 <div class="lum-adm-card mb-4">

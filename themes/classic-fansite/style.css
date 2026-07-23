@@ -388,7 +388,15 @@ html[data-bs-theme="dark"] {
    ============================================================ */
 
 /* ── Section headings ─────────────────────────────────────── */
-.lum-section-title {
+/* Scoped as ".fs-main .lum-section-title" (two classes) rather than a  */
+/* single ".lum-section-title" so this rule's specificity beats the     */
+/* Typography rule above (".fs-main h1..h6", one class + one element).  */
+/* Section titles are always rendered as heading elements (e.g. index.php's */
+/* "Recently Updated"/"Categories"/"Latest Additions" are <h2>s), so without */
+/* this the Typography rule's --fs-head-text colour silently won over the   */
+/* intended light --fs-section-text colour, making titles unreadably dark   */
+/* against the dark --fs-section-bg background. */
+.fs-main .lum-section-title {
   font-size: .9rem;
   font-weight: 700;
   text-transform: uppercase;
