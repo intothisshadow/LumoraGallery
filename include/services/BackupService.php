@@ -3,9 +3,10 @@ declare(strict_types=1);
 /**
  * Lumora Gallery — Backup Service
  *
- * Full-installation ZIP backups for the admin "Backups" panel (Admin →
- * Updates), distinct from the config.php + database.sql backup UpdaterService
- * creates automatically as part of Stage 4 of the in-dashboard updater.
+ * Full-installation ZIP backups ("full backups") for the admin "Full Backups"
+ * panel (Admin → Updates), distinct from the lightweight "update backup"
+ * (config.php + database.sql only) UpdaterService creates automatically as
+ * part of Stage 4 of every in-dashboard update.
  *
  * A backup created here is a ZIP snapshot of the application's own code and
  * configuration (everything under LUMORA_ROOT except `albums/` and `cache/`),
@@ -203,12 +204,12 @@ class BackupService
 
         self::writeMeta($meta);
 
-        UpdaterService::logUpdate('info', "Backup created: {$filename} (" . lumora_format_bytes($size) . ')' .
+        UpdaterService::logUpdate('info', "Full backup created: {$filename} (" . lumora_format_bytes($size) . ')' .
             (!empty($removed) ? '; pruned: ' . implode(', ', $removed) : ''));
 
         return [
             'success' => true,
-            'message' => 'Backup created (' . lumora_format_bytes($size) . ').',
+            'message' => 'Full backup created (' . lumora_format_bytes($size) . ').',
             'details' => [],
         ];
     }
@@ -269,9 +270,9 @@ class BackupService
         unset($meta[$index]);
         self::writeMeta(array_values($meta));
 
-        UpdaterService::logUpdate('info', "Backup deleted: {$filename}");
+        UpdaterService::logUpdate('info', "Full backup deleted: {$filename}");
 
-        return ['success' => true, 'message' => 'Backup deleted.', 'details' => []];
+        return ['success' => true, 'message' => 'Full backup deleted.', 'details' => []];
     }
 
     // ── Restore ───────────────────────────────────────────────────────────────
@@ -431,12 +432,12 @@ class BackupService
             if ($entry['filename'] === $filename) { $version = $entry['version']; break; }
         }
 
-        UpdaterService::recordUpdateHistory($version, true, 'Restored from backup ' . $filename . '.');
-        UpdaterService::logUpdate('info', "Restored from backup: {$filename}");
+        UpdaterService::recordUpdateHistory($version, true, 'Restored from full backup ' . $filename . '.');
+        UpdaterService::logUpdate('info', "Restored from full backup: {$filename}");
 
         return [
             'success' => true,
-            'message' => 'Backup restored successfully.',
+            'message' => 'Full backup restored successfully.',
             'details' => $details,
         ];
     }

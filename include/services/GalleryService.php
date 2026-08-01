@@ -1162,6 +1162,64 @@ class GalleryService
         ) > 0;
     }
 
+    // ── Bulk Rename (LG-26) ───────────────────────────────────────────────────
+
+    /**
+     * Load specific images within a single album, in pos/id order.
+     *
+     * Used by the Bulk Rename feature to re-fetch exactly the set of images
+     * an admin selected in the Image Manager, scoped to one album, in the
+     * same order shown there — so sequential numbering in the preview
+     * matches what gets applied.
+     *
+     * @param list<int> $ids Image IDs to load.
+     * @return list<array{id: int, filename: string, pos: int, folder: string}>
+     */
+    public static function getAlbumImagesByIds(int $album_id, array $ids): array
+    {
+        if (empty($ids)) {
+            return [];
+        }
+        $ph     = implode(',', array_fill(0, count($ids), '?'));
+        $params = array_merge([$album_id], array_values($ids));
+        return LumoraDB::fetchAll(
+            "SELECT i.id, i.filename, i.pos, a.folder
+             FROM `{PREFIX}images` i
+             JOIN `{PREFIX}albums` a ON a.id = i.album_id
+             WHERE i.album_id = ? AND i.id IN ({$ph})
+             ORDER BY i.pos ASC, i.id ASC",
+            $params
+        );
+    }
+
+    /**
+     * Get the filenames of every image in an album except the given IDs.
+     *
+     * Used by the Bulk Rename feature to detect a rename target that would
+     * collide with an image outside the selected batch.
+     *
+     * @param list<int> $exclude_ids Image IDs to exclude from the result.
+     * @return list<string> Existing filenames.
+     */
+    public static function getOtherAlbumFilenames(int $album_id, array $exclude_ids): array
+    {
+        if (empty($exclude_ids)) {
+            return array_column(
+                LumoraDB::fetchAll('SELECT filename FROM `{PREFIX}images` WHERE album_id = ?', [$album_id]),
+                'filename'
+            );
+        }
+        $ph     = implode(',', array_fill(0, count($exclude_ids), '?'));
+        $params = array_merge([$album_id], array_values($exclude_ids));
+        return array_column(
+            LumoraDB::fetchAll(
+                "SELECT filename FROM `{PREFIX}images` WHERE album_id = ? AND id NOT IN ({$ph})",
+                $params
+            ),
+            'filename'
+        );
+    }
+
     // ── Gallery-wide image queries ────────────────────────────────────────────
 
     /**

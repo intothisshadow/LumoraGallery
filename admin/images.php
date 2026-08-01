@@ -12,6 +12,8 @@ declare(strict_types=1);
  *   - Delete a single image via AJAX (no <form> inside table rows).
  *   - Bulk-delete selected images (AJAX → ajax_image_delete.php).
  *   - Bulk-move selected images to another album (AJAX → ajax_image_move.php).
+ *   - Bulk-rename selected images within one album by pattern, with a
+ *     preview step (POST hand-off → rename.php; 'manage_images' only).
  *
  * GET actions:  list (default), edit
  * POST actions: save, delete
@@ -405,6 +407,17 @@ if ($show_content) {
         ? '<div class="small text-muted mt-2">You have no other assigned albums to move images into. '
           . 'Contact an administrator or moderator to get access to additional albums.</div>'
         : '';
+
+    // Bulk Rename (LG-26): scoped to a single, non-search album view only —
+    // the feature renames files within one album's folder, so it is hidden
+    // in cross-album search results — and restricted to full 'manage_images'
+    // holders even though a contributor with only 'edit_own_images' can reach
+    // this page, since renaming touches files beyond any one owner's images.
+    $rename_btn_html = ($can_manage_all && !$is_search)
+        ? '<button type="button" id="lum-bulk-rename" class="btn btn-sm btn-outline-secondary" disabled onclick="lumBulkRenameGo()">✏️ Rename Selected</button>'
+          . '<div class="vr d-none d-sm-block"></div>'
+        : '';
+
     $content .= <<<HTML
 <div class="lum-adm-card mb-3 py-2">
   <div class="d-flex flex-wrap align-items-center gap-2">
@@ -414,6 +427,7 @@ if ($show_content) {
     <div class="vr d-none d-sm-block"></div>
     <button type="button" id="lum-bulk-delete" class="btn btn-sm btn-outline-danger" disabled onclick="lumBulkDelete()">🗑 Delete Selected</button>
     <div class="vr d-none d-sm-block"></div>
+    {$rename_btn_html}
     <div class="d-flex gap-1 align-items-center flex-wrap">
       <select id="lum-move-target" class="form-select form-select-sm" style="max-width:240px"{$move_disabled_attr}>
         {$move_opts}
@@ -602,9 +616,11 @@ function lumUpdCount() {
   var cntEl  = document.getElementById('lum-sel-count');
   var delBtn = document.getElementById('lum-bulk-delete');
   var movBtn = document.getElementById('lum-bulk-move');
+  var renBtn = document.getElementById('lum-bulk-rename');
   if (cntEl)  cntEl.textContent = n + ' selected';
   if (delBtn) delBtn.disabled   = (n === 0);
   if (movBtn) movBtn.disabled   = (n === 0);
+  if (renBtn) renBtn.disabled   = (n === 0);
 }
 
 function lumSelectedIds() {
@@ -685,6 +701,33 @@ function lumBulkMove() {
     lumShowStatus(msg, (data.errors && data.errors.length) ? 'warning' : 'success');
     if (data.moved > 0) setTimeout(function() { location.reload(); }, 1400);
   });
+}
+
+/**
+ * Bulk Rename (LG-26): hand the current selection off to rename.php via a
+ * plain POST (built and submitted on the fly) rather than AJAX — the target
+ * page is a full multi-step form flow (pattern → preview → apply), not a
+ * fire-and-forget action like delete/move.
+ */
+function lumBulkRenameGo() {
+  var ids = lumSelectedIds();
+  if (ids.length === 0) return;
+  var form = document.createElement('form');
+  form.method = 'post';
+  form.action = LUM_AJAX + 'rename.php';
+  form.style.display = 'none';
+  function addField(name, value) {
+    var inp = document.createElement('input');
+    inp.type  = 'hidden';
+    inp.name  = name;
+    inp.value = value;
+    form.appendChild(inp);
+  }
+  addField('csrf_token', LUM_CSRF);
+  addField('album_id', '{$album_id_h}');
+  ids.forEach(function(id) { addField('ids[]', id); });
+  document.body.appendChild(form);
+  form.submit();
 }
 
 /** Delete a single image via AJAX. Called via onclick on each row's 🗑 button. */

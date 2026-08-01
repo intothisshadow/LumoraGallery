@@ -20,15 +20,17 @@ declare(strict_types=1);
  *         Extract → Validate → Replace files → Migrate DB → Cleanup
  *      Each step is a separate AJAX call so the browser can report granular
  *      progress.  Failed stages offer a Rollback option that restores the
- *      database and config.php from the automatic backup taken during Stage 4.
+ *      database and config.php from the automatic "update backup" taken
+ *      during Stage 4 (see item 5 below for the distinct, on-demand "full
+ *      backup").
  *
  *   4. Database migrations — independent of the file updater; applies any
  *      pending SchemaService migrations via ajax_run_migrations.php.
  *
- *   5. Full-installation backups — separate from the automatic Stage 4
- *      backup above: manual ZIP snapshots of the whole codebase + a database
- *      dump (see BackupService), with a create/restore/delete UI. Up to 3
- *      are retained.
+ *   5. Full backups — separate from the automatic "update backup" taken in
+ *      Stage 4 above: manual, on-demand ZIP snapshots of the whole codebase +
+ *      a database dump (see BackupService), with a create/restore/delete UI.
+ *      Up to 3 are retained. Rendered as the "Full Backups" card.
  *
  *   6. System status — a live read of hosting-environment requirements
  *      (PHP version, extensions, permissions, disk space) shown as a
@@ -391,9 +393,9 @@ HTML;
   <div id="lum-upd-confirm-area" class="mb-3">
     <p class="small text-muted mb-2">
       The updater will download the release archive, verify its integrity, create an automatic
-      database and configuration backup, replace application files, and run any pending database
-      migrations — all without SSH access.  <strong>Custom themes and plugins are preserved by
-      default.</strong>
+      update backup (database + configuration), replace application files, and run any pending
+      database migrations — all without SSH access.  <strong>Custom themes and plugins are
+      preserved by default.</strong>
     </p>
 
     <div class="lum-upd-confirm-box mb-3">
@@ -401,7 +403,8 @@ HTML;
         <input class="form-check-input" type="checkbox" id="lum-upd-confirm-chk">
         <label class="form-check-label fw-semibold" for="lum-upd-confirm-chk">
           ⚠️ I understand that this will replace application files. I have verified my server
-          has a backup or am relying on the automatic backup created during the update.
+          has a backup or am relying on the automatic update backup (config + database only —
+          see Full Backups below for a complete codebase snapshot) created during the update.
         </label>
       </div>
     </div>
@@ -462,7 +465,7 @@ HTML;
 HTML;
 }
 
-// ── Build Backups card ─────────────────────────────────────────────────────────
+// ── Build Full Backups card ──────────────────────────────────────────────────────
 $backups = BackupService::listBackups();
 $backup_rows = '';
 foreach ($backups as $b) {
@@ -508,11 +511,13 @@ HTML
 
 $backups_card = <<<HTML
 <div class="lum-adm-card mb-4">
-  <h5 class="mb-2">Backups</h5>
+  <h5 class="mb-2">Full Backups</h5>
   <p class="text-muted small mb-3">
-    A backup is a ZIP snapshot of the application's own code and configuration —
-    not your uploaded images, which a backup or update never touches. Up to 3 backups
-    are kept; creating a new one automatically removes the oldest beyond that.
+    A full backup is a ZIP snapshot of the application's own code, configuration, and database —
+    not your uploaded images, which a backup or update never touches. This is separate from the
+    lightweight update backup (config + database only) created automatically before every update;
+    create one here on demand for a complete, restorable snapshot. Up to 3 full backups are kept;
+    creating a new one automatically removes the oldest beyond that.
   </p>
   {$backup_now_btn}
   {$backups_table}
@@ -677,9 +682,11 @@ $content = <<<HTML
     <li>Release source: <code>{$provider_h} ({$repo_h})</code></li>
     <li>Custom themes and plugins are preserved by default during an update. To replace them with the
         versions bundled in a release, tick the relevant checkboxes on the Install Update form above.</li>
-    <li>An automatic database backup and <code>config.php</code> backup are created before any file replacement.
-        These are stored in <code>cache/.updates/backup/</code>. Separately, the Backups panel above lets you
-        create and restore full-installation ZIP snapshots on demand.</li>
+    <li>An automatic <strong>update backup</strong> (database + <code>config.php</code> only) is created before
+        any file replacement, stored in <code>cache/.updates/backup/</code>. It's what Rollback restores from
+        if a stage fails. Separately, the <strong>Full Backups</strong> panel above lets you create and restore
+        complete codebase + database ZIP snapshots on demand — use those for a full, restorable copy of the
+        installation, not just the update-time safety net.</li>
     <li>If the <code>install/</code> directory is present when an update completes, it is automatically
         removed during the cleanup step.</li>
     <li>Cryptographic signature verification is a planned future security enhancement;

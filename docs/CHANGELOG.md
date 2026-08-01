@@ -8,6 +8,72 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **In-dashboard updates now remove obsolete files after a successful
+  Replace stage (LG-37).** `UpdaterService::stageReplace()` copies the new
+  release's files over `LUMORA_ROOT` incrementally without ever deleting
+  anything — so a file renamed or removed between two releases previously
+  stayed on disk forever. A durable manifest
+  (`cache/.updates/file-manifest.json`, new `readFileManifest()`/
+  `writeFileManifest()`) now records every file installed by the last
+  successful Replace, and `removeObsoleteFiles()` deletes any manifest
+  entry no longer present in the new release once it finishes copying.
+  Scoped so it can never delete anything outside the application's own
+  core files: a new `ALWAYS_PROTECTED` list (`config.php`, `albums/`,
+  `cache/`) is checked independently of the stage's own `$preserve` array,
+  and `$preserve` itself (which already includes `themes`/`plugins` when
+  their preserve config is on) is also honored — so, for example, a theme
+  file tracked from an earlier run where `update_preserve_themes` was off
+  is never removed just because a later run has it preserved again. The
+  very first update after this ships is always a safe no-op (no prior
+  manifest to compare against); tracking simply begins from that install
+  onward. `listFilesRecursive()`/`removeObsoleteFiles()` take an explicit
+  root/preserve list rather than assuming `LUMORA_ROOT` internally
+  (mirroring `copyDirectory()`'s own explicit `$dst`), so the new logic is
+  unit-testable against throwaway fixture directories without touching the
+  real application source tree, unlike `stageReplace()` itself.
+
+- **Bulk Rename for images within an album (LG-26).** The Image Manager's
+  per-album bulk-select toolbar (`admin/images.php`) gains a "✏️ Rename
+  Selected" button (hidden in cross-album search results, since renaming is
+  scoped to one album's folder) that hands the selected image IDs to a new
+  page, `admin/rename.php`. There, an admin sets a naming pattern — Prefix,
+  Suffix, and a Base pattern field supporting `{name}` (original filename)
+  and `{num}` (a sequential number, with configurable start value and
+  zero-padding width) — previews every resulting filename before anything
+  changes, and only then applies it. The preview flags duplicate targets
+  within the batch and collisions with any other image already in the
+  album, refusing to apply until the pattern is adjusted. File extensions
+  are always preserved automatically and are never part of the template.
+  Applying renames both the original file and its thumbnail via a two-phase
+  temp-name swap (old → unique temp → new) so that a pattern permuting
+  existing filenames (e.g. two images trading names) can never collide
+  mid-operation; any failure at any step rolls every touched file back to
+  its original name and leaves the database untouched. Restricted to full
+  `manage_images` permission holders (not `edit_own_images` contributors),
+  since it can touch files beyond any one uploader's own images. New
+  `GalleryService::getAlbumImagesByIds()` / `::getOtherAlbumFilenames()`
+  query helpers and a new pure `lumora_build_rename_filename()` function
+  (`include/functions.php`) back the feature.
+
+### Changed
+
+- **PhotoSwipe lightbox now leaves a 5% margin around large images instead of
+  filling the viewport edge-to-edge.** Added a `paddingFn` to the PhotoSwipe init
+  in `ThemeRenderer::renderLightboxJs()`, giving very large photos ~90% of the
+  viewport instead of 100%. Applies to both bundled themes since the lightbox
+  script is shared.
+- **Clarified the naming and scope of the two update-related backups in the admin
+  Updates page.** The automatic, per-update backup (`config.php` + a database dump,
+  created before every update via `UpdaterService::stageBackup()`) is now consistently
+  called the **update backup** throughout the UI (stage label, confirmation checkbox,
+  "About Updates" notes, `Install Update` intro text) to distinguish it from the
+  manual, on-demand **full backup** (`BackupService` — a ZIP of the whole codebase +
+  config + a database dump). The manual-backup card is renamed from "Backups" to
+  "Full Backups", and both cards now explain how they differ in scope from each
+  other. No behavioural change — this is a wording/labelling clarification only.
+
 ## [1.12.0] — 2026-07-23
 
 ### Added

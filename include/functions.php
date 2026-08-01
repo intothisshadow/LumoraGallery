@@ -535,6 +535,43 @@ function image_thumb_path(array $image): string
     return lumora_album_path($image['folder']) . LUMORA_THUMB_PREFIX . $image['filename'];
 }
 
+/**
+ * Build a new filename from a Bulk Rename pattern template (LG-26).
+ *
+ * Supported tokens: {name} — the original filename without its extension;
+ * {num} — a sequential number zero-padded to $pad digits. The original file
+ * extension is always preserved and appended automatically; it is never
+ * part of the template itself, so a rename can never change a file's type.
+ *
+ * The built basename is sanitized to a safe, flat filename: path separators,
+ * control characters, and other filesystem-unsafe characters are stripped,
+ * and a result that would be empty (or only "." / "..") falls back to the
+ * original name instead. The basename is also capped at 200 characters
+ * (before the extension) to avoid filesystem path-length failures.
+ */
+function lumora_build_rename_filename(string $template, string $original_filename, int $num, int $pad): string
+{
+    $ext  = pathinfo($original_filename, PATHINFO_EXTENSION);
+    $name = pathinfo($original_filename, PATHINFO_FILENAME);
+    $pad  = max(1, min(10, $pad));
+
+    $built = strtr($template, [
+        '{name}' => $name,
+        '{num}'  => str_pad((string) max(0, $num), $pad, '0', STR_PAD_LEFT),
+    ]);
+
+    $built = (string) preg_replace('/[\/\\\\\x00-\x1F<>:"|?*]/', '', $built);
+    $built = trim($built);
+    if ($built === '' || $built === '.' || $built === '..') {
+        $built = $name;
+    }
+    if (strlen($built) > 200) {
+        $built = substr($built, 0, 200);
+    }
+
+    return $built . ($ext !== '' ? '.' . $ext : '');
+}
+
 // ── Pagination ────────────────────────────────────────────────────────────────
 
 /**

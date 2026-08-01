@@ -87,7 +87,7 @@ class UpdaterService
         self::STAGE_PREFLIGHT   => 'Pre-flight checks',
         self::STAGE_DOWNLOAD    => 'Download archive',
         self::STAGE_VERIFY      => 'Verify integrity',
-        self::STAGE_BACKUP      => 'Create backup',
+        self::STAGE_BACKUP      => 'Create update backup (config + database)',
         self::STAGE_MAINTENANCE => 'Maintenance mode',
         self::STAGE_EXTRACT     => 'Extract archive',
         self::STAGE_VALIDATE    => 'Validate files',
@@ -95,6 +95,19 @@ class UpdaterService
         self::STAGE_MIGRATE     => 'Run database migrations',
         self::STAGE_CLEANUP     => 'Cleanup & finish',
     ];
+
+    /**
+     * Top-level paths (relative to LUMORA_ROOT) that removeObsoleteFiles()
+     * must never delete, independent of whatever $preserve it was called
+     * with — belt-and-braces on top of stageReplace()'s own $preserve list,
+     * specifically so a mistake computing $preserve elsewhere can never
+     * put user-uploaded album content, the runtime cache, or config.php at
+     * risk. albums/ in particular holds user-uploaded gallery content and
+     * must never be touched by any part of the update pipeline.
+     *
+     * @var list<string>
+     */
+    private const ALWAYS_PROTECTED = ['config.php', 'albums', 'cache'];
 
     // ── Path helpers ──────────────────────────────────────────────────────────
 
@@ -138,6 +151,17 @@ class UpdaterService
     private static function maintenanceFlagFile(): string
     {
         return self::updatesDir() . '.maintenance_active';
+    }
+
+    /**
+     * Durable record of every file installed by the last successful
+     * Replace stage, used by removeObsoleteFiles() to detect files a newer
+     * release no longer ships. Unlike lock.json, this is never deleted by
+     * releaseLock() — it must survive across update sessions to be useful.
+     */
+    private static function fileManifestPath(): string
+    {
+        return self::updatesDir() . 'file-manifest.json';
     }
 
     // ── Lock file management ──────────────────────────────────────────────────
@@ -568,11 +592,16 @@ class UpdaterService
     }
 
     /**
-     * Stage 4 — Create database and configuration backup.
+     * Stage 4 — Create the automatic "update backup" (database + config.php).
      *
      * A SQL dump of all prefixed tables is created via PDO, along with a copy
      * of config.php.  Both artefacts are stored in the backup directory and
      * used by rollback() if a later stage fails.
+     *
+     * This is intentionally lightweight (config + database only, no application
+     * files) so it can run on every update without adding noticeable time or
+     * disk usage. It is distinct from BackupService's on-demand "full backup",
+     * which additionally snapshots the codebase itself.
      */
     private static function stageBackup(): array
     {
@@ -626,7 +655,7 @@ class UpdaterService
 
         self::updateLock(['backup_dir' => $backupDir]);
 
-        return self::ok(self::STAGE_BACKUP, 'Backup created.', self::STAGE_MAINTENANCE, $details);
+        return self::ok(self::STAGE_BACKUP, 'Update backup created.', self::STAGE_MAINTENANCE, $details);
     }
 
     /**
@@ -846,6 +875,13 @@ class UpdaterService
      *   Preserved by default (configurable):
      *     themes/      — set update_preserve_themes = 0 to overwrite
      *     plugins/     — set update_preserve_plugins = 0 to overwrite
+     *
+     * After copying, removeObsoleteFiles() removes any file a previous
+     * version installed that this release no longer ships — see that
+     * method's docblock. This is the only point in the pipeline that
+     * deletes application files; it never touches anything under
+     * ALWAYS_PROTECTED (config.php, albums/, cache/) regardless of what
+     * an old manifest says.
      */
     private static function stageReplace(): array
     {
@@ -897,6 +933,21 @@ class UpdaterService
 
         self::logUpdate('info', "Replace: {$stats['copied']} files updated, {$stats['skipped']} preserved");
 
+        // Remove files a previous version installed but this release no
+        // longer ships — the only way a file can go stale under this
+        // stage's copy-over-without-deleting model. Never fails the stage:
+        // the core file replacement above already succeeded, so a cleanup
+        // error here is logged as a warning, not treated as an update
+        // failure.
+        $cleanup = self::removeObsoleteFiles($srcRoot, LUMORA_ROOT, self::readFileManifest(), $preserve);
+        self::writeFileManifest($cleanup['current']);
+        if (!empty($cleanup['errors'])) {
+            self::logUpdate('warning', 'Obsolete file cleanup had errors: ' . implode('; ', $cleanup['errors']));
+        }
+        if ($cleanup['removed'] > 0) {
+            self::logUpdate('info', "Replace: {$cleanup['removed']} obsolete file(s) removed");
+        }
+
         $details = [
             '✓ ' . $stats['copied'] . ' files updated',
             '✓ ' . $stats['skipped'] . ' preserved paths left untouched',
@@ -907,6 +958,14 @@ class UpdaterService
                              : ($replacingPlugins ? '✓ plugins/ replaced (requested for this update)'
                                                   : '⚠ plugins/ overwritten (update_preserve_plugins=0)'),
         ];
+
+        if ($cleanup['removed'] > 0) {
+            $details[] = '✓ ' . $cleanup['removed'] . ' obsolete file(s) from a previous version removed';
+        }
+
+        if (!empty($cleanup['errors'])) {
+            $details[] = '⚠ Some obsolete files could not be removed — see the update log';
+        }
 
         return self::ok(self::STAGE_REPLACE, 'Application files updated.', self::STAGE_MIGRATE, $details);
     }
@@ -1620,6 +1679,187 @@ class UpdaterService
                     $stats['copied']++;
                 }
             }
+        }
+    }
+
+    /**
+     * Recursively list every file under $root, relative to $root, skipping
+     * $preserve's top-level entries — the same walk/skip rule copyDirectory()
+     * applies when copying, but building a list instead of copying anything.
+     * Pure and side-effect-free: safe to unit test directly against a
+     * throwaway fixture directory.
+     *
+     * @param list<string> $preserve Top-level entry names to skip entirely.
+     * @return list<string> File paths relative to $root, using DIRECTORY_SEPARATOR.
+     */
+    public static function listFilesRecursive(string $root, array $preserve): array
+    {
+        $files = [];
+        self::collectFilesRecursive(rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR, '', $preserve, $files);
+
+        return $files;
+    }
+
+    /**
+     * @param list<string> $preserve
+     * @param list<string> $files By-reference accumulator.
+     */
+    private static function collectFilesRecursive(string $root, string $relativePrefix, array $preserve, array &$files, bool $isRoot = true): void
+    {
+        if (!is_dir($root)) {
+            return;
+        }
+
+        foreach (new \DirectoryIterator($root) as $item) {
+            if ($item->isDot()) continue;
+
+            $name     = $item->getFilename();
+            $relative = $relativePrefix === '' ? $name : $relativePrefix . DIRECTORY_SEPARATOR . $name;
+
+            if ($isRoot && in_array($name, $preserve, true)) {
+                continue;
+            }
+
+            if ($item->isDir()) {
+                self::collectFilesRecursive($item->getPathname() . DIRECTORY_SEPARATOR, $relative, $preserve, $files, false);
+            } elseif ($item->isFile()) {
+                $files[] = $relative;
+            }
+        }
+    }
+
+    /**
+     * Read the durable file manifest written after the last successful
+     * Replace stage. Returns [] when missing, corrupt, or not a plain
+     * list — a corrupt manifest must never be treated as license to delete
+     * anything, so it's always safe (if under-protective) to fail this way.
+     *
+     * @return list<string>
+     */
+    public static function readFileManifest(): array
+    {
+        $path = self::fileManifestPath();
+        if (!file_exists($path)) return [];
+
+        $raw = file_get_contents($path);
+        if ($raw === false) return [];
+
+        try {
+            $data = json_decode($raw, associative: true, flags: JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return [];
+        }
+
+        if (!is_array($data) || !array_is_list($data)) {
+            return [];
+        }
+
+        return array_values(array_filter($data, 'is_string'));
+    }
+
+    /**
+     * @param list<string> $files
+     */
+    private static function writeFileManifest(array $files): void
+    {
+        self::ensureUpdatesDir();
+        file_put_contents(
+            self::fileManifestPath(),
+            json_encode(array_values($files), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+        );
+    }
+
+    /**
+     * Removes files that were part of a previous Replace stage's manifest
+     * but aren't part of this run's file listing — the only way a file can
+     * actually go stale under this updater's incremental copy-over-without-
+     * deleting model. Deliberately compares against $preserve (this run's
+     * configured preserve list, e.g. respecting a currently-enabled
+     * "preserve themes" toggle even if an earlier run had it disabled) AND
+     * the hardcoded ALWAYS_PROTECTED list, so albums/config.php/cache can
+     * never be removed regardless of manifest history or how $preserve was
+     * computed elsewhere.
+     *
+     * A missing/never-written manifest reads back as [], so the very first
+     * run after this exists is always a safe no-op: nothing is removed,
+     * tracking simply begins from that point on.
+     *
+     * $destRoot is an explicit parameter (rather than hardcoding LUMORA_ROOT
+     * internally) purely so this method — unlike stageReplace() as a whole —
+     * can be exercised directly against a throwaway fixture directory in
+     * tests, the same reasoning copyDirectory() already takes an explicit
+     * $dst rather than assuming LUMORA_ROOT. Production always calls this
+     * with $destRoot === LUMORA_ROOT (see stageReplace()).
+     *
+     * @param list<string> $previousManifest
+     * @param list<string> $preserve
+     * @return array{removed: int, errors: list<string>, current: list<string>}
+     */
+    public static function removeObsoleteFiles(string $srcRoot, string $destRoot, array $previousManifest, array $preserve): array
+    {
+        $current  = self::listFilesRecursive($srcRoot, $preserve);
+        $obsolete = array_diff($previousManifest, $current);
+        $destRoot = rtrim($destRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+
+        $removed = 0;
+        $errors  = [];
+
+        foreach ($obsolete as $relative) {
+            $top = strstr($relative, DIRECTORY_SEPARATOR, true);
+            $top = $top !== false ? $top : $relative;
+
+            if (in_array($top, self::ALWAYS_PROTECTED, true) || in_array($top, $preserve, true)) {
+                continue;
+            }
+
+            $target = $destRoot . $relative;
+
+            if (!file_exists($target)) {
+                continue;
+            }
+
+            try {
+                if (is_dir($target)) {
+                    self::removeDirectory($target);
+                } else {
+                    unlink($target);
+                }
+                self::pruneEmptyParents(dirname($target), $destRoot);
+                $removed++;
+            } catch (\Throwable $e) {
+                $errors[] = "Could not remove obsolete file {$relative}: " . $e->getMessage();
+            }
+        }
+
+        return ['removed' => $removed, 'errors' => $errors, 'current' => $current];
+    }
+
+    /**
+     * Removes now-empty directories walking upward from $dir, stopping at
+     * $root or the first non-empty directory. Cosmetic cleanup after
+     * removeObsoleteFiles() deletes the last file in a directory that no
+     * longer needs to exist.
+     */
+    private static function pruneEmptyParents(string $dir, string $root): void
+    {
+        $root = rtrim($root, DIRECTORY_SEPARATOR);
+        $dir  = rtrim($dir, DIRECTORY_SEPARATOR);
+
+        while ($dir !== '' && $dir !== $root && str_starts_with($dir . DIRECTORY_SEPARATOR, $root . DIRECTORY_SEPARATOR)) {
+            if (!is_dir($dir)) {
+                return;
+            }
+
+            $entries = array_diff(scandir($dir) ?: [], ['.', '..']);
+            if ($entries !== []) {
+                return;
+            }
+
+            if (!@rmdir($dir)) {
+                return;
+            }
+
+            $dir = dirname($dir);
         }
     }
 

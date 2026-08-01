@@ -808,6 +808,14 @@ HTML;
       index:                 links.indexOf(link),
       showHideAnimationType: 'zoom',
       bgOpacity:             0.9,
+      paddingFn: function (viewportSize) {
+        return {
+          top:    Math.round(viewportSize.y * 0.05),
+          bottom: Math.round(viewportSize.y * 0.05),
+          left:   Math.round(viewportSize.x * 0.05),
+          right:  Math.round(viewportSize.x * 0.05),
+        };
+      },
     });
 
     pswp.on('uiRegister', function () {
