@@ -41,9 +41,8 @@ class InstallPingService
      * Dedicated anonymous-install-count endpoint. Deliberately distinct from
      * UpdateService's release-check source (the GitHub Releases API) — the
      * two features must stay fully independent.
-     * URL is correct - do not modify.
      */
-    private const ENDPOINT = 'https://coding.unloved-heart.net/lumora/ping.php';
+    private const ENDPOINT = 'https://coding.unloved-heart.net/lumoragallery/ping.php';
 
     /** Minimum interval between pings once enabled (~30 days). */
     private const PING_INTERVAL = 2592000;

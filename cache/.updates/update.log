@@ -947,3 +947,46 @@
 [2026-08-01 17:40:26] [ERROR] Standalone download failed from https://github.com/intothisshadow/Lumora/archive/refs/tags/v1.0.1-phptest-6a6e2f8aa88bd.zip
 [2026-08-01 17:40:26] [INFO] Standalone download of v1.0.2-phptest-6a6e2f8aa89aa from https://github.com/intothisshadow/Lumora/archive/refs/tags/v1.0.2-phptest-6a6e2f8aa89aa.zip
 [2026-08-01 17:40:26] [INFO] Standalone download+verify completed for v1.0.2-phptest-6a6e2f8aa89aa
+[2026-08-04 08:20:37] [WARNING] Update session force-aborted by administrator
+[2026-08-04 08:20:37] [INFO] SHA-256 verified for v1.0.0-phptest-6a71a0d5b24e9
+[2026-08-04 08:20:37] [ERROR] SHA-256 mismatch — expected 0000000000000000000000000000000000000000000000000000000000000000, got d52f4eabdb66b70849f6ae9ef88104ad6c49c8939754770edcc1de0b09da04b2
+[2026-08-04 08:20:37] [WARNING] No SHA-256 available for v0.0.0-phptest-6a71a0d5b2c61; integrity check skipped
+[2026-08-04 08:20:37] [WARNING] No SHA-256 available for v0.0.0-phptest-6a71a0d5b2f63; integrity check skipped
+[2026-08-04 08:20:37] [INFO] Extracted 3 entries to /mnt/Winterfell/Coding/Github/Scripts/Lumora Gallery/Lumora/cache/.updates/extract/
+[2026-08-04 08:20:37] [INFO] Downloading v0.0.0-phptest-6a71a0d5b3e49 from https://example.invalid/lumora-v1.0.0.zip
+[2026-08-04 08:20:37] [INFO] Downloaded 18 B to /mnt/Winterfell/Coding/Github/Scripts/Lumora Gallery/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a71a0d5b3e49.zip
+[2026-08-04 08:20:37] [INFO] Downloading v0.0.0-phptest-6a71a0d5b3ffd from https://example.invalid/lumora-v1.0.0.zip
+[2026-08-04 08:20:37] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-08-04 08:20:37] [INFO] Downloading v0.0.0-phptest-6a71a0d5b4149 from https://example.invalid/lumora-v1.0.0.zip
+[2026-08-04 08:20:37] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-08-04 08:20:37] [INFO] Archive already present at /mnt/Winterfell/Coding/Github/Scripts/Lumora Gallery/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a71a0d5b4286.zip; skipping download
+[2026-08-04 08:20:37] [INFO] Preflight passed for v9.9.9-phptest via GitHub Releases
+[2026-08-04 08:20:37] [INFO] Preflight passed for v3.3.3-phptest via GitHub Releases
+[2026-08-04 08:20:37] [INFO] Standalone download of v1.0.0-phptest-6a71a0d5b4e2b from https://github.com/intothisshadow/LumoraGallery/archive/refs/tags/v1.0.0-phptest-6a71a0d5b4e2b.zip
+[2026-08-04 08:20:37] [INFO] Standalone download+verify completed for v1.0.0-phptest-6a71a0d5b4e2b
+[2026-08-04 08:20:37] [INFO] Standalone download of v1.0.1-phptest-6a71a0d5b506e from https://github.com/intothisshadow/LumoraGallery/archive/refs/tags/v1.0.1-phptest-6a71a0d5b506e.zip
+[2026-08-04 08:20:37] [ERROR] Standalone download failed from https://github.com/intothisshadow/LumoraGallery/archive/refs/tags/v1.0.1-phptest-6a71a0d5b506e.zip
+[2026-08-04 08:20:37] [INFO] Standalone download of v1.0.2-phptest-6a71a0d5b5154 from https://github.com/intothisshadow/LumoraGallery/archive/refs/tags/v1.0.2-phptest-6a71a0d5b5154.zip
+[2026-08-04 08:20:37] [INFO] Standalone download+verify completed for v1.0.2-phptest-6a71a0d5b5154
+[2026-08-04 08:21:35] [INFO] Full backup deleted: lumora-backup-remove-6a71a10f5c2a3.zip
+[2026-08-04 08:28:12] [WARNING] Update session force-aborted by administrator
+[2026-08-04 08:28:12] [INFO] SHA-256 verified for v1.0.0-phptest-6a71a29cdee62
+[2026-08-04 08:28:12] [ERROR] SHA-256 mismatch — expected 0000000000000000000000000000000000000000000000000000000000000000, got d90fa8cb135460aa2a0842e37adc7b19ac67d1843b2b2020bd8d4a80559b6b03
+[2026-08-04 08:28:12] [WARNING] No SHA-256 available for v0.0.0-phptest-6a71a29cdf381; integrity check skipped
+[2026-08-04 08:28:12] [WARNING] No SHA-256 available for v0.0.0-phptest-6a71a29cdf635; integrity check skipped
+[2026-08-04 08:28:12] [INFO] Extracted 3 entries to /mnt/Winterfell/Coding/Github/Scripts/Lumora Gallery/Lumora/cache/.updates/extract/
+[2026-08-04 08:28:12] [INFO] Downloading v0.0.0-phptest-6a71a29ce0507 from https://example.invalid/lumora-v1.0.0.zip
+[2026-08-04 08:28:12] [INFO] Downloaded 18 B to /mnt/Winterfell/Coding/Github/Scripts/Lumora Gallery/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a71a29ce0507.zip
+[2026-08-04 08:28:12] [INFO] Downloading v0.0.0-phptest-6a71a29ce06ae from https://example.invalid/lumora-v1.0.0.zip
+[2026-08-04 08:28:12] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-08-04 08:28:12] [INFO] Downloading v0.0.0-phptest-6a71a29ce07fe from https://example.invalid/lumora-v1.0.0.zip
+[2026-08-04 08:28:12] [ERROR] Download failed from https://example.invalid/lumora-v1.0.0.zip
+[2026-08-04 08:28:12] [INFO] Archive already present at /mnt/Winterfell/Coding/Github/Scripts/Lumora Gallery/Lumora/cache/.updates/lumora-v0.0.0-phptest-6a71a29ce0943.zip; skipping download
+[2026-08-04 08:28:12] [INFO] Preflight passed for v9.9.9-phptest via GitHub Releases
+[2026-08-04 08:28:12] [INFO] Preflight passed for v3.3.3-phptest via GitHub Releases
+[2026-08-04 08:28:12] [INFO] Standalone download of v1.0.0-phptest-6a71a29ce148f from https://github.com/intothisshadow/LumoraGallery/archive/refs/tags/v1.0.0-phptest-6a71a29ce148f.zip
+[2026-08-04 08:28:12] [INFO] Standalone download+verify completed for v1.0.0-phptest-6a71a29ce148f
+[2026-08-04 08:28:12] [INFO] Standalone download of v1.0.1-phptest-6a71a29ce16d3 from https://github.com/intothisshadow/LumoraGallery/archive/refs/tags/v1.0.1-phptest-6a71a29ce16d3.zip
+[2026-08-04 08:28:12] [ERROR] Standalone download failed from https://github.com/intothisshadow/LumoraGallery/archive/refs/tags/v1.0.1-phptest-6a71a29ce16d3.zip
+[2026-08-04 08:28:12] [INFO] Standalone download of v1.0.2-phptest-6a71a29ce17bb from https://github.com/intothisshadow/LumoraGallery/archive/refs/tags/v1.0.2-phptest-6a71a29ce17bb.zip
+[2026-08-04 08:28:12] [INFO] Standalone download+verify completed for v1.0.2-phptest-6a71a29ce17bb

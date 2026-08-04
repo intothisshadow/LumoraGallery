@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Script homepage, GitHub repository, and install-ping URLs standardised to
+  match sister script Lumora Press (LG-38).** The "Powered by" footer link
+  (`ThemeRenderer::renderPoweredBy()`) and the README's Repository link now
+  point at `https://coding.unloved-heart.net/scripts/lumoragallery` (was
+  `.../scripts/lumora`). `GitHubUpdateProvider`'s default repository
+  (`update_github_repo` config key's fallback, used for release checks,
+  changelog links, and archive download URLs) is now
+  `intothisshadow/LumoraGallery` (was `intothisshadow/Lumora`), matching the
+  GitHub repository rename. The opt-in Anonymous Install Ping
+  (`InstallPingService::ENDPOINT`) now sends to
+  `https://coding.unloved-heart.net/lumoragallery/ping.php` (was
+  `.../lumora/ping.php`).
+
 ### Added
 
 - **In-dashboard updates now remove obsolete files after a successful

@@ -355,7 +355,7 @@ Lumora automatically detects LiteSpeed and OpenLiteSpeed and can take advantage 
 | | |
 |---|---|
 | Developer | Ariane |
-| Repository | <https://coding.unloved-heart.net/scripts/lumora> |
+| Repository | <https://coding.unloved-heart.net/scripts/lumoragallery> |
 
 ---
 

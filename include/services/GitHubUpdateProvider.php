@@ -14,8 +14,8 @@ declare(strict_types=1);
  * The active channel is selected via the `update_channel` config key
  * ('stable' default, or 'prerelease' — see admin/update.php's Update Settings
  * panel). The repository is configurable via the `update_github_repo` config
- * key (default: intothisshadow/Lumora) so forks and self-hosted mirrors can
- * point to their own release source without code changes.
+ * key (default: intothisshadow/LumoraGallery) so forks and self-hosted mirrors
+ * can point to their own release source without code changes.
  *
  * An optional GitHub personal access token can be supplied via the
  * `update_github_token` config key to raise the unauthenticated API rate
@@ -37,7 +37,7 @@ if (!defined('LUMORA_ENTRY')) exit('Direct access denied.');
 class GitHubUpdateProvider extends AbstractUpdateProvider
 {
     /** Default repository identifier (owner/repo). */
-    private const DEFAULT_REPO = 'intothisshadow/Lumora';
+    private const DEFAULT_REPO = 'intothisshadow/LumoraGallery';
 
     /** GitHub REST API v3 base URL. */
     private const API_BASE = 'https://api.github.com';
@@ -54,7 +54,7 @@ class GitHubUpdateProvider extends AbstractUpdateProvider
 
     /**
      * Return the configured repository identifier (owner/repo), e.g.
-     * "intothisshadow/Lumora".
+     * "intothisshadow/LumoraGallery".
      */
     public function getSourceLabel(): string
     {

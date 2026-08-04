@@ -176,7 +176,7 @@ class UpdateService
 
     /**
      * Return a human-readable label for the configured release provider and
-     * source, e.g. "GitHub Releases (intothisshadow/Lumora)". Used in the
+     * source, e.g. "GitHub Releases (intothisshadow/LumoraGallery)". Used in the
      * admin "About Updates" panel in place of the old fixed endpoint URL.
      */
     public static function getProviderLabel(): string
