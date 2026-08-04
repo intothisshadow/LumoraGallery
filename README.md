@@ -88,7 +88,7 @@ Lumora/
 │   │   ├── UpdateService.php   Release check via the configured provider (GitHub Releases by default), version comparison, cache TTL follows the check-frequency setting (24h/7d)
 │   │   ├── SchemaService.php   Schema migration engine — discover, run, rollback PHP class migrations
 │   │   ├── AbstractUpdateProvider.php  Provider interface — fetchMetadata(), buildArchiveUrl(), factory
-│   │   ├── GitHubUpdateProvider.php    GitHub Releases API provider — metadata, SHA-256, archive URL
+│   │   ├── GitHubUpdateProvider.php    GitHub Releases API provider — metadata, SHA-256, curated ZIP asset URL (falls back to raw archive URL)
 │   │   ├── UpdaterService.php  Update orchestrator — 10-stage workflow, lock file, backup, rollback, standalone download+verify, system status checks
 │   │   ├── BackupService.php   Full-installation ZIP backups (code + config + DB dump, excluding albums/cache) — create/restore/delete, up to 3 retained
 │   │   ├── InstallationService.php  Installation settings detection, migration helpers, health checks, audit logging

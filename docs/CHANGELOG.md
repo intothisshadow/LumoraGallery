@@ -8,22 +8,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Changed
-
-- **Script homepage, GitHub repository, and install-ping URLs standardised to
-  match sister script Lumora Press (LG-38).** The "Powered by" footer link
-  (`ThemeRenderer::renderPoweredBy()`) and the README's Repository link now
-  point at `https://coding.unloved-heart.net/scripts/lumoragallery` (was
-  `.../scripts/lumora`). `GitHubUpdateProvider`'s default repository
-  (`update_github_repo` config key's fallback, used for release checks,
-  changelog links, and archive download URLs) is now
-  `intothisshadow/LumoraGallery` (was `intothisshadow/Lumora`), matching the
-  GitHub repository rename. The opt-in Anonymous Install Ping
-  (`InstallPingService::ENDPOINT`) now sends to
-  `https://coding.unloved-heart.net/lumoragallery/ping.php` (was
-  `.../lumora/ping.php`).
+## [1.13.0] — 2026-08-04
 
 ### Added
+
+- **In-dashboard updates now download a curated release ZIP instead of
+  GitHub's raw tag archive, when one is available (LG-36).**
+  `GitHubUpdateProvider::mapRelease()` now looks for a release asset named
+  `LumoraGallery-v{version}.zip` (case-insensitive) and uses its
+  `browser_download_url` for `download_url`; releases cut without that asset
+  still fall back to the previous raw-archive URL, so nothing breaks for
+  older releases. The raw tag archive includes `.git*` files and other
+  repo-internal content that shouldn't reach an end user's install.
+  `GitHubUpdateProvider::parseChecksumAsset()`'s multi-entry checksum-file
+  matching also had a latent bug fixed as part of this: it searched for the
+  substring `lumora-v{version}`, which is not present in the new
+  `LumoraGallery-v{version}.zip` filename (there's a `gallery-` in between),
+  so a `sha256sums.txt`-style checksum asset would have silently failed to
+  match once the curated ZIP shipped. The fragment is now
+  `lumoragallery-v{version}`.
 
 - **In-dashboard updates now remove obsolete files after a successful
   Replace stage (LG-37).** `UpdaterService::stageReplace()` copies the new
@@ -88,6 +91,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   config + a database dump). The manual-backup card is renamed from "Backups" to
   "Full Backups", and both cards now explain how they differ in scope from each
   other. No behavioural change — this is a wording/labelling clarification only.
+- **Script homepage, GitHub repository, and install-ping URLs standardised to
+  match sister script Lumora Press (LG-38).** The "Powered by" footer link
+  (`ThemeRenderer::renderPoweredBy()`) and the README's Repository link now
+  point at `https://coding.unloved-heart.net/scripts/lumoragallery` (was
+  `.../scripts/lumora`). `GitHubUpdateProvider`'s default repository
+  (`update_github_repo` config key's fallback, used for release checks,
+  changelog links, and archive download URLs) is now
+  `intothisshadow/LumoraGallery` (was `intothisshadow/Lumora`), matching the
+  GitHub repository rename. The opt-in Anonymous Install Ping
+  (`InstallPingService::ENDPOINT`) now sends to
+  `https://coding.unloved-heart.net/lumoragallery/ping.php` (was
+  `.../lumora/ping.php`).
 
 ## [1.12.0] — 2026-07-23
 

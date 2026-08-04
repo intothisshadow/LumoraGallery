@@ -4,6 +4,65 @@ Long-term archive of completed work, migrated from TODO.md on release.
 
 ---
 
+## v1.13.0 — Released 2026-08-04
+
+### Added
+
+- **Curated Release ZIP for GitHub Updates (LG-36).** In-dashboard updates now
+  download a curated `LumoraGallery-v{version}.zip` release asset instead of
+  GitHub's raw tag archive, when one is available — the raw archive included
+  `.git*` files and other repo-internal content that shouldn't reach an end
+  user's install. `GitHubUpdateProvider::mapRelease()` searches release
+  assets for the curated ZIP via a new `findAssetUrl()` helper and falls back
+  to the original `buildArchiveUrl()` behavior when no curated asset exists,
+  so releases cut before this feature keep working. Fixed a latent bug in
+  `parseChecksumAsset()`'s multi-entry checksum matching along the way: it
+  searched for the substring `lumora-v{version}`, not present in the new
+  `LumoraGallery-v{version}.zip` filename. New `scripts/build-release.sh`
+  packaging script assembles the ZIP from `LumoraGallery/` (excluding
+  `.git*`, root `config.php`, OS/editor cruft, and `albums/`/`cache/`
+  contents while preserving the `cache/.updates/` security stub files) and
+  writes it plus a `.sha256` checksum to `Releases/`, refusing to overwrite
+  an existing build for a version.
+- **In-dashboard updates now remove obsolete files after a successful
+  Replace stage (LG-37).** A durable manifest
+  (`cache/.updates/file-manifest.json`) records every file installed by the
+  last successful Replace stage; `UpdaterService::removeObsoleteFiles()`
+  diffs it against the new release's file listing and deletes anything no
+  longer present, once copying finishes. A hardcoded `ALWAYS_PROTECTED` list
+  (`config.php`, `albums/`, `cache/`) is checked independently of the
+  stage's own `$preserve` array so user content and config can never be
+  swept up regardless of manifest history; the very first update after this
+  ships is a safe no-op since there's no prior manifest to diff against.
+- **Bulk Rename for images within an album (LG-26).** The Image Manager's
+  per-album bulk-select toolbar gains a "✏️ Rename Selected" button leading
+  to a three-step server-side flow (`admin/rename.php`): pattern form
+  (Prefix/Suffix/Base with `{name}`/`{num}` tokens) → preview (flags
+  duplicate/colliding targets) → apply. Renames both the original file and
+  its thumbnail via a two-phase temp-name swap so permuting existing
+  filenames can never collide mid-operation, rolling back fully on any
+  failure. Restricted to full `manage_images` permission holders.
+
+### Changed
+
+- **Clarified the naming and scope of the two update-related backups in the
+  admin Updates page (LG-35).** The automatic, per-update backup is now
+  consistently called the **update backup**; the manual, on-demand ZIP
+  backup is now the **full backup** (card renamed from "Backups" to "Full
+  Backups"). Both explain how they differ in scope. Wording/labelling only,
+  no behavioural change.
+- **Script homepage, GitHub repository, and install-ping URLs standardised
+  to match sister script Lumora Press (LG-38).** The "Powered by" footer
+  link and README Repository link now point at
+  `https://coding.unloved-heart.net/scripts/lumoragallery`.
+  `GitHubUpdateProvider`'s default repository is now
+  `intothisshadow/LumoraGallery`. The opt-in Anonymous Install Ping now
+  sends to `https://coding.unloved-heart.net/lumoragallery/ping.php`.
+- **PhotoSwipe lightbox now leaves a 5% margin around large images** instead
+  of filling the viewport edge-to-edge.
+
+---
+
 ## v1.12.0 — Released 2026-07-23
 
 ### Added

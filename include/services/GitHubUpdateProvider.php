@@ -250,8 +250,14 @@ class GitHubUpdateProvider extends AbstractUpdateProvider
         if ($releaseName === '') $releaseName = null;
 
         $changelogUrl = isset($data['html_url']) ? trim((string) $data['html_url']) : null;
-        $downloadUrl  = $this->buildArchiveUrl($version);
         $prerelease   = (bool) ($data['prerelease'] ?? false);
+
+        // Prefer the curated release ZIP asset (LumoraGallery-v{version}.zip) when
+        // present; it excludes .git* files, dev-only content, and runtime data that
+        // GitHub's raw tag archive includes. Fall back to the raw tag archive URL
+        // for releases cut without a curated asset.
+        $downloadUrl = $this->findAssetUrl($data, 'lumoragallery-v' . $version . '.zip')
+            ?? $this->buildArchiveUrl($version);
 
         // Extract minimum PHP / DB from release notes.
         $minPhp = null;
@@ -297,6 +303,27 @@ class GitHubUpdateProvider extends AbstractUpdateProvider
     }
 
     /**
+     * Search a release's assets for one whose name matches exactly (case-insensitive),
+     * returning its `browser_download_url`, or null when no such asset exists.
+     *
+     * @param array<string, mixed> $data
+     */
+    private function findAssetUrl(array $data, string $assetName): ?string
+    {
+        if (empty($data['assets']) || !is_array($data['assets'])) return null;
+
+        $target = strtolower($assetName);
+        foreach ($data['assets'] as $asset) {
+            if (strtolower((string) ($asset['name'] ?? '')) === $target) {
+                $url = $asset['browser_download_url'] ?? null;
+                return $url !== null ? (string) $url : null;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Fetch a checksum asset file and extract the SHA-256 hash for the release archive.
      *
      * Handles two formats:
@@ -319,7 +346,7 @@ class GitHubUpdateProvider extends AbstractUpdateProvider
         }
 
         // Multi-entry file: match the line containing the archive name.
-        $archiveFragment = 'lumora-v' . ltrim($version, 'v');
+        $archiveFragment = 'lumoragallery-v' . ltrim($version, 'v');
         foreach (explode("\n", $raw) as $line) {
             $line = trim($line);
             if (str_contains(strtolower($line), strtolower($archiveFragment))
