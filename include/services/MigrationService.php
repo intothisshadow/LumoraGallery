@@ -18,6 +18,7 @@ declare(strict_types=1);
  * @link       https://coding.unloved-heart.net/scripts/lumoragallery
  * @source     https://github.com/intothisshadow/LumoraGallery
  * @since      1.6.0
+ * @see        SchemaService Distinct sibling — manages Lumora's own schema, not gallery data imports.
  */
 
 final class MigrationService

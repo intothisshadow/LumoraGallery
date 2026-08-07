@@ -8,13 +8,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.14.0] — 2026-08-07
+
 ### Added
+
+- **Home page "Latest Additions" image count is now configurable
+  (LG-31).** Previously hardcoded to 8, which frequently left an
+  incomplete, visually stranded last row in the thumbnail grid at common
+  viewport widths (an item count that doesn't divide evenly into a row's
+  worth of columns always leaves a partial row — this is an inherent
+  property of a fixed grid, not something CSS alone can cleanly fix without
+  making the odd-one-out thumbnail a different size than its neighbors,
+  which reads as visually inconsistent). Added a new `latest_images_count`
+  config key (Admin → Configuration; default `8`, range `0`–`50`, `0` =
+  hide the section) — an admin can now pick a count that divides evenly
+  into their own theme's typical column count to avoid the sparse row
+  entirely. Mirrors the existing `latest_albums_count` setting exactly in
+  behavior and validation. The same setting also governs the "Latest
+  Additions" count on category pages (LG-041), which had the identical `8`
+  hardcoded separately — one setting now covers both.
 
 - **Category pages now show a "Latest Additions" section, including images
   from sub-categories (LG-041).** Browsing into a category (`?cat=N`)
   previously showed only its direct albums and sub-categories, with no
   "what's new in here" signal. A new `GalleryService::getLatestImagesInCategorySubtree()`
-  now surfaces the 8 most recently added approved images from that
+  now surfaces the most recently added approved images (count governed by
+  `latest_images_count`, see LG-31 below) from that
   category's own albums *and* every descendant sub-category's albums at
   any depth — an image added three levels down still shows up on the
   top-level category's page, not just its immediate parent. Same
@@ -52,7 +71,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   rather than a blanket default. Legacy forwarding-wrapper files
   (`include/template.php`, `include/thumb.php`) are now marked
   `@deprecated`, pointing readers to `ThemeRenderer::`/`ThumbnailService::`.
-  No behavioral changes — comment headers only.
+  No behavioral changes — comment headers only. `@see` cross-references to
+  related classes (deferred in the initial pass) have since been added to
+  28 files with a genuine, verified relationship — the service layer,
+  migrations, and the three legacy wrapper files — rather than every file
+  indiscriminately.
 
 ### Fixed
 

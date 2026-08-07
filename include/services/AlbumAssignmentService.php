@@ -29,6 +29,9 @@ declare(strict_types=1);
  * @link       https://coding.unloved-heart.net/scripts/lumoragallery
  * @source     https://github.com/intothisshadow/LumoraGallery
  * @since      1.10.0
+ * @see        GalleryService Album/category queries this scopes access to.
+ * @see        GroupService Grants the 'manage_assigned_albums' permission checked here.
+ * @see        UserService Owns the accounts assignments are made against.
  */
 
 if (!defined('LUMORA_ENTRY')) exit('Direct access denied.');

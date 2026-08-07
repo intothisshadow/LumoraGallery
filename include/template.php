@@ -18,6 +18,7 @@ declare(strict_types=1);
  * @source     https://github.com/intothisshadow/LumoraGallery
  * @since      1.0.0
  * @deprecated Legacy forwarding wrappers over ThemeRenderer; new code should call ThemeRenderer:: directly.
+ * @see        ThemeRenderer All rendering logic these wrappers delegate to.
  */
 
 if (!defined('LUMORA_ENTRY')) exit('Direct access denied.');

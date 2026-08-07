@@ -14,6 +14,7 @@ declare(strict_types=1);
  * @link       https://coding.unloved-heart.net/scripts/lumoragallery
  * @source     https://github.com/intothisshadow/LumoraGallery
  * @since      1.9.0
+ * @see        AbstractMigration Base class every migration extends.
  */
 
 class Migration0002_CreateConfigChangesTable extends AbstractMigration

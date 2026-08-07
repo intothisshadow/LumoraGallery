@@ -19,6 +19,7 @@ declare(strict_types=1);
  * @source     https://github.com/intothisshadow/LumoraGallery
  * @since      1.0.0
  * @deprecated Legacy forwarding wrappers over ThumbnailService; new code should call ThumbnailService:: directly.
+ * @see        ThumbnailService All logic these wrappers delegate to.
  */
 
 if (!defined('LUMORA_ENTRY')) exit('Direct access denied.');

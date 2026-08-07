@@ -18,6 +18,8 @@ declare(strict_types=1);
  * @link       https://coding.unloved-heart.net/scripts/lumoragallery
  * @source     https://github.com/intothisshadow/LumoraGallery
  * @since      1.5.0
+ * @see        GalleryService Data source for most rendering methods here.
+ * @see        LumoraConfig Config values consumed throughout this class.
  */
 
 if (!defined('LUMORA_ENTRY')) exit('Direct access denied.');

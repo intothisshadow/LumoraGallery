@@ -25,6 +25,8 @@ declare(strict_types=1);
  * @link       https://coding.unloved-heart.net/scripts/lumoragallery
  * @source     https://github.com/intothisshadow/LumoraGallery
  * @since      1.10.0
+ * @see        AbstractMigration Base class every migration extends.
+ * @see        \AlbumAssignmentService Consumes the table this migration creates.
  */
 
 if (!defined('LUMORA_ENTRY')) exit('Direct access denied.');

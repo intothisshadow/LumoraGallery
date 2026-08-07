@@ -24,6 +24,8 @@ declare(strict_types=1);
  * @link       https://coding.unloved-heart.net/scripts/lumoragallery
  * @source     https://github.com/intothisshadow/LumoraGallery
  * @since      1.9.0
+ * @see        ServerEnvironmentService Also used by admin/installation.php's System Information panel.
+ * @see        CacheHeaderService Also used by admin/installation.php's caching status panel.
  */
 
 if (!defined('LUMORA_ENTRY')) exit('Direct access denied.');

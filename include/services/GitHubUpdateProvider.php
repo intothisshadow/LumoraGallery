@@ -36,6 +36,8 @@ declare(strict_types=1);
  * @link       https://coding.unloved-heart.net/scripts/lumoragallery
  * @source     https://github.com/intothisshadow/LumoraGallery
  * @since      1.9.0
+ * @see        AbstractUpdateProvider Interface this class implements.
+ * @see        UpdaterService Consumes this provider for release downloads.
  */
 
 if (!defined('LUMORA_ENTRY')) exit('Direct access denied.');

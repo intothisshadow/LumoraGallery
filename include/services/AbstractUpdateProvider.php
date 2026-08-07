@@ -20,6 +20,9 @@ declare(strict_types=1);
  * @link       https://coding.unloved-heart.net/scripts/lumoragallery
  * @source     https://github.com/intothisshadow/LumoraGallery
  * @since      1.9.0
+ * @see        GitHubUpdateProvider Concrete implementation.
+ * @see        UpdaterService Consumes providers via createFromConfig().
+ * @see        UpdateService Consumes providers for release checks.
  */
 
 if (!defined('LUMORA_ENTRY')) exit('Direct access denied.');

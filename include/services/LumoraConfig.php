@@ -102,6 +102,7 @@ class LumoraConfig
             'max_image_width',
             'max_image_height'                 => (string) max(0, (int) $raw),
             'latest_albums_count'              => (string) max(0, min(50, (int) $raw)),
+            'latest_images_count'              => (string) max(0, min(50, (int) $raw)),
             'who_is_online_duration'           => (string) max(1, min(60, (int) $raw)),
             'log_mode'                         => in_array($raw, ['off', 'errors', 'all'], true)
                                                     ? $raw : 'off',

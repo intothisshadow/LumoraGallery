@@ -29,6 +29,7 @@ declare(strict_types=1);
  * @link       https://coding.unloved-heart.net/scripts/lumoragallery
  * @source     https://github.com/intothisshadow/LumoraGallery
  * @since      1.5.0
+ * @see        GalleryService Album/image records this service generates thumbnails for.
  */
 
 if (!defined('LUMORA_ENTRY')) exit('Direct access denied.');

@@ -52,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'thumb_quality',
             'max_upload_size_mb', 'max_image_width', 'max_image_height',
             'count_album_views', 'log_mode', 'gallery_offline',
-            'latest_albums_count',
+            'latest_albums_count', 'latest_images_count',
             'who_is_online_duration',
             'show_powered_by',
             'category_layout',
@@ -119,7 +119,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'timezone', 'thumb_quality',
             'max_upload_size_mb', 'max_image_width', 'max_image_height',
             'count_album_views', 'log_mode', 'gallery_offline',
-            'latest_albums_count', 'who_is_online_duration',
+            'latest_albums_count', 'latest_images_count', 'who_is_online_duration',
             'show_powered_by',
             'category_layout',
             'default_color_mode',
@@ -160,6 +160,7 @@ $cfg = [
     'log_mode'            => lumora_config('log_mode',            'off'),
     'gallery_offline'     => lumora_config('gallery_offline',     '0'),
     'latest_albums_count' => lumora_config('latest_albums_count', '5'),
+    'latest_images_count' => lumora_config('latest_images_count', '8'),
     'who_is_online_duration' => lumora_config('who_is_online_duration', '5'),
     'show_powered_by'        => lumora_config('show_powered_by',        '1'),
     'category_layout'        => lumora_config('category_layout',        'grid'),
@@ -249,6 +250,7 @@ $sel_cm_auto      = $cfg['default_color_mode'] === 'auto'  ? ' selected' : '';
 $sel_cm_light     = $cfg['default_color_mode'] === 'light' ? ' selected' : '';
 $sel_cm_dark      = $cfg['default_color_mode'] === 'dark'  ? ' selected' : '';
 $v_latest_albums  = h($cfg['latest_albums_count']);
+$v_latest_images  = h($cfg['latest_images_count']);
 $v_who_online_dur = h($cfg['who_is_online_duration']);
 
 $processor_h = h($processor_status);
@@ -502,6 +504,15 @@ $content = <<<HTML
                class="form-control" min="0" max="50" style="max-width:120px">
         <div class="form-text">How many recently updated albums to display on the home page. Set to <code>0</code> to hide the section.</div>
       </div>
+      <div class="col-md-6">
+        <label class="form-label fw-semibold">Latest Additions (home page)</label>
+        <input type="number" name="latest_images_count" value="{$v_latest_images}"
+               class="form-control" min="0" max="50" style="max-width:120px">
+        <div class="form-text">How many recently added images to display in the "Latest Additions" grid on the home page. Set to <code>0</code> to hide the section. Picking a count that divides evenly by your thumbnail grid's typical column count (e.g. 6, 8, or 12) avoids a sparse last row.</div>
+      </div>
+    </div>
+
+    <div class="row g-3 mb-0">
       <div class="col-md-6">
         <label class="form-label fw-semibold">Who Is Online — Window (minutes)</label>
         <input type="number" name="who_is_online_duration" value="{$v_who_online_dur}"

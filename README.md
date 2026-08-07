@@ -273,6 +273,7 @@ All settings are managed in **Admin → Configuration**. Key options:
 | `log_mode` | off | Logging: `off`, `errors` (PHP error log), or `all` (error log + DB) |
 | `gallery_offline` | 0 | Maintenance mode — shows HTTP 503 to non-admins when `1` |
 | `latest_albums_count` | 5 | Number of recently updated albums shown on the home page; `0` = hide section |
+| `latest_images_count` | 8 | Number of images shown in the "Latest Additions" grid on the home page; `0` = hide section |
 | `who_is_online_duration` | 5 | Visitor window in minutes for the Who Is Online strip (1–60); `0` = disable tracking |
 | `show_powered_by` | 1 | Show a "Powered by Lumora Gallery" credit in the footer (`0` = hidden); uses `{POWERED_BY}` theme token |
 | `default_color_mode` | auto | Site-wide fallback colour mode (`auto` / `light` / `dark`) for visitors with no stored preference |

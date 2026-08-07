@@ -33,6 +33,9 @@ declare(strict_types=1);
  * @link       https://coding.unloved-heart.net/scripts/lumoragallery
  * @source     https://github.com/intothisshadow/LumoraGallery
  * @since      1.7.0
+ * @see        AbstractUpdateProvider Supplies the release metadata this class checks/caches.
+ * @see        GitHubUpdateProvider Default concrete provider.
+ * @see        UpdaterService Performs the actual update this class only checks for.
  */
 
 if (!defined('LUMORA_ENTRY')) exit('Direct access denied.');

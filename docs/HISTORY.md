@@ -4,6 +4,99 @@ Long-term archive of completed work, migrated from TODO.md on release.
 
 ---
 
+## v1.14.0 — Released 2026-08-07
+
+### Added
+
+- **Home page "Latest Additions" image count is now configurable (LG-31).**
+  Previously hardcoded to 8, which frequently left an incomplete, visually
+  stranded last row in the thumbnail grid at common viewport widths (an
+  item count that doesn't divide evenly into a row's worth of columns
+  always leaves a partial row — an inherent property of a fixed grid, not
+  something CSS alone can cleanly fix without making the odd-one-out
+  thumbnail a different size than its neighbors, which reads as visually
+  inconsistent). Added a new `latest_images_count` config key (Admin →
+  Configuration; default `8`, range `0`–`50`, `0` = hide the section) — an
+  admin can now pick a count that divides evenly into their own theme's
+  typical column count to avoid the sparse row entirely. Mirrors the
+  existing `latest_albums_count` setting exactly in behavior and
+  validation. The same setting also governs the "Latest Additions" count
+  on category pages (LG-041), which had the identical `8` hardcoded
+  separately — one setting now covers both.
+- **Category pages now show a "Latest Additions" section, including images
+  from sub-categories (LG-041).** Browsing into a category (`?cat=N`)
+  previously showed only its direct albums and sub-categories, with no
+  "what's new in here" signal. A new
+  `GalleryService::getLatestImagesInCategorySubtree()` now surfaces the
+  most recently added approved images (count governed by
+  `latest_images_count`) from that category's own albums *and* every
+  descendant sub-category's albums at any depth — an image added three
+  levels down still shows up on the top-level category's page, not just
+  its immediate parent. Same `approved`/public-album visibility gate as
+  every other public image listing; no new permission surface.
+- **New Album's Folder Path field now suggests existing unclaimed server
+  folders (LG-040).** `admin/albums.php?action=new` previously required
+  hand-typing the exact relative path of a folder already uploaded to
+  `albums/` (e.g. via FTP) — a typo silently created a new, empty folder
+  instead of attaching the album to the one holding the images. The Folder
+  Path field now shows a visible, clickable list of on-disk folders under
+  `albums/` that aren't yet claimed by any album (click one to fill the
+  field), plus a `<datalist>` for typing-based autocomplete, both
+  populated via a new `manage_albums`-gated AJAX endpoint,
+  `admin/ajax_list_folders.php`, backed by
+  `GalleryService::listAvailableAlbumFolders()`. The scan is strictly
+  contained to `albums/` (every candidate is `realpath()`-verified against
+  the resolved albums root, guarding against a symlink escaping it), skips
+  hidden directories, and only offers a folder if it passes the exact same
+  `lumora_sanitize_folder()` validation the form submit already enforces.
+  Only leaf folders that directly contain at least one file are suggested
+  — purely organizational parent folders (e.g. a show/season folder
+  holding only subfolders) are walked into but never listed themselves,
+  so a gallery with a deep show/season/episode structure doesn't drown
+  its handful of real candidates in container-folder noise. Free-typing a
+  new path and leaving the field blank (auto-generated numeric folder)
+  are both unaffected — the suggestion list is purely additive.
+- **Standardized PHPDoc file headers across the entire codebase (LG-039).**
+  Every PHP source file now carries a consistent header block —
+  `@package`, `@subpackage`, `@author`, `@copyright`, `@license`, `@link`,
+  `@source`, and `@since` — placed after `declare(strict_types=1);`, to
+  improve IDE support and documentation generation. `@since` reflects each
+  file's actual version of introduction per the changelog/history record
+  rather than a blanket default. Legacy forwarding-wrapper files
+  (`include/template.php`, `include/thumb.php`) are now marked
+  `@deprecated`, pointing readers to `ThemeRenderer::`/`ThumbnailService::`.
+  `@see` cross-references to related classes were added to 28 files with a
+  genuine, verified relationship — the service layer, migrations, and the
+  three legacy wrapper files — rather than every file indiscriminately.
+
+### Fixed
+
+- **`?view=most_viewed&cat=N` returned nothing for a category with only
+  sub-categories and no albums of its own (LG-33 gap).**
+  `GalleryService::getMostViewedImages()`'s category scoping matched
+  `a.category_id = ?` exactly, so a purely organizational parent category
+  (e.g. a show's top-level category holding only "Season 1"/"Season
+  2"/etc. sub-categories, with every actual album living in those, not in
+  the parent) always showed "No images to display" — even though its
+  sub-categories were full of heavily-viewed images. It now scopes to the
+  category's full descendant subtree at any depth, via the same
+  `getCategorySubtreeIds()` helper LG-041 added, matching how "Latest
+  Additions" already behaves on category pages.
+- **classic-fansite's "Most Viewed" nav link never carried album/category
+  context forward (LG-33 gap).** LG-33 made `ThemeRenderer::renderNav()`
+  scope the "Most Viewed" link to the current album/category via a
+  `{NAVIGATION}` template token — but classic-fansite's `template.html`
+  had its own hardcoded nav markup (`<a class="fs-nav-link">...`) with no
+  `{NAVIGATION}` token to plug into, so `?view=most_viewed&cat=`/`&album=`
+  never appeared there; only the `default` theme ever benefited from
+  LG-33. classic-fansite's nav now renders via `{NAVIGATION}` like the
+  default theme does, with new CSS making the token's markup look
+  identical to the previous hardcoded chips — no visual change, only the
+  underlying link logic is now shared with the default theme instead of
+  duplicated and out of sync.
+
+---
+
 ## v1.13.0 — Released 2026-08-04
 
 ### Added

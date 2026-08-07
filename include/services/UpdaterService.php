@@ -47,6 +47,9 @@ declare(strict_types=1);
  * @link       https://coding.unloved-heart.net/scripts/lumoragallery
  * @source     https://github.com/intothisshadow/LumoraGallery
  * @since      1.9.0
+ * @see        AbstractUpdateProvider Supplies the release/download metadata this class consumes.
+ * @see        BackupService Distinct sibling — the manual "Full Backups" feature, not the automatic update backup.
+ * @see        SchemaService The migrate stage delegates to runPendingMigrations().
  */
 
 if (!defined('LUMORA_ENTRY')) exit('Direct access denied.');

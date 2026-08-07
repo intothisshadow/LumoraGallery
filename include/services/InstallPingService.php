@@ -36,6 +36,8 @@ declare(strict_types=1);
  * @link       https://coding.unloved-heart.net/scripts/lumoragallery
  * @source     https://github.com/intothisshadow/LumoraGallery
  * @since      1.11.0
+ * @see        UpdateService Its release-check source is deliberately separate from this ping.
+ * @see        AbstractUpdateProvider The GitHub Releases API source UpdateService uses instead.
  */
 
 if (!defined('LUMORA_ENTRY')) exit('Direct access denied.');

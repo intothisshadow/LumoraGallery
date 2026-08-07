@@ -121,7 +121,12 @@ if ($view !== '') {
 
         // Latest Additions (LG-041) — recent images from this category's own
         // albums and every descendant sub-category's albums, at any depth.
-        $latest_in_cat = GalleryService::getLatestImagesInCategorySubtree($cat_id, 8);
+        // Shares latest_images_count (LG-31) with the home page's own
+        // Latest Additions section, so an admin only has to tune one setting.
+        $latest_images_count = max(0, (int) lumora_config('latest_images_count', '8'));
+        $latest_in_cat = $latest_images_count > 0
+            ? GalleryService::getLatestImagesInCategorySubtree($cat_id, $latest_images_count)
+            : [];
         if (!empty($latest_in_cat)) {
             $mt = (!empty($albums) || !empty($subcats)) ? ' mt-4' : '';
             $content .= '<h2 class="lum-section-title' . $mt . '">Latest Additions</h2>'
@@ -137,7 +142,8 @@ if ($view !== '') {
     // ── Home page ─────────────────────────────────────────────────────────
     $stats               = get_gallery_stats();
     $root_cats           = get_categories(0);
-    $latest              = get_latest_images(8);
+    $latest_images_count = max(0, (int) lumora_config('latest_images_count', '8'));
+    $latest              = $latest_images_count > 0 ? get_latest_images($latest_images_count) : [];
     $latest_albums_count = max(0, (int) lumora_config('latest_albums_count', '5'));
     $latest_albums       = $latest_albums_count > 0 ? get_latest_updated_albums($latest_albums_count) : [];
 
