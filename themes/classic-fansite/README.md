@@ -255,13 +255,19 @@ a fallback display name.
 | `{THEME_URL}` | URL to this theme's directory, with trailing slash |
 | `{BASE_URL}` | Gallery root URL, with trailing slash |
 | `{LUMORA_VERSION}` | Version string, e.g. `"1.0.0"` |
-| `{NAVIGATION}` | Bootstrap navbar-nav `<ul>` (used by the default theme) |
+| `{NAVIGATION}` | Site nav links (Home/Latest/Most Viewed/Random) |
 | `{ADMIN_LINK}` | Admin panel `<a>` link (empty for non-admin visitors) |
 | `{POWERED_BY}` | "Powered by Lumora Gallery" credit (empty when disabled in config) |
 | `{CONTENT}` | Main page HTML |
 
-This theme intentionally does **not** use `{NAVIGATION}` and instead builds its
-own nav directly in `template.html` using `{BASE_URL}`. Both approaches are valid.
+`{NAVIGATION}` renders as a plain `<ul class="navbar-nav">`/`<li class="nav-item">`/
+`<a class="nav-link">` structure — this theme's `style.css` restyles those
+generic classes (scoped under `.fs-nav-inner`) to look like this theme's own
+`.fs-nav-link` chip design, rather than building the nav links directly with
+`{BASE_URL}`. Using the token (instead of hand-building each link) is what
+lets the "Most Viewed" link automatically carry the current album/category
+forward when browsing one (LG-33) — a hand-built link would always point at
+the gallery-wide most-viewed list.
 
 ---
 

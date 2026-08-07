@@ -10,8 +10,14 @@ declare(strict_types=1);
  *
  * All SQL uses {PREFIX} which LumoraDB::query() replaces at runtime.
  *
- * @copyright Copyright (C) 2025 Ariane
- * @license   GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
+ * @package    LumoraGallery
+ * @subpackage Core
+ * @author     Ariane
+ * @copyright  Copyright (c) 2026 Ariane
+ * @license    GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
+ * @link       https://coding.unloved-heart.net/scripts/lumoragallery
+ * @source     https://github.com/intothisshadow/LumoraGallery
+ * @since      1.5.0
  */
 
 if (!defined('LUMORA_ENTRY')) exit('Direct access denied.');
@@ -236,6 +242,67 @@ class GalleryService
             $result[$root_id] = ['album_count' => $albums, 'image_count' => $images];
         }
         return $result;
+    }
+
+    /**
+     * Return $cat_id and every descendant category ID at any depth
+     * (inclusive), via one BFS over the full category tree loaded in a
+     * single query. Single-root counterpart to getCategorySubtreeCounts()'s
+     * own inline BFS (kept separate rather than shared, since that method's
+     * documented "3 queries regardless of root count" behavior depends on
+     * building the id/parent_id map once for a whole batch of roots — a
+     * shared single-root helper would force it back to one tree-load query
+     * per root instead).
+     *
+     * @return list<int>
+     */
+    private static function getCategorySubtreeIds(int $cat_id): array
+    {
+        $all_rows    = LumoraDB::fetchAll('SELECT id, parent_id FROM `{PREFIX}categories`');
+        $children_of = [];
+        foreach ($all_rows as $row) {
+            $children_of[(int) $row['parent_id']][] = (int) $row['id'];
+        }
+
+        $ids   = [];
+        $queue = [$cat_id];
+        while (!empty($queue)) {
+            $id    = array_shift($queue);
+            $ids[] = $id;
+            foreach ($children_of[$id] ?? [] as $child_id) {
+                $queue[] = $child_id;
+            }
+        }
+        return $ids;
+    }
+
+    /**
+     * Most recently added approved images across a category's own albums
+     * and every descendant sub-category's albums, at any depth (LG-041) —
+     * the category-page equivalent of getLatestImages()'s gallery-wide
+     * version. Only public albums are considered, matching every other
+     * public image listing's visibility gate.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function getLatestImagesInCategorySubtree(int $cat_id, int $limit = 8): array
+    {
+        $cat_ids = self::getCategorySubtreeIds($cat_id);
+        if (empty($cat_ids)) return [];
+
+        $ph     = implode(',', array_fill(0, count($cat_ids), '?'));
+        $params = $cat_ids;
+        $params[] = $limit;
+
+        return LumoraDB::fetchAll(
+            "SELECT i.*, a.folder, a.title AS album_title
+             FROM `{PREFIX}images` i
+             JOIN `{PREFIX}albums` a ON a.id = i.album_id
+             WHERE i.approved = 1 AND a.visibility = 0 AND a.category_id IN ({$ph})
+             ORDER BY i.added_at DESC
+             LIMIT ?",
+            $params
+        );
     }
 
     // ── Admin Category Queries ────────────────────────────────────────────────
@@ -1247,7 +1314,11 @@ class GalleryService
     /**
      * Most-viewed approved images (public albums only), optionally scoped to
      * a single album or category. $album_id takes precedence over $cat_id
-     * when both are given.
+     * when both are given. $cat_id scoping includes every descendant
+     * sub-category at any depth (not just albums directly in that
+     * category) — a category that only organizes sub-categories, with no
+     * albums of its own, still returns results from whichever
+     * sub-category the most-viewed images actually live in.
      *
      * @return list<array<string, mixed>>
      */
@@ -1260,8 +1331,10 @@ class GalleryService
             $where[]  = 'i.album_id = ?';
             $params[] = $album_id;
         } elseif ($cat_id !== null) {
-            $where[]  = 'a.category_id = ?';
-            $params[] = $cat_id;
+            $cat_ids = self::getCategorySubtreeIds($cat_id);
+            $ph      = implode(',', array_fill(0, count($cat_ids), '?'));
+            $where[] = "a.category_id IN ({$ph})";
+            array_push($params, ...$cat_ids);
         }
 
         $params[] = $limit;
@@ -1388,6 +1461,136 @@ class GalleryService
             'record_count' => $record,
             'record_date'  => $record_date,
         ];
+    }
+
+    // ── Folder Discovery (LG-040) ─────────────────────────────────────────────
+
+    /**
+     * List directories under LUMORA_ALBUMS_PATH that are not yet claimed by
+     * any existing album row — used by admin/albums.php?action=new so an
+     * admin can pick a folder that was already uploaded to disk (e.g. via
+     * FTP) instead of retyping its exact path by hand.
+     *
+     * Scans at every depth (album folders can be nested, e.g.
+     * "ShowName/Season2/EpisodeSlug"), but only a directory that directly
+     * contains at least one file is offered as a candidate — a purely
+     * organizational parent directory (e.g. "ShowName" or
+     * "ShowName/Season2" holding only subfolders, no files of its own) is
+     * still walked into but never suggested itself. Without this, a deep
+     * show/season/episode tree would bury the handful of genuinely useful
+     * leaf folders under a much larger pile of container-folder noise, and
+     * clicking a bare container folder would be misleading since that's
+     * never where images actually live in this app.
+     *
+     * Never leaves LUMORA_ALBUMS_PATH (every candidate is realpath()-resolved
+     * and re-checked against the resolved albums root before being
+     * included, guarding against a symlink pointing outside it), and
+     * applies the exact same lumora_sanitize_folder() validation the form
+     * submit path uses, so a folder offered here is guaranteed to also be
+     * accepted on save.
+     *
+     * Fails soft: returns whatever was found so far (or an empty list)
+     * rather than erroring out — this is a convenience lookup, not a
+     * critical path. Capped at self::MAX_AVAILABLE_FOLDERS results.
+     *
+     * @return list<string> Relative folder paths, sorted alphabetically.
+     */
+    public static function listAvailableAlbumFolders(): array
+    {
+        $albums_root = realpath(LUMORA_ALBUMS_PATH);
+        if ($albums_root === false || !is_dir($albums_root)) {
+            return [];
+        }
+
+        $used = array_flip(array_column(
+            LumoraDB::fetchAll('SELECT folder FROM `{PREFIX}albums`'),
+            'folder'
+        ));
+
+        $found = [];
+        self::scanAlbumFoldersRecursive($albums_root, $albums_root, $used, $found);
+
+        sort($found, SORT_STRING);
+        return $found;
+    }
+
+    /** Hard cap on how many candidate folders listAvailableAlbumFolders() will scan/return. */
+    private const MAX_AVAILABLE_FOLDERS = 1000;
+
+    /**
+     * Recursive worker for listAvailableAlbumFolders(). Walks $dir (an
+     * absolute, already realpath()-resolved directory) depth-first,
+     * appending every unclaimed, safely-contained subdirectory's
+     * albums-root-relative path to $found by reference. Stops early once
+     * self::MAX_AVAILABLE_FOLDERS candidates have been collected.
+     *
+     * @param array<string, int> $used  Folder paths already in {PREFIX}albums, as a lookup set.
+     * @param list<string>       $found Accumulator, passed by reference.
+     */
+    private static function scanAlbumFoldersRecursive(string $albums_root, string $dir, array $used, array &$found): void
+    {
+        if (count($found) >= self::MAX_AVAILABLE_FOLDERS) {
+            return;
+        }
+
+        $entries = @scandir($dir);
+        if ($entries === false) {
+            return;
+        }
+
+        foreach ($entries as $entry) {
+            if (count($found) >= self::MAX_AVAILABLE_FOLDERS) {
+                return;
+            }
+            if ($entry === '.' || $entry === '..' || str_starts_with($entry, '.')) {
+                continue;
+            }
+
+            $path = $dir . DIRECTORY_SEPARATOR . $entry;
+            if (!is_dir($path)) {
+                continue;
+            }
+
+            $real = realpath($path);
+            if ($real === false || !str_starts_with($real . DIRECTORY_SEPARATOR, $albums_root . DIRECTORY_SEPARATOR)) {
+                continue; // symlink escaped the albums root — skip it
+            }
+
+            $relative = substr($real, strlen($albums_root) + 1);
+            $relative = str_replace(DIRECTORY_SEPARATOR, '/', $relative);
+            $clean    = lumora_sanitize_folder($relative);
+
+            if ($clean !== '' && $clean === $relative && !isset($used[$clean]) && self::dirHasDirectFile($real)) {
+                $found[] = $clean;
+            }
+
+            self::scanAlbumFoldersRecursive($albums_root, $real, $used, $found);
+        }
+    }
+
+    /**
+     * Return true if $dir directly contains at least one regular file
+     * (thumbnails included — this is a cheap "does anything live here"
+     * check, not an image-type check). Stops at the first match rather than
+     * reading the whole directory listing.
+     */
+    private static function dirHasDirectFile(string $dir): bool
+    {
+        $entries = @scandir($dir);
+        if ($entries === false) {
+            return false;
+        }
+
+        foreach ($entries as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            if (is_file($dir . DIRECTORY_SEPARATOR . $entry)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // ── Private write helpers ────────────────────────────────────────────────

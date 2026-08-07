@@ -14,6 +14,15 @@ declare(strict_types=1);
  * batch-add into albums explicitly assigned to them via
  * AlbumAssignmentService — both the dropdown list and the ?album= GET
  * parameter are scoped/re-validated server-side.
+ *
+ * @package    LumoraGallery
+ * @subpackage Admin
+ * @author     Ariane
+ * @copyright  Copyright (c) 2026 Ariane
+ * @license    GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
+ * @link       https://coding.unloved-heart.net/scripts/lumoragallery
+ * @source     https://github.com/intothisshadow/LumoraGallery
+ * @since      1.0.0
  */
 define('LUMORA_ENTRY', true);
 require_once dirname(__DIR__) . '/include/bootstrap.php';
@@ -216,7 +225,11 @@ $content = <<<HTML
       }
 
       if (data.done) {
-        if (statusEl) statusEl.textContent = 'Done! ' + doneCount + ' image' + (doneCount !== 1 ? 's' : '') + ' processed.';
+        if (statusEl) {
+          statusEl.textContent = 'Done! ' + doneCount + ' image' + (doneCount !== 1 ? 's' : '') + ' processed.';
+          statusEl.classList.remove('small', 'text-muted');
+          statusEl.classList.add('lum-batch-status-done');
+        }
         if (bar) { bar.classList.remove('progress-bar-animated'); bar.style.width = '100%'; bar.textContent = '100%'; }
         if (btnDone) btnDone.classList.remove('d-none');
       } else {

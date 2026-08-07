@@ -2,14 +2,20 @@
 
 declare(strict_types=1);
 /**
- * Coppermine Importer — Version Constants
+ * Lumora Gallery — Coppermine Importer Plugin — Version Constants
  *
  * This is the single source of truth for the plugin version.
  * Update LUMORA_CPG_IMPORTER_VERSION here; all other files reference
  * this constant instead of hardcoding a version string.
  *
- * @copyright Copyright (C) 2025 Ariane
- * @license   GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
+ * @package    LumoraGallery
+ * @subpackage Plugins
+ * @author     Ariane
+ * @copyright  Copyright (c) 2026 Ariane
+ * @license    GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
+ * @link       https://coding.unloved-heart.net/scripts/lumoragallery
+ * @source     https://github.com/intothisshadow/LumoraGallery
+ * @since      1.6.0
  */
 
 /** Importer plugin version. Update only when releasing a new plugin version. */

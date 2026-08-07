@@ -10,8 +10,14 @@ declare(strict_types=1);
  * provides hooks for importer plugins. All source-specific logic belongs in
  * the individual importer plugin, not here.
  *
- * @copyright Copyright (C) 2025 Ariane
- * @license   GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
+ * @package    LumoraGallery
+ * @subpackage Database
+ * @author     Ariane
+ * @copyright  Copyright (c) 2026 Ariane
+ * @license    GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
+ * @link       https://coding.unloved-heart.net/scripts/lumoragallery
+ * @source     https://github.com/intothisshadow/LumoraGallery
+ * @since      1.6.0
  */
 
 final class MigrationService

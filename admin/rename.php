@@ -29,8 +29,14 @@ declare(strict_types=1);
  * the database is only updated once every file is confirmed in its final
  * location on disk.
  *
- * @copyright Copyright (C) 2025 Ariane
- * @license   GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
+ * @package    LumoraGallery
+ * @subpackage Admin
+ * @author     Ariane
+ * @copyright  Copyright (c) 2026 Ariane
+ * @license    GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
+ * @link       https://coding.unloved-heart.net/scripts/lumoragallery
+ * @source     https://github.com/intothisshadow/LumoraGallery
+ * @since      1.13.0
  */
 define('LUMORA_ENTRY', true);
 require_once dirname(__DIR__) . '/include/bootstrap.php';

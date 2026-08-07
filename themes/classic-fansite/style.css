@@ -272,6 +272,48 @@ html[data-bs-theme="dark"] {
   color: var(--fs-nav-link-hover);
 }
 
+/* {NAVIGATION} (ThemeRenderer::renderNav()) markup, styled to look
+   identical to the .fs-nav-link chips above — LG-33's "Most Viewed"
+   album/category context only reached the default theme before this,
+   since a hardcoded nav never had a {NAVIGATION} token to plug into. */
+.fs-nav-inner .navbar-nav {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.fs-nav-inner .nav-item {
+  display: flex;
+}
+
+.fs-nav-inner .nav-link {
+  display: inline-flex;
+  align-items: center;
+  padding: .55rem 1.05rem;
+  color: var(--fs-nav-link);
+  text-decoration: none;
+  font-size: .875rem;
+  font-weight: 500;
+  letter-spacing: .015em;
+  white-space: nowrap;
+  border-right: 1px solid rgba(255,255,255,.07);
+  transition: background .15s, color .15s;
+  flex-shrink: 0;
+}
+
+.fs-nav-inner .nav-item:first-child .nav-link {
+  border-left: 1px solid rgba(255,255,255,.07);
+}
+
+.fs-nav-inner .nav-link:hover {
+  background: var(--fs-nav-hover-bg);
+  color: var(--fs-nav-link-hover);
+}
+
 .fs-nav-admin {
   margin-left: auto;
   display: flex;

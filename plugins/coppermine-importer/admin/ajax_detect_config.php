@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 /**
- * Coppermine Importer — Config Detection AJAX Handler
+ * Lumora Gallery — Coppermine Importer Plugin — Config Detection AJAX Handler
  *
  * Accepts POST requests from the auto-detect panel on the credentials form.
  * Two actions are supported:
@@ -26,8 +26,14 @@ declare(strict_types=1);
  *     only — the client sends an integer index, not a path.
  *   - Admin authentication and CSRF are enforced on every request.
  *
- * @copyright Copyright (C) 2025 Ariane
- * @license   GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
+ * @package    LumoraGallery
+ * @subpackage Plugins
+ * @author     Ariane
+ * @copyright  Copyright (c) 2026 Ariane
+ * @license    GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
+ * @link       https://coding.unloved-heart.net/scripts/lumoragallery
+ * @source     https://github.com/intothisshadow/LumoraGallery
+ * @since      1.6.0
  */
 
 define('LUMORA_ENTRY', true);

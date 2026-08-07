@@ -1,5 +1,4 @@
 <?php
-
 declare(strict_types=1);
 /**
  * Lumora Gallery — Theme Renderer
@@ -11,8 +10,14 @@ declare(strict_types=1);
  * Legacy callers use the free-function wrappers in include/template.php.
  * New V2 code should call ThemeRenderer:: directly.
  *
- * @copyright Copyright (C) 2025 Ariane
- * @license   GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
+ * @package    LumoraGallery
+ * @subpackage Themes
+ * @author     Ariane
+ * @copyright  Copyright (c) 2026 Ariane
+ * @license    GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
+ * @link       https://coding.unloved-heart.net/scripts/lumoragallery
+ * @source     https://github.com/intothisshadow/LumoraGallery
+ * @since      1.5.0
  */
 
 if (!defined('LUMORA_ENTRY')) exit('Direct access denied.');
@@ -251,21 +256,38 @@ class ThemeRenderer
      */
     public static function renderNav(?int $album_id = null, ?int $cat_id = null): string
     {
-        $base     = lumora_base_url();
-        $home     = h(lumora_theme_preview_link($base));
-        $latest   = h(lumora_theme_preview_link($base . '?view=latest'));
-        $most_qs  = $album_id !== null ? '&album=' . $album_id : ($cat_id !== null ? '&cat=' . $cat_id : '');
-        $most     = h(lumora_theme_preview_link($base . '?view=most_viewed' . $most_qs));
-        $random   = h(lumora_theme_preview_link($base . '?view=random'));
+        $u = self::navUrls($album_id, $cat_id);
         $nav = <<<HTML
 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-  <li class="nav-item"><a class="nav-link" href="{$home}">Home</a></li>
-  <li class="nav-item"><a class="nav-link" href="{$latest}">Latest</a></li>
-  <li class="nav-item"><a class="nav-link" href="{$most}">Most Viewed</a></li>
-  <li class="nav-item"><a class="nav-link" href="{$random}">Random</a></li>
+  <li class="nav-item"><a class="nav-link" href="{$u['home']}">Home</a></li>
+  <li class="nav-item"><a class="nav-link" href="{$u['latest']}">Latest</a></li>
+  <li class="nav-item"><a class="nav-link" href="{$u['most_viewed']}">Most Viewed</a></li>
+  <li class="nav-item"><a class="nav-link" href="{$u['random']}">Random</a></li>
 </ul>
 HTML;
         return $nav;
+    }
+
+    /**
+     * Compute the four primary nav destination URLs (Home / Latest /
+     * Most Viewed / Random) used by renderNav(), each already
+     * theme-preview-link-wrapped and HTML-escaped. Most Viewed optionally
+     * carries album/category context forward (LG-33). Split out purely to
+     * keep renderNav()'s own markup readable.
+     *
+     * @return array{home: string, latest: string, most_viewed: string, random: string}
+     */
+    private static function navUrls(?int $album_id = null, ?int $cat_id = null): array
+    {
+        $base    = lumora_base_url();
+        $most_qs = $album_id !== null ? '&album=' . $album_id : ($cat_id !== null ? '&cat=' . $cat_id : '');
+
+        return [
+            'home'        => h(lumora_theme_preview_link($base)),
+            'latest'      => h(lumora_theme_preview_link($base . '?view=latest')),
+            'most_viewed' => h(lumora_theme_preview_link($base . '?view=most_viewed' . $most_qs)),
+            'random'      => h(lumora_theme_preview_link($base . '?view=random')),
+        ];
     }
 
     // ── Powered by ────────────────────────────────────────────────────────────

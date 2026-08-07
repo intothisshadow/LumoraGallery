@@ -292,6 +292,19 @@ html, body { height: 100%; }
   display: none;
 }
 
+.lum-batch-status-done {
+  display: inline-block;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--bs-success, #198754);
+  animation: lum-batch-status-done-in .25s ease-out;
+}
+
+@keyframes lum-batch-status-done-in {
+  from { opacity: 0; transform: scale(.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
 /* ── Tree hierarchy (categories.php / albums.php) ──────────── */
 
 /* Connector glyph (└) used for nested rows */
@@ -469,6 +482,92 @@ html, body { height: 100%; }
 .lum-upd-status-fail {
   color: var(--bs-danger, #dc3545);
   font-weight: 600;
+}
+
+/* ── Folder suggestions (New Album Folder Path, LG-040) ─────── */
+.lum-folder-suggestions {
+  margin-top: .6rem;
+  animation: lum-folder-suggestions-in .18s ease-out;
+}
+
+@keyframes lum-folder-suggestions-in {
+  from { opacity: 0; transform: translateY(-.25rem); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.lum-folder-suggestions__label {
+  font-size: .8rem;
+  color: var(--lum-adm-muted);
+  margin-bottom: .45rem;
+}
+
+.lum-folder-suggestions__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  max-height: 10rem;
+  overflow-y: auto;
+  padding: .65rem;
+  background: var(--lum-adm-bg);
+  border: 1px solid var(--lum-adm-border);
+  border-radius: .5rem;
+}
+
+.lum-folder-suggestions__item {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  max-width: 100%;
+  font-family: var(--bs-font-monospace, monospace);
+  font-size: .8rem;
+  line-height: 1.2;
+  padding: .38rem .7rem;
+  background: var(--lum-adm-surface);
+  color: var(--lum-adm-text);
+  border: 1px solid var(--lum-adm-border);
+  border-radius: 2rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .06);
+  cursor: pointer;
+  transition: transform .12s ease, box-shadow .12s ease,
+              background-color .12s ease, border-color .12s ease;
+}
+
+.lum-folder-suggestions__item::before {
+  content: "📁";
+  font-size: .85em;
+  flex: none;
+}
+
+.lum-folder-suggestions__item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lum-folder-suggestions__item:hover,
+.lum-folder-suggestions__item:focus-visible {
+  background: var(--lum-adm-active);
+  border-color: var(--lum-adm-accent);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, .12);
+  outline: none;
+}
+
+.lum-folder-suggestions__item:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .08);
+}
+
+.lum-folder-suggestions__item.is-selected {
+  background: var(--lum-adm-accent);
+  border-color: var(--lum-adm-accent);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(92, 117, 232, .4);
+}
+
+.lum-folder-suggestions__item.is-selected::before {
+  content: "✓";
+  font-weight: 700;
 }
 
 /* ── Responsive ───────────────────────────────────────────── */

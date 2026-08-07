@@ -14,8 +14,14 @@ declare(strict_types=1);
  * AbstractMigration is loaded on demand by SchemaService::runOne() — it is
  * not loaded at bootstrap time.
  *
- * @copyright Copyright (C) 2025 Ariane
- * @license   GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
+ * @package    LumoraGallery
+ * @subpackage Database
+ * @author     Ariane
+ * @copyright  Copyright (c) 2026 Ariane
+ * @license    GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
+ * @link       https://coding.unloved-heart.net/scripts/lumoragallery
+ * @source     https://github.com/intothisshadow/LumoraGallery
+ * @since      1.8.0
  */
 
 if (!defined('LUMORA_ENTRY')) exit('Direct access denied.');

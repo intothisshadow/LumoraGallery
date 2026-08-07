@@ -5,15 +5,22 @@ declare(strict_types=1);
  *
  * Routes:
  *   /              → gallery home: recently updated albums + categories + latest additions + stats + who is online
- *   /?cat=N        → browse a category (sub-categories + albums)
+ *   /?cat=N        → browse a category (sub-categories + albums + latest
+ *                    additions from the whole subtree, LG-041)
  *   /?view=latest      → most recently added images
  *   /?view=most_viewed → all-time most viewed images (gallery-wide)
  *   /?view=most_viewed&album=N → most viewed images within album N (LG-33)
  *   /?view=most_viewed&cat=N   → most viewed images within category N (LG-33)
  *   /?view=random      → random selection
  *
- * @copyright Copyright (C) 2025 Ariane
- * @license   GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
+ * @package    LumoraGallery
+ * @subpackage Routing
+ * @author     Ariane
+ * @copyright  Copyright (c) 2026 Ariane
+ * @license    GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
+ * @link       https://coding.unloved-heart.net/scripts/lumoragallery
+ * @source     https://github.com/intothisshadow/LumoraGallery
+ * @since      1.0.0
  */
 
 define('LUMORA_ENTRY', true);
@@ -110,6 +117,16 @@ if ($view !== '') {
             $mt = !empty($albums) ? ' mt-4' : '';
             $content .= '<h2 class="lum-section-title' . $mt . '">Sub-categories</h2>'
                 . lumora_render_categories($subcats);
+        }
+
+        // Latest Additions (LG-041) — recent images from this category's own
+        // albums and every descendant sub-category's albums, at any depth.
+        $latest_in_cat = GalleryService::getLatestImagesInCategorySubtree($cat_id, 8);
+        if (!empty($latest_in_cat)) {
+            $mt = (!empty($albums) || !empty($subcats)) ? ' mt-4' : '';
+            $content .= '<h2 class="lum-section-title' . $mt . '">Latest Additions</h2>'
+                . lumora_render_thumbgrid($latest_in_cat)
+                . lumora_render_lightbox_js(lumora_base_url());
         }
 
         if (empty($subcats) && empty($albums)) {

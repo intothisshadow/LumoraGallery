@@ -41,6 +41,15 @@ declare(strict_types=1);
  * lives in GalleryService::createAlbum()/updateAlbum()/deleteAlbum() — this
  * page only handles permission checks, CSRF validation, request parsing,
  * flash messages, and redirects.
+ *
+ * @package    LumoraGallery
+ * @subpackage Admin
+ * @author     Ariane
+ * @copyright  Copyright (c) 2026 Ariane
+ * @license    GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
+ * @link       https://coding.unloved-heart.net/scripts/lumoragallery
+ * @source     https://github.com/intothisshadow/LumoraGallery
+ * @since      1.0.0
  */
 define('LUMORA_ENTRY', true);
 require_once dirname(__DIR__) . '/include/bootstrap.php';
@@ -395,11 +404,25 @@ if ($action === 'new' || $action === 'edit') {
         }
     }
 
+    // LG-040: on the New Album form, the Folder Path input is paired with a
+    // visible, clickable list of folders that already exist on disk under
+    // albums/ but aren't yet claimed by any album — populated client-side
+    // from ajax_list_folders.php so an admin can see and pick one instead of
+    // retyping a path that may have been uploaded via FTP in advance. A
+    // <datalist> is kept too, for typing-based autocomplete. Free typing
+    // (for a genuinely new folder) and leaving the field blank
+    // (auto-generated numeric folder) both keep working exactly as before.
     $folder_field = $action === 'new'
         ? '<div class="mb-3">
              <label class="form-label fw-semibold">Folder Path <small class="text-muted">(optional — auto-generated numeric if blank)</small></label>
              <input type="text" name="folder" value="" class="form-control font-monospace"
+                    list="lum-available-folders" id="lum-folder-input"
                     placeholder="e.g. Xena/Season1/1x01-SinsOfThePast">
+             <datalist id="lum-available-folders"></datalist>
+             <div class="lum-folder-suggestions" id="lum-folder-suggestions" hidden>
+               <div class="lum-folder-suggestions__label">Folders found on disk (not yet used by any album) — click to use:</div>
+               <div class="lum-folder-suggestions__list" id="lum-folder-suggestions-list"></div>
+             </div>
              <div class="form-text">
                Use <code>/</code> to create subfolders: <code>ShowName/Season2/EpisodeSlug</code>.<br>
                Allowed: letters, digits, hyphens <code>-</code>, underscores <code>_</code>, dots <code>.</code>.<br>
@@ -411,6 +434,65 @@ if ($action === 'new' || $action === 'edit') {
              <input type="text" value="' . $folder_v . '" class="form-control font-monospace" disabled>
              <div class="form-text">Folder cannot be changed after creation.</div>
            </div>';
+
+    $folder_lookup_script = '';
+    if ($action === 'new') {
+        $list_url_js = json_encode(lumora_base_url() . 'admin/ajax_list_folders.php');
+        $csrf_js     = json_encode($csrf);
+        $folder_lookup_script = <<<HTML
+<script>
+(function () {
+  'use strict';
+
+  var LIST_URL = {$list_url_js};
+  var CSRF     = {$csrf_js};
+
+  var input    = document.getElementById('lum-folder-input');
+  var datalist = document.getElementById('lum-available-folders');
+  var wrap     = document.getElementById('lum-folder-suggestions');
+  var list     = document.getElementById('lum-folder-suggestions-list');
+  if (!input || !datalist || !wrap || !list) return;
+
+  var body = new URLSearchParams();
+  body.set('csrf_token', CSRF);
+
+  fetch(LIST_URL, { method: 'POST', body: body })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (!data || !Array.isArray(data.folders) || data.folders.length === 0) return;
+
+      data.folders.forEach(function (folder) {
+        var opt = document.createElement('option');
+        opt.value = folder;
+        datalist.appendChild(opt);
+
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'lum-folder-suggestions__item';
+        var label = document.createElement('span');
+        label.textContent = folder;
+        btn.appendChild(label);
+        btn.addEventListener('click', function () {
+          input.value = folder;
+          list.querySelectorAll('.lum-folder-suggestions__item').forEach(function (el) {
+            el.classList.remove('is-selected');
+          });
+          btn.classList.add('is-selected');
+          input.focus();
+        });
+        list.appendChild(btn);
+      });
+
+      wrap.hidden = false;
+    })
+    .catch(function () {
+      // Folder suggestions are a convenience only — silently do nothing on
+      // failure, the field still works as a plain free-text input.
+    });
+})();
+</script>
+HTML;
+    }
 
     $content = <<<HTML
 <a href="{$base_h}" class="btn btn-sm btn-outline-secondary mb-3">← Back to list</a>
@@ -450,6 +532,7 @@ if ($action === 'new' || $action === 'edit') {
     <button type="submit" class="btn btn-primary">Save Album</button>
   </form>
 </div>
+{$folder_lookup_script}
 HTML;
     lum_admin_page($ftitle, $content, 'albums');
 }

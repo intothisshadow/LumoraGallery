@@ -64,6 +64,7 @@ Lumora/
 │   ├── ajax_installation_health.php  AJAX endpoint for installation health check (9 system checks)
 │   ├── ajax_reorder_categories.php  AJAX endpoint for drag-and-drop category reorder/reparent
 │   ├── ajax_reorder_albums.php AJAX endpoint for drag-and-drop album reorder within a category
+│   ├── ajax_list_folders.php   AJAX endpoint listing unclaimed server folders under albums/ (New Album Folder Path suggestions)
 │   ├── categories.php          Category management
 │   ├── config.php              Gallery settings, export/import
 │   ├── dashboard.php           Stats overview
@@ -291,7 +292,7 @@ migration is a scan-and-index operation — no file conversion needed:
 
 1. Copy (or symlink) your existing Coppermine `albums/` directory into Lumora's root.
 2. Create matching categories and albums in Lumora Admin, setting each album's **Folder Path** to the same relative path Coppermine uses
-   (e.g. `Xena/Season1/1x01-SinsOfThePast`).
+   (e.g. `Xena/Season1/1x01-SinsOfThePast`) — the New Album form suggests folders it finds under `albums/` that aren't yet claimed by any album, so an already-copied Coppermine folder should appear as you type.
 3. Run **Batch Add** on each album — Lumora indexes the images without touching the files.
 
 The **Coppermine Importer** plugin (`plugins/coppermine-importer/`) automates this entirely — it connects to the Coppermine database directly and imports categories, albums, and image metadata in keyset-paginated AJAX chunks without touching any files. Navigate to **Admin → Import** to run it.

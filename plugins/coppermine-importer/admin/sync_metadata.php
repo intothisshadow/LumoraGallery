@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 /**
- * Coppermine Importer — Metadata Sync Tool
+ * Lumora Gallery — Coppermine Importer Plugin — Metadata Sync Tool
  *
  * Standalone companion to the main import wizard (index.php). Syncs category
  * and album cover-thumbnail selections from an existing Coppermine
@@ -28,8 +28,14 @@ declare(strict_types=1);
  * Session key: lumora_cpg_thumb_sync (separate from the import wizard's
  * lumora_cpg_import, so the two tools never share or collide on state).
  *
- * @copyright Copyright (C) 2025 Ariane
- * @license   GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
+ * @package    LumoraGallery
+ * @subpackage Plugins
+ * @author     Ariane
+ * @copyright  Copyright (c) 2026 Ariane
+ * @license    GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
+ * @link       https://coding.unloved-heart.net/scripts/lumoragallery
+ * @source     https://github.com/intothisshadow/LumoraGallery
+ * @since      1.6.0
  */
 
 define('LUMORA_ENTRY', true);

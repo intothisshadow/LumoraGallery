@@ -29,8 +29,14 @@ declare(strict_types=1);
  * human-readable error string on failure, so callers can flash the message
  * directly without knowing the reason.
  *
- * @copyright Copyright (C) 2025 Ariane
- * @license   GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
+ * @package    LumoraGallery
+ * @subpackage Core
+ * @author     Ariane
+ * @copyright  Copyright (c) 2026 Ariane
+ * @license    GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
+ * @link       https://coding.unloved-heart.net/scripts/lumoragallery
+ * @source     https://github.com/intothisshadow/LumoraGallery
+ * @since      1.9.0
  */
 
 if (!defined('LUMORA_ENTRY')) exit('Direct access denied.');

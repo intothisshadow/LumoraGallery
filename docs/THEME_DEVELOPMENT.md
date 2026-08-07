@@ -33,7 +33,7 @@ file — no registration step is required. The active theme is chosen in
 | `{THEME_URL}` | URL to this theme's directory, with trailing slash |
 | `{BASE_URL}` | Gallery root URL, with trailing slash |
 | `{LUMORA_VERSION}` | Version string, e.g. `"1.9.2"` |
-| `{NAVIGATION}` | Bootstrap navbar-nav `<ul>` (used by the default theme) |
+| `{NAVIGATION}` | Site nav links (Home/Latest/Most Viewed/Random) — renders as `<ul class="navbar-nav"><li class="nav-item"><a class="nav-link">`; restyle those generic classes in your theme's CSS rather than hand-building the links, so the "Most Viewed" link keeps carrying the current album/category forward (LG-33) — see classic-fansite's `style.css` for an example of restyling them to a custom look |
 | `{ADMIN_LINK}` | Admin panel `<a>` link (empty for non-admin visitors) |
 | `{POWERED_BY}` | "Powered by Lumora Gallery" credit (empty when disabled in config) |
 | `{CONTENT}` | Main page HTML |
