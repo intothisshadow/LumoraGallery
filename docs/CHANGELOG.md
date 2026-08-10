@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.15.1] — 2026-08-10
+
+### Added
+
+- **New Album's Folder Path field now shows a notice when the automatic
+  on-disk folder search (LG-040) finds no unclaimed folders (LG-044).**
+  Previously, once the "Searching for folders on disk…" spinner
+  disappeared, a scan that genuinely found zero unclaimed folders left the
+  field area silent — no different from a scan that hadn't run at all,
+  with no way to tell the two apart. A small "No unclaimed folders found
+  on disk" notice now appears in that case. A failed or malformed scan
+  (network error, non-JSON response) still stays completely silent as
+  before — the field falling back to plain free-text input without any
+  error message — since only a genuinely successful, empty-result scan
+  warrants telling the admin so.
+
 ## [1.15.0] — 2026-08-10
 
 ### Added

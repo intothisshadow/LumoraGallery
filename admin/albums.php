@@ -412,6 +412,10 @@ if ($action === 'new' || $action === 'edit') {
     // <datalist> is kept too, for typing-based autocomplete. Free typing
     // (for a genuinely new folder) and leaving the field blank
     // (auto-generated numeric folder) both keep working exactly as before.
+    // A successful scan that finds zero unclaimed folders shows a small
+    // "No unclaimed folders found" notice instead of leaving the field
+    // area silent once the spinner disappears; a failed/malformed scan
+    // stays silent as before (the field still works as a plain input).
     $folder_field = $action === 'new'
         ? '<div class="mb-3">
              <label class="form-label fw-semibold">Folder Path <small class="text-muted">(optional — auto-generated numeric if blank)</small></label>
@@ -427,6 +431,7 @@ if ($action === 'new' || $action === 'edit') {
                <div class="lum-folder-suggestions__label">Folders found on disk (not yet used by any album) — click to use:</div>
                <div class="lum-folder-suggestions__list" id="lum-folder-suggestions-list"></div>
              </div>
+             <div class="lum-folder-suggestions-empty" id="lum-folder-suggestions-empty" hidden>No unclaimed folders found on disk — type a path above, or leave blank for an auto-generated one.</div>
              <div class="form-text">
                Use <code>/</code> to create subfolders: <code>ShowName/Season2/EpisodeSlug</code>.<br>
                Allowed: letters, digits, hyphens <code>-</code>, underscores <code>_</code>, dots <code>.</code>.<br>
@@ -456,6 +461,7 @@ if ($action === 'new' || $action === 'edit') {
   var wrap      = document.getElementById('lum-folder-suggestions');
   var list      = document.getElementById('lum-folder-suggestions-list');
   var searching = document.getElementById('lum-folder-searching');
+  var empty     = document.getElementById('lum-folder-suggestions-empty');
   if (!input || !datalist || !wrap || !list) return;
 
   var body = new URLSearchParams();
@@ -464,7 +470,15 @@ if ($action === 'new' || $action === 'edit') {
   fetch(LIST_URL, { method: 'POST', body: body })
     .then(function (r) { return r.json(); })
     .then(function (data) {
-      if (!data || !Array.isArray(data.folders) || data.folders.length === 0) return;
+      // A malformed/error response (missing "folders" entirely) stays
+      // silent, same as a network failure below — only a real successful
+      // scan that came back with zero folders shows the empty notice.
+      if (!data || !Array.isArray(data.folders)) return;
+
+      if (data.folders.length === 0) {
+        if (empty) empty.hidden = false;
+        return;
+      }
 
       data.folders.forEach(function (folder) {
         var opt = document.createElement('option');

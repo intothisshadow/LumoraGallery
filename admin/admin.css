@@ -554,6 +554,17 @@ html, body { height: 100%; }
   to   { opacity: 1; transform: translateY(0); }
 }
 
+.lum-folder-suggestions-empty {
+  margin-top: .6rem;
+  font-size: .8rem;
+  color: var(--lum-adm-muted);
+  animation: lum-folder-suggestions-in .18s ease-out;
+}
+
+.lum-folder-suggestions-empty[hidden] {
+  display: none;
+}
+
 .lum-folder-suggestions__label {
   font-size: .8rem;
   color: var(--lum-adm-muted);
