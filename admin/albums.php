@@ -419,6 +419,10 @@ if ($action === 'new' || $action === 'edit') {
                     list="lum-available-folders" id="lum-folder-input"
                     placeholder="e.g. Xena/Season1/1x01-SinsOfThePast">
              <datalist id="lum-available-folders"></datalist>
+             <div class="lum-folder-searching" id="lum-folder-searching">
+               <span class="lum-folder-searching__spinner" aria-hidden="true"></span>
+               Searching for folders on disk…
+             </div>
              <div class="lum-folder-suggestions" id="lum-folder-suggestions" hidden>
                <div class="lum-folder-suggestions__label">Folders found on disk (not yet used by any album) — click to use:</div>
                <div class="lum-folder-suggestions__list" id="lum-folder-suggestions-list"></div>
@@ -447,10 +451,11 @@ if ($action === 'new' || $action === 'edit') {
   var LIST_URL = {$list_url_js};
   var CSRF     = {$csrf_js};
 
-  var input    = document.getElementById('lum-folder-input');
-  var datalist = document.getElementById('lum-available-folders');
-  var wrap     = document.getElementById('lum-folder-suggestions');
-  var list     = document.getElementById('lum-folder-suggestions-list');
+  var input     = document.getElementById('lum-folder-input');
+  var datalist  = document.getElementById('lum-available-folders');
+  var wrap      = document.getElementById('lum-folder-suggestions');
+  var list      = document.getElementById('lum-folder-suggestions-list');
+  var searching = document.getElementById('lum-folder-searching');
   if (!input || !datalist || !wrap || !list) return;
 
   var body = new URLSearchParams();
@@ -488,6 +493,9 @@ if ($action === 'new' || $action === 'edit') {
     .catch(function () {
       // Folder suggestions are a convenience only — silently do nothing on
       // failure, the field still works as a plain free-text input.
+    })
+    .finally(function () {
+      if (searching) searching.hidden = true;
     });
 })();
 </script>

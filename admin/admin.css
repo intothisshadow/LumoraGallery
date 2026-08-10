@@ -484,7 +484,66 @@ html, body { height: 100%; }
   font-weight: 600;
 }
 
+/* ── Updates page: release source tabs (GitHub / Manual Update, LG-042) ── */
+.lum-upd-source-tabs {
+  display: inline-flex;
+  gap: .3rem;
+  padding: .3rem;
+  margin-bottom: 1.25rem;
+  background: var(--lum-adm-bg);
+  border: 1px solid var(--lum-adm-border);
+  border-radius: 2rem;
+}
+
+.lum-upd-source-tab {
+  border: none;
+  background: transparent;
+  color: var(--lum-adm-muted);
+  font-weight: 600;
+  font-size: .9rem;
+  padding: .5rem 1.15rem;
+  border-radius: 1.5rem;
+  cursor: pointer;
+  transition: background-color .15s ease, color .15s ease;
+}
+
+.lum-upd-source-tab:hover {
+  color: var(--lum-adm-text);
+}
+
+.lum-upd-source-tab.is-active {
+  background: var(--lum-adm-accent);
+  color: #fff;
+}
+
 /* ── Folder suggestions (New Album Folder Path, LG-040) ─────── */
+.lum-folder-searching {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin-top: .6rem;
+  font-size: .8rem;
+  color: var(--lum-adm-muted);
+}
+
+.lum-folder-searching[hidden] {
+  display: none;
+}
+
+.lum-folder-searching__spinner {
+  width: .8rem;
+  height: .8rem;
+  flex: none;
+  border: 2px solid var(--lum-adm-border);
+  border-top-color: var(--lum-adm-accent);
+  border-radius: 50%;
+  animation: lum-folder-searching-spin .7s linear infinite;
+}
+
+@keyframes lum-folder-searching-spin {
+  to { transform: rotate(360deg); }
+}
+
 .lum-folder-suggestions {
   margin-top: .6rem;
   animation: lum-folder-suggestions-in .18s ease-out;
@@ -568,6 +627,103 @@ html, body { height: 100%; }
 .lum-folder-suggestions__item.is-selected::before {
   content: "✓";
   font-weight: 700;
+}
+
+/* ── Appearance page: theme card grid (LG-043) ──────────────── */
+.lum-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1.1rem;
+}
+
+.lum-theme-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--lum-adm-border);
+  border-radius: .5rem;
+  overflow: hidden;
+  background: var(--lum-adm-surface);
+  transition: box-shadow .15s ease, border-color .15s ease;
+}
+
+.lum-theme-card:hover {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .1);
+}
+
+.lum-theme-card--active {
+  border-color: var(--lum-adm-accent);
+  border-width: 2px;
+}
+
+.lum-theme-card__screenshot-wrap {
+  aspect-ratio: 4 / 3;
+  background: var(--lum-adm-bg);
+  overflow: hidden;
+}
+
+.lum-theme-card__screenshot {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.lum-theme-card__screenshot--placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, var(--lum-adm-tbl-head) 25%, var(--lum-adm-bg) 25%,
+    var(--lum-adm-bg) 50%, var(--lum-adm-tbl-head) 50%, var(--lum-adm-tbl-head) 75%,
+    var(--lum-adm-bg) 75%, var(--lum-adm-bg));
+  background-size: 28px 28px;
+}
+
+.lum-theme-card__body {
+  padding: .9rem 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  flex: 1;
+}
+
+.lum-theme-card__name {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--lum-adm-head);
+}
+
+.lum-theme-card__badge {
+  font-size: .65rem;
+  vertical-align: middle;
+}
+
+.lum-theme-card__meta {
+  font-size: .8rem;
+  color: var(--lum-adm-muted);
+  margin: 0;
+}
+
+.lum-theme-card__actions {
+  margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+}
+
+/* Details modal screenshot gallery (Bootstrap modal body). */
+.lum-theme-details__gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+  margin-bottom: 1rem;
+}
+
+.lum-theme-details__screenshot {
+  max-width: 260px;
+  max-height: 180px;
+  object-fit: cover;
+  border-radius: .35rem;
+  border: 1px solid var(--lum-adm-border);
 }
 
 /* ── Responsive ───────────────────────────────────────────── */

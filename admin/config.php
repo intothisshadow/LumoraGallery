@@ -6,6 +6,11 @@ declare(strict_types=1);
  * Handles all gallery settings stored in lum_config.
  * Also provides config export (JSON download) and import.
  *
+ * Theme selection and other display-related settings (default colour mode,
+ * category layout, "Powered by" credit) moved to admin/appearance.php
+ * (LG-043) — see that file for the theme card grid, install/update/delete
+ * from ZIP, and preview links.
+ *
  * @package    LumoraGallery
  * @subpackage Admin
  * @author     Ariane
@@ -44,9 +49,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($act === 'save') {
         // White-list the settings we accept.
+        // theme, default_color_mode, category_layout, and show_powered_by
+        // moved to admin/appearance.php (LG-043) — save their own logic
+        // there via the same LumoraConfig::sanitizeValue() calls.
         $allowed = [
             'gallery_name', 'gallery_description', 'base_url',
-            'theme', 'thumb_width', 'thumb_height', 'per_page',
+            'thumb_width', 'thumb_height', 'per_page',
             'allowed_extensions',
             'timezone',
             'thumb_quality',
@@ -54,16 +62,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'count_album_views', 'log_mode', 'gallery_offline',
             'latest_albums_count', 'latest_images_count',
             'who_is_online_duration',
-            'show_powered_by',
-            'category_layout',
-            'default_color_mode',
             'install_ping_enabled',
             'litespeed_cache_purge',
         ];
 
         // Boolean checkbox keys: always save even when not present in POST
         // (unchecked checkbox sends nothing; treated as '0' by sanitizeValue()).
-        $bool_keys = ['count_album_views', 'gallery_offline', 'show_powered_by', 'install_ping_enabled', 'litespeed_cache_purge'];
+        $bool_keys = ['count_album_views', 'gallery_offline', 'install_ping_enabled', 'litespeed_cache_purge'];
 
         // Detect the install-ping opt-in transition before overwriting it, so
         // an immediate first ping can fire the moment it's switched on rather
@@ -112,17 +117,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             lumora_redirect($base);
         }
 
+        // theme, default_color_mode, category_layout, and show_powered_by
+        // moved to admin/appearance.php (LG-043); imported config files
+        // containing those keys simply leave them untouched here now.
         $safe_keys = [
-            'gallery_name', 'gallery_description', 'theme',
+            'gallery_name', 'gallery_description',
             'thumb_width', 'thumb_height', 'per_page',
             'allowed_extensions',
             'timezone', 'thumb_quality',
             'max_upload_size_mb', 'max_image_width', 'max_image_height',
             'count_album_views', 'log_mode', 'gallery_offline',
             'latest_albums_count', 'latest_images_count', 'who_is_online_duration',
-            'show_powered_by',
-            'category_layout',
-            'default_color_mode',
         ];
         $imported = 0;
         foreach ($data['lumora_config'] as $k => $v) {
@@ -146,7 +151,6 @@ $cfg = [
     'gallery_name'        => lumora_config('gallery_name',        'Lumora Gallery'),
     'gallery_description' => lumora_config('gallery_description', ''),
     'base_url'            => lumora_config('base_url',            ''),
-    'theme'               => lumora_config('theme',               'default'),
     'thumb_width'         => lumora_config('thumb_width',         '250'),
     'thumb_height'        => lumora_config('thumb_height',        '250'),
     'per_page'            => lumora_config('per_page',            '48'),
@@ -162,9 +166,6 @@ $cfg = [
     'latest_albums_count' => lumora_config('latest_albums_count', '5'),
     'latest_images_count' => lumora_config('latest_images_count', '8'),
     'who_is_online_duration' => lumora_config('who_is_online_duration', '5'),
-    'show_powered_by'        => lumora_config('show_powered_by',        '1'),
-    'category_layout'        => lumora_config('category_layout',        'grid'),
-    'default_color_mode'     => lumora_config('default_color_mode',     'auto'),
     'install_ping_enabled'   => lumora_config('install_ping_enabled',   '0'),
     'litespeed_cache_purge'  => lumora_config('litespeed_cache_purge',  '0'),
 ];
@@ -179,47 +180,8 @@ $processor_status = extension_loaded('imagick')
         ? '⚠ GD library (fallback — install the PHP imagick extension for better quality)'
         : '✗ None found — thumbnail generation disabled');
 
-// Theme metadata.
-$themes = lumora_list_themes();
-$theme_meta = [];
-foreach ($themes as $t) {
-    $theme_meta[$t] = lumora_get_theme_meta($t);
-}
-
-$theme_opts = '';
-foreach ($themes as $t) {
-    $sel = $t === $cfg['theme'] ? ' selected' : '';
-    $theme_opts .= '<option value="' . h($t) . '"' . $sel . '>' . h($theme_meta[$t]['name']) . '</option>';
-}
-if (empty($themes)) {
-    $theme_opts = '<option value="default" selected>default (no themes found)</option>';
-}
-
-// Preview links (TODO.md #29): an admin-only, single-request `?theme=`
-// override on the public gallery's own base URL — see
-// lumora_theme_preview_state() in include/functions.php for the resolution
-// logic this points at. Opens in a new tab so the admin's own current
-// admin-panel session/tab is untouched; never touches the `theme` config
-// value itself, so the site's real active theme is completely unaffected
-// for every other visitor.
-$theme_rows = '';
-foreach ($themes as $t) {
-    $m           = $theme_meta[$t];
-    $author_h    = $m['author'] !== '' ? h($m['author']) : '<span class="text-muted">&mdash;</span>';
-    $design_h    = $m['design_uri'] !== ''
-        ? '<a href="' . h($m['design_uri']) . '" target="_blank" rel="noopener">' . h($m['design_uri']) . '</a>'
-        : '<span class="text-muted">&mdash;</span>';
-    $preview_url = h(lumora_base_url() . '?theme=' . rawurlencode($t));
-    $preview_h   = '<a href="' . $preview_url . '" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">Preview &#x2197;</a>';
-    $theme_rows .= '<tr><td>' . h($m['name']) . '</td><td><code>' . h($t) . '</code></td>'
-        . '<td>' . $author_h . '</td><td>' . $design_h . '</td><td>' . $preview_h . '</td></tr>';
-}
-$theme_table = '';
-if ($theme_rows !== '') {
-    $theme_table = '<table class="table table-sm table-borderless align-middle mb-0 mt-2" style="max-width:780px">'
-        . '<thead><tr><th>Theme</th><th>Folder</th><th>Author</th><th>Design URI</th><th>Preview</th></tr></thead>'
-        . '<tbody>' . $theme_rows . '</tbody></table>';
-}
+// Theme management (activation, install/update/delete from ZIP, preview
+// links) moved to admin/appearance.php (LG-043) — see ThemeService.
 
 // Pre-compute values safe for use in HTML attributes.
 $v_gallery_name    = h($cfg['gallery_name']);
@@ -234,6 +196,7 @@ $v_max_img_w       = h($cfg['max_image_width']);
 $v_max_img_h       = h($cfg['max_image_height']);
 $v_thumb_w         = h($cfg['thumb_width']);
 $v_thumb_h         = h($cfg['thumb_height']);
+$appearance_url_h  = h(lumora_base_url() . 'admin/appearance.php');
 
 // Select / checkbox states.
 $sel_log_off    = $cfg['log_mode'] === 'off'    ? ' selected' : '';
@@ -241,14 +204,8 @@ $sel_log_errors = $cfg['log_mode'] === 'errors' ? ' selected' : '';
 $sel_log_all    = $cfg['log_mode'] === 'all'    ? ' selected' : '';
 $chk_album_views = $cfg['count_album_views'] === '1' ? ' checked' : '';
 $chk_offline      = $cfg['gallery_offline']   === '1' ? ' checked' : '';
-$chk_powered_by   = $cfg['show_powered_by']   === '1' ? ' checked' : '';
 $chk_install_ping = $cfg['install_ping_enabled'] === '1' ? ' checked' : '';
 $chk_litespeed_purge = $cfg['litespeed_cache_purge'] === '1' ? ' checked' : '';
-$sel_cat_grid     = $cfg['category_layout']   === 'grid' ? ' selected' : '';
-$sel_cat_list     = $cfg['category_layout']   === 'list' ? ' selected' : '';
-$sel_cm_auto      = $cfg['default_color_mode'] === 'auto'  ? ' selected' : '';
-$sel_cm_light     = $cfg['default_color_mode'] === 'light' ? ' selected' : '';
-$sel_cm_dark      = $cfg['default_color_mode'] === 'dark'  ? ' selected' : '';
 $v_latest_albums  = h($cfg['latest_albums_count']);
 $v_latest_images  = h($cfg['latest_images_count']);
 $v_who_online_dur = h($cfg['who_is_online_duration']);
@@ -279,8 +236,6 @@ $install_uuid_html = $v_install_uuid !== ''
 // .lum-adm-section-icon rule in admin.css (see TODO #25).
 $ic_basic = '<svg class="lum-adm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16.5"></line><circle cx="12" cy="7.75" r="1" fill="currentColor" stroke="none"></circle></svg>';
 
-$ic_appearance = '<svg class="lum-adm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.4-.3-.4-.5-.9-.5-1.4 0-1.1.9-2 2-2h1.5c1.9 0 3.5-1.6 3.5-3.5C20 6.4 16.4 3 12 3z"></path><circle cx="7.5" cy="10.5" r="1" fill="currentColor" stroke="none"></circle><circle cx="10.5" cy="7" r="1" fill="currentColor" stroke="none"></circle><circle cx="15" cy="8" r="1" fill="currentColor" stroke="none"></circle></svg>';
-
 $ic_images = '<svg class="lum-adm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="8.5" cy="9.5" r="1.5"></circle><path d="M21 16l-5-5-4 4-2-2-5 5"></path></svg>';
 
 $ic_behavior = '<svg class="lum-adm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"></line><circle cx="9" cy="6" r="2" fill="currentColor" stroke="none"></circle><line x1="4" y1="12" x2="20" y2="12"></line><circle cx="15" cy="12" r="2" fill="currentColor" stroke="none"></circle><line x1="4" y1="18" x2="20" y2="18"></line><circle cx="7" cy="18" r="2" fill="currentColor" stroke="none"></circle></svg>';
@@ -297,6 +252,11 @@ $content = <<<HTML
 <form method="post" action="{$base_h}">
   <input type="hidden" name="action"     value="save">
   <input type="hidden" name="csrf_token" value="{$csrf}">
+
+  <div class="alert alert-info py-2 px-3 mb-4">
+    Theme selection, colour mode, category layout, and the "Powered by" credit
+    now live on the <a href="{$appearance_url_h}">Appearance</a> page.
+  </div>
 
   <!-- ── Basic Information ─────────────────────────────────────────── -->
   <div class="lum-adm-card mb-4">
@@ -317,50 +277,6 @@ $content = <<<HTML
     <div class="mb-0">
       <label class="form-label fw-semibold">Gallery Description</label>
       <textarea name="gallery_description" rows="2" class="form-control">{$v_gallery_desc}</textarea>
-    </div>
-  </div>
-
-  <!-- ── Appearance ─────────────────────────────────────────────────── -->
-  <div class="lum-adm-card mb-4">
-    <h5 class="lum-adm-section-title mb-3">{$ic_appearance}Appearance</h5>
-
-    <div class="mb-3">
-      <label class="form-label fw-semibold">Active Theme</label>
-      <select name="theme" class="form-select" style="max-width:220px">{$theme_opts}</select>
-      <div class="form-text">Themes are folders inside <code>themes/</code> that contain a <code>template.html</code>. Display name, author, and design URI are read from a <code>Theme Name</code> / <code>Author</code> / <code>Design URI</code> CSS header comment at the top of each theme's primary stylesheet; a theme with no such header falls back to its folder name. Use <strong>Preview</strong> to see any installed theme rendered on the live gallery without changing this setting &mdash; only visible to you, in a new tab.</div>
-      {$theme_table}
-    </div>
-
-    <div class="row g-3 mb-3">
-      <div class="col-md-6">
-        <label class="form-label fw-semibold">Default Colour Mode</label>
-        <select name="default_color_mode" class="form-select" style="max-width:220px">
-          <option value="auto"{$sel_cm_auto}>Auto (follow visitor's system preference)</option>
-          <option value="light"{$sel_cm_light}>Light — always start in light mode</option>
-          <option value="dark"{$sel_cm_dark}>Dark — always start in dark mode</option>
-        </select>
-        <div class="form-text">Sets the default colour scheme for visitors who have not yet used the
-          <strong>🖥️ / ☀️ / 🌙</strong> toggle. Visitors' own preference (stored in their browser)
-          always takes priority over this setting.</div>
-      </div>
-      <div class="col-md-6">
-        <label class="form-label fw-semibold">Category Layout</label>
-        <select name="category_layout" class="form-select" style="max-width:260px">
-          <option value="grid"{$sel_cat_grid}>Grid — card grid (default)</option>
-          <option value="list"{$sel_cat_list}>List — one category per row</option>
-        </select>
-        <div class="form-text">Choose how categories are displayed on the home page and category browsing pages. <em>List</em> shows each category as a row with thumbnail, name, album count, and image count.</div>
-      </div>
-    </div>
-
-    <div class="mb-0">
-      <div class="form-check form-switch">
-        <input type="hidden" name="show_powered_by" value="0">
-        <input class="form-check-input" type="checkbox" id="show_powered_by"
-               name="show_powered_by" value="1"{$chk_powered_by}>
-        <label class="form-check-label fw-semibold" for="show_powered_by">Show Powered By Credit</label>
-      </div>
-      <div class="form-text">Display a &ldquo;Powered by Lumora Gallery&rdquo; credit in the site footer.</div>
     </div>
   </div>
 

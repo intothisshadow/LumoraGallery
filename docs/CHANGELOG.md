@@ -8,6 +8,97 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.15.0] — 2026-08-10
+
+### Added
+
+- **New Admin → Appearance page with a visual theme card grid, replacing
+  the plain theme dropdown on Configuration (LG-043).** Theme selection
+  and the display-related settings (`theme`, `default_color_mode`,
+  `category_layout`, `show_powered_by`) previously lived inside
+  Configuration's "Appearance" card; they now have their own page,
+  `admin/appearance.php`, with its own "Appearance" item under Settings
+  in the sidebar. Every installed theme (from `lumora_list_themes()`) is
+  shown as a card: a screenshot on top (a file named `preview.*`,
+  `thumbnail.*`, or `screenshot.*` in the theme's folder, in that
+  priority order, with numbered variants like `screenshot-2.jpg`
+  supported and a neutral placeholder shown when none exist), the theme's
+  name and author below with an **Active** badge on the current theme,
+  and **Activate**/**Preview**/**Details** actions underneath the
+  thumbnail. **Details** opens a modal with the theme's full screenshot
+  gallery, author, design URI, and folder name. Two new capabilities go
+  beyond what Configuration's old theme table offered: **install a theme
+  from an uploaded `.zip`** (validated — real ZIP structure, entry-count
+  and uncompressed-size caps, unsafe-path/path-traversal rejection, a
+  `template.html` present in the archive, a single wrapping top-level
+  folder such as a GitHub export auto-flattened, and the destination
+  folder name derived from the theme's own declared `Theme Name` header
+  where present), and **update an already-installed theme in place** by
+  re-uploading a `.zip` for its existing folder name — a deliberate
+  divergence from the plain install path, which still hard-rejects a
+  name collision — gated behind an explicit "this will overwrite the
+  currently-installed files" confirmation, with the upload staged to a
+  temp folder and only swapped over the live theme via `rename()` after
+  every validation check passes, so a bad upload can never leave a
+  half-extracted theme live. Non-active, non-bundled themes also get a
+  **Delete** action; the two bundled themes (`default`, `classic-fansite`)
+  and whichever theme is currently active can never be deleted. All of
+  this new theme-management logic lives in a new
+  `include/services/ThemeService.php` service class, following the
+  project's established static-service pattern. The unsafe-ZIP-entry-name
+  check this reuses (path traversal, absolute paths, backslashes, null
+  bytes) is now a single shared `lumora_is_unsafe_zip_entry_name()`
+  helper in `include/functions.php`, called by both `ThemeService` and
+  `UpdaterService` — previously `UpdaterService` had its own private copy
+  of this exact check.
+
+- **Admin → Updates now supports installing from an uploaded ZIP, in
+  addition to the existing GitHub-based updater (LG-042).** Previously
+  the only way to install a Lumora Gallery release was the "Update Now"
+  button against a GitHub-fetched archive — with no option for hosts
+  that can't make outbound HTTPS requests to GitHub, and no way to
+  install a build that isn't published as a tagged GitHub release. A new
+  **📦 Install from Uploaded ZIP** panel lets an administrator upload a
+  release ZIP directly; the package is validated (ZIP structure,
+  path-traversal/unsafe-entry rejection, entry-count and
+  uncompressed-size caps, PHP-version and disk-space checks against the
+  package's own `LUMORA_MIN_PHP`/`version.php`) and, once accepted, feeds
+  its detected version into the exact same 10-stage
+  `preflight → download → verify → backup → maintenance → extract →
+  validate → replace → migrate → cleanup` pipeline, automatic update
+  backup, and rollback-on-failure behavior the GitHub flow already uses
+  — `UpdaterService::acquireLockFromUpload()` stages the uploaded archive
+  at the same path a downloaded release would occupy, so every stage
+  from Download onward (which skips re-fetching a present archive) runs
+  unmodified — `stageDownload()`'s resume check now runs before its
+  download-URL requirement rather than after, since an uploaded package
+  deliberately has no download URL at all. A new
+  `admin/ajax_update_upload.php` endpoint
+  (`site_configuration`-gated, CSRF-protected) handles the upload; the
+  progress panel, stage list, and stuck-session recovery UI are now
+  shared between both update sources rather than only appearing when a
+  GitHub release happens to be available.
+
+- **New Album's Folder Path field now shows a "Searching for folders on
+  disk…" indicator while the on-disk folder scan (LG-040) is running.**
+  On galleries with a large `albums/` tree the scan can take a few
+  seconds, and with no feedback the field looked inert during that time.
+  A spinner + text placeholder now appears next to the field as soon as
+  the page loads and disappears once the scan finishes (success, empty
+  result, or failure) — same fetch, same fallback-to-plain-input
+  behavior on error, just visible progress in between.
+
+### Changed
+
+- **Opt-in Anonymous Install Ping endpoint moved to its own subdirectory.**
+  `InstallPingService::ENDPOINT` now sends to
+  `https://coding.unloved-heart.net/lumoragallery/install-tracking-server/ping.php`
+  (was `.../lumoragallery/ping.php`) — the receiving service now lives at
+  its own `install-tracking-server/` path on that host instead of sitting
+  directly at the `lumoragallery` docroot. Purely a server-side deployment
+  change; the ping itself (payload, opt-in gating, ~monthly cadence,
+  fire-and-forget failure handling) is unaffected.
+
 ## [1.14.0] — 2026-08-07
 
 ### Added

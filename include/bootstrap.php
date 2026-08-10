@@ -111,6 +111,7 @@ require_once LUMORA_INCLUDE . 'services/LumoraConfig.php';
 require_once LUMORA_INCLUDE . 'services/GalleryService.php';
 require_once LUMORA_INCLUDE . 'services/ThumbnailService.php';
 require_once LUMORA_INCLUDE . 'services/ThemeRenderer.php';
+require_once LUMORA_INCLUDE . 'services/ThemeService.php';
 require_once LUMORA_INCLUDE . 'services/MigrationService.php';
 require_once LUMORA_INCLUDE . 'services/UpdateService.php';
 require_once LUMORA_INCLUDE . 'services/SchemaService.php';

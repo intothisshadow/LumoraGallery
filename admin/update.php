@@ -144,6 +144,39 @@ $updater_running = UpdaterService::isUpdateRunning();
 $updater_lock    = $updater_running ? UpdaterService::getLockInfo() : null;
 $update_history  = UpdaterService::getUpdateHistory();
 
+// Stuck-session notice (lock held but no update running from this browser) —
+// computed unconditionally (LG-042) since it must surface regardless of
+// whether a GitHub release is currently offered: a stuck session can now
+// come from either the GitHub "Update Now" flow or the "Install from
+// Uploaded ZIP" flow below, and both share the same lock/progress pipeline.
+$stuck_notice = '';
+if ($updater_running && $updater_lock !== null) {
+    $stuck_ver  = h($updater_lock['version'] ?? 'unknown');
+    $stuck_strt = $updater_lock['started_at'] ?? 0;
+    $stuck_age  = $stuck_strt > 0 ? h(human_time_diff((int) $stuck_strt)) . ' ago' : 'unknown time';
+    $stuck_notice = '<div class="alert alert-warning py-2 mb-3 small">'
+        . '⚠ An update session for v' . $stuck_ver . ' was started ' . $stuck_age . ' and may be stuck. '
+        . '<button id="lum-upd-abort-stuck" class="btn btn-sm btn-outline-danger ms-2">Abort stuck session</button>'
+        . '</div>';
+}
+
+// Stage list HTML for the shared progress panel — rendered in PHP so CSS
+// works without JS running first. Also computed unconditionally (LG-042):
+// both the GitHub "Update Now" flow and the "Install from Uploaded ZIP"
+// flow drive the exact same UpdaterService stage pipeline through the same
+// #lum-upd-progress panel.
+$stage_rows = '';
+foreach (UpdaterService::STAGE_SEQUENCE as $s) {
+    $label       = UpdaterService::STAGE_LABELS[$s] ?? $s;
+    $stage_rows .= '<div id="lum-stage-' . h($s) . '" class="d-flex align-items-start gap-2 mb-2 lum-upd-stage">'
+        . '<span class="lum-upd-stage-icon mt-1" style="min-width:1.1rem;text-align:center">⊙</span>'
+        . '<div>'
+        . '<span class="lum-upd-stage-label small">' . h($label) . '</span>'
+        . '<div class="lum-upd-stage-details small text-muted mt-1" style="display:none"></div>'
+        . '</div>'
+        . '</div>';
+}
+
 // ── Schema migration status ───────────────────────────────────────────────────
 $mig_status  = SchemaService::getMigrationStatus();
 $mig_pending = count($mig_status['pending']);
@@ -298,9 +331,22 @@ if ($upd['latest'] !== null) {
     $release_title_h = $release_name_h !== null ? $release_name_h : ('v' . $latest_h);
     $release_notes_html = UpdateService::renderReleaseNotesHtml($upd['release_notes']);
 
+    // GitHubUpdateProvider::mapRelease() truncates notes over 2000 bytes to
+    // 1997 chars + a trailing "…" before they're ever stored — that trailing
+    // marker is the reliable signal here that the inline copy is a preview,
+    // not the full release body.
+    $notes_truncated = $upd['release_notes'] !== null
+        && str_ends_with($upd['release_notes'], '…')
+        && strlen($upd['release_notes']) >= 1998;
+
+    $notes_btn_label = $notes_truncated ? 'View full release notes on GitHub' : 'View release notes on GitHub';
     $notes_btn = $cl_url_h
-        ? '<a href="' . $cl_url_h . '" target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm">View release notes on GitHub</a>'
+        ? '<a href="' . $cl_url_h . '" target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm">' . $notes_btn_label . '</a>'
         : '';
+
+    $notes_label = $notes_truncated
+        ? 'Release notes (preview — truncated at 2,000 characters; see the full notes on GitHub):'
+        : 'Release notes:';
     $dl_btn = $dl_url_h
         ? '<a href="' . $dl_url_h . '" class="btn btn-outline-secondary btn-sm">Download release ZIP</a>'
         : '';
@@ -332,7 +378,7 @@ HTML;
   </div>
   {$checksum_bar}
   {$php_compat_warn}
-  <p class="small text-muted mt-3 mb-1">Release notes:</p>
+  <p class="small text-muted mt-3 mb-1">{$notes_label}</p>
   <div class="lum-upd-release-notes">{$release_notes_html}</div>
 </div>
 
@@ -357,31 +403,6 @@ if ($upd_available && !$can_perform_updates) {
 
 HTML;
 } elseif ($upd_available) {
-    // Stage list HTML — rendered in PHP so CSS works without JS running first.
-    $stage_rows = '';
-    foreach (UpdaterService::STAGE_SEQUENCE as $s) {
-        $label        = UpdaterService::STAGE_LABELS[$s] ?? $s;
-        $stage_rows  .= '<div id="lum-stage-' . h($s) . '" class="d-flex align-items-start gap-2 mb-2 lum-upd-stage">'
-            . '<span class="lum-upd-stage-icon mt-1" style="min-width:1.1rem;text-align:center">⊙</span>'
-            . '<div>'
-            . '<span class="lum-upd-stage-label small">' . h($label) . '</span>'
-            . '<div class="lum-upd-stage-details small text-muted mt-1" style="display:none"></div>'
-            . '</div>'
-            . '</div>';
-    }
-
-    // Stuck-session notice (lock held but no update running from this browser).
-    $stuck_notice = '';
-    if ($updater_running && $updater_lock !== null) {
-        $stuck_ver  = h($updater_lock['version'] ?? 'unknown');
-        $stuck_strt = $updater_lock['started_at'] ?? 0;
-        $stuck_age  = $stuck_strt > 0 ? h(human_time_diff((int) $stuck_strt)) . ' ago' : 'unknown time';
-        $stuck_notice = '<div class="alert alert-warning py-2 mb-3 small">'
-            . '⚠ An update session for v' . $stuck_ver . ' was started ' . $stuck_age . ' and may be stuck. '
-            . '<button id="lum-upd-abort-stuck" class="btn btn-sm btn-outline-danger ms-2">Abort stuck session</button>'
-            . '</div>';
-    }
-
     $btn_disabled   = $updater_running ? ' disabled' : '';
     $php_warn_note  = !$php_ok
         ? '<div class="alert alert-danger py-2 mb-3 small">⚠ PHP version mismatch — see above. Do not update.</div>'
@@ -390,9 +411,8 @@ HTML;
 
     $update_now_card = <<<HTML
 <!-- ── "Update Now" card ───────────────────────────────────────────────────── -->
-<div class="lum-adm-card mb-4">
+<div id="lum-upd-card" class="lum-adm-card mb-4">
   <h5 class="mb-3">⬆ Install Update</h5>
-  {$stuck_notice}
   {$php_warn_note}
 
   <!-- Confirmation & options -->
@@ -443,33 +463,100 @@ HTML;
     </button>
     <span class="text-muted small ms-2">Provider: <span id="lum-upd-provider-label">{$provider_h}</span></span>
   </div>
+</div>
 
-  <!-- Progress area (hidden until update starts) -->
-  <div id="lum-upd-progress" class="d-none">
-    <h6 class="mb-3">Update progress</h6>
+HTML;
+}
 
-    <!-- Stage indicators -->
-    <div id="lum-upd-stages" class="mb-3 ps-1">
-      {$stage_rows}
+// ── Build "Install from Uploaded ZIP" card (LG-042) ────────────────────────────
+// Always available to site_configuration holders, independent of whether the
+// GitHub-based check found a newer release — lets an admin install a specific
+// build, or update on a host that can't reach GitHub. Feeds into the exact
+// same #lum-upd-progress stage pipeline as the "Update Now" button above.
+$upload_card = '';
+if (!$can_perform_updates) {
+    $upload_card = <<<HTML
+<div class="lum-adm-card mb-4">
+  <h5 class="mb-2">📦 Install from Uploaded ZIP</h5>
+  <div class="alert alert-info py-2 small mb-0">
+    Installing from an uploaded ZIP requires the Site Configuration permission.
+  </div>
+</div>
+
+HTML;
+} else {
+    $upload_disabled = $updater_running ? ' disabled' : '';
+
+    $upload_card = <<<HTML
+<div id="lum-upload-card" class="lum-adm-card mb-4">
+  <h5 class="mb-2">📦 Install from Uploaded ZIP</h5>
+  <p class="text-muted small mb-3">
+    Install or reinstall Lumora Gallery from a release ZIP file you upload directly &mdash; useful
+    if this server can't reach GitHub over outbound HTTPS, or to install a build that isn't
+    published as a GitHub release. The uploaded package goes through the exact same validation,
+    automatic update backup, and rollback-on-failure pipeline as an update fetched from GitHub.
+  </p>
+
+  <div id="lum-upload-area">
+    <div class="mb-3">
+      <label class="form-label fw-semibold" for="lum-upload-file">Release ZIP file</label>
+      <input type="file" id="lum-upload-file" accept=".zip" class="form-control" style="max-width:420px"{$upload_disabled}>
+      <div class="form-text">Only official Lumora Gallery release packages should be uploaded here.</div>
     </div>
 
-    <!-- Detail log -->
-    <div id="lum-upd-log" class="small font-monospace"
-         style="max-height:180px;overflow-y:auto;background:var(--bs-gray-100,#f8f9fa);
-                border:1px solid var(--bs-border-color,#dee2e6);padding:.5rem .75rem;
-                border-radius:.35rem;white-space:pre-wrap;word-break:break-word"></div>
-
-    <!-- Controls -->
-    <div class="mt-3 d-flex gap-2 align-items-center flex-wrap">
-      <button id="lum-upd-rollback-btn" class="btn btn-danger btn-sm d-none">↩ Rollback</button>
-      <button id="lum-upd-abort-btn"   class="btn btn-outline-secondary btn-sm d-none">⏹ Abort</button>
-      <span   id="lum-upd-status-msg"  class="text-muted small"></span>
+    <div class="form-check mb-2">
+      <input class="form-check-input" type="checkbox" id="lum-upload-replace-plugins"{$upload_disabled}>
+      <label class="form-check-label small" for="lum-upload-replace-plugins">
+        Replace installed plugins with the versions bundled in this package
+        <span class="text-muted">(plugins are preserved by default)</span>
+      </label>
     </div>
+
+    <div class="form-check mb-3">
+      <input class="form-check-input" type="checkbox" id="lum-upload-replace-themes"{$upload_disabled}>
+      <label class="form-check-label small" for="lum-upload-replace-themes">
+        Replace installed themes with the versions bundled in this package
+        <span class="text-muted">(themes are preserved by default; uncheck to keep customised themes)</span>
+      </label>
+    </div>
+
+    <button id="lum-upload-start-btn" class="btn btn-success"{$upload_disabled}>⬆ Upload &amp; Install</button>
+    <span id="lum-upload-status" class="text-muted small ms-2"></span>
   </div>
 </div>
 
 HTML;
 }
+
+// ── Shared update-progress card ─────────────────────────────────────────────────
+// Used by both the "Update Now" (GitHub) and "Install from Uploaded ZIP"
+// flows above, since both drive the exact same UpdaterService stage
+// pipeline. Always rendered (hidden until a flow starts) so it's available
+// even when no GitHub update is currently offered.
+$progress_card = <<<HTML
+<div id="lum-upd-progress" class="lum-adm-card mb-4 d-none">
+  <h5 class="mb-3">Update progress</h5>
+
+  <!-- Stage indicators -->
+  <div id="lum-upd-stages" class="mb-3 ps-1">
+    {$stage_rows}
+  </div>
+
+  <!-- Detail log -->
+  <div id="lum-upd-log" class="small font-monospace"
+       style="max-height:180px;overflow-y:auto;background:var(--bs-gray-100,#f8f9fa);
+              border:1px solid var(--bs-border-color,#dee2e6);padding:.5rem .75rem;
+              border-radius:.35rem;white-space:pre-wrap;word-break:break-word"></div>
+
+  <!-- Controls -->
+  <div class="mt-3 d-flex gap-2 align-items-center flex-wrap">
+    <button id="lum-upd-rollback-btn" class="btn btn-danger btn-sm d-none">↩ Rollback</button>
+    <button id="lum-upd-abort-btn"   class="btn btn-outline-secondary btn-sm d-none">⏹ Abort</button>
+    <span   id="lum-upd-status-msg"  class="text-muted small"></span>
+  </div>
+</div>
+
+HTML;
 
 // ── Build Full Backups card ──────────────────────────────────────────────────────
 $backups = BackupService::listBackups();
@@ -649,29 +736,45 @@ $content = <<<HTML
   {$header_grid}
 </div>
 
-{$latest_release_card}
-{$update_now_card}
+{$stuck_notice}
+
+<!-- ── Release source tabs (LG-042) ─────────────────────────────────────────── -->
+<div class="lum-upd-source-tabs" role="tablist">
+  <button type="button" class="lum-upd-source-tab is-active" id="lum-source-tab-github" data-lum-source-tab="github" role="tab" aria-selected="true">GitHub</button>
+  <button type="button" class="lum-upd-source-tab" id="lum-source-tab-manual" data-lum-source-tab="manual" role="tab" aria-selected="false">Manual Update</button>
+</div>
+
+<div id="lum-source-panel-github" data-lum-source-panel="github">
+  {$latest_release_card}
+  {$update_now_card}
+
+  <!-- ── Check for updates ─────────────────────────────────────────────────── -->
+  <div class="lum-adm-card mb-4">
+    <h5 class="mb-2">🔄 Check for Updates</h5>
+    <p class="text-muted small mb-3">
+      Checks the configured release source for a new Lumora release.  Results are cached
+      (see Update settings below for the check frequency). No gallery content, user data, or
+      identifying information is ever transmitted — only a plain GET request is made to the
+      release API.
+    </p>
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+      <button id="lum-check-btn" class="btn btn-primary">🔄 Check for Updates Now</button>
+      <span id="lum-check-spinner" class="text-muted small d-none">Checking…</span>
+    </div>
+    <div id="lum-check-result" class="mt-3"></div>
+  </div>
+</div>
+
+<div id="lum-source-panel-manual" data-lum-source-panel="manual" class="d-none">
+  {$upload_card}
+</div>
+
+{$progress_card}
 
 <!-- ── Database schema updates ──────────────────────────────────────────────── -->
 <div class="lum-adm-card mb-4">
   <h5 class="mb-3">🗄 Database Updates</h5>
   {$db_updates_block}
-</div>
-
-<!-- ── Check for updates ─────────────────────────────────────────────────────── -->
-<div class="lum-adm-card mb-4">
-  <h5 class="mb-2">🔄 Check for Updates</h5>
-  <p class="text-muted small mb-3">
-    Checks the configured release source for a new Lumora release.  Results are cached
-    (see Update settings below for the check frequency). No gallery content, user data, or
-    identifying information is ever transmitted — only a plain GET request is made to the
-    release API.
-  </p>
-  <div class="d-flex gap-2 align-items-center flex-wrap">
-    <button id="lum-check-btn" class="btn btn-primary">🔄 Check for Updates Now</button>
-    <span id="lum-check-spinner" class="text-muted small d-none">Checking…</span>
-  </div>
-  <div id="lum-check-result" class="mt-3"></div>
 </div>
 
 {$backups_card}
@@ -685,9 +788,13 @@ $content = <<<HTML
   <ul class="small text-muted mb-0">
     <li>Update check results are cached; use the button above to force a refresh, or adjust the check frequency in Update settings.</li>
     <li>No gallery content, images, or user data is ever transmitted during an update check.</li>
-    <li>Release source: <code>{$provider_h} ({$repo_h})</code></li>
+    <li>Release source: <code>{$provider_h} ({$repo_h})</code>, or a manually uploaded ZIP via
+        the "Manual Update" tab above — useful if this server can't reach GitHub, or to install
+        a build that isn't published as a GitHub release. Both sources drive the exact same
+        validation, backup, and rollback-on-failure pipeline.</li>
     <li>Custom themes and plugins are preserved by default during an update. To replace them with the
-        versions bundled in a release, tick the relevant checkboxes on the Install Update form above.</li>
+        versions bundled in a release, tick the relevant checkboxes on the Install Update or
+        Install from Uploaded ZIP form.</li>
     <li>An automatic <strong>update backup</strong> (database + <code>config.php</code> only) is created before
         any file replacement, stored in <code>cache/.updates/backup/</code>. It's what Rollback restores from
         if a stage fails. Separately, the <strong>Full Backups</strong> panel above lets you create and restore
@@ -739,6 +846,25 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!resp.ok) throw new Error('Server returned HTTP ' + resp.status);
     return resp.json();
   }
+
+  // ── Release source tabs (LG-042) ────────────────────────────────────────────
+
+  const \$sourceTabs = document.querySelectorAll('[data-lum-source-tab]');
+  \$sourceTabs.forEach(function (\$tab) {
+    \$tab.addEventListener('click', function () {
+      const target = \$tab.getAttribute('data-lum-source-tab');
+
+      \$sourceTabs.forEach(function (\$t) {
+        const active = \$t === \$tab;
+        \$t.classList.toggle('is-active', active);
+        \$t.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+
+      document.querySelectorAll('[data-lum-source-panel]').forEach(function (\$panel) {
+        \$panel.classList.toggle('d-none', \$panel.getAttribute('data-lum-source-panel') !== target);
+      });
+    });
+  });
 
   // ── Application update check ───────────────────────────────────────────────
 
@@ -853,10 +979,74 @@ document.addEventListener('DOMContentLoaded', function () {
       replaceThemes  = (\$replaceThemes  && \$replaceThemes.checked)  ? '1' : '0';
 
       // Transition UI to progress mode.
-      if (\$confirmArea)  \$confirmArea.classList.add('d-none');
+      const \$updCard = document.getElementById('lum-upd-card');
+      if (\$updCard)      \$updCard.classList.add('d-none');
       if (\$progressArea) \$progressArea.classList.remove('d-none');
 
       await runUpdateStage('preflight', TARGET_VER);
+    });
+  }
+
+  // ── "Install from Uploaded ZIP" workflow (LG-042) ──────────────────────────
+  // Feeds into the exact same runUpdateStage()/progress panel as the
+  // GitHub "Update Now" flow above — the only difference is how the
+  // session is bootstrapped (a multipart upload instead of a click that
+  // targets TARGET_VER).
+
+  const \$uploadFile           = document.getElementById('lum-upload-file');
+  const \$uploadReplacePlugins = document.getElementById('lum-upload-replace-plugins');
+  const \$uploadReplaceThemes  = document.getElementById('lum-upload-replace-themes');
+  const \$uploadStartBtn       = document.getElementById('lum-upload-start-btn');
+  const \$uploadStatus         = document.getElementById('lum-upload-status');
+
+  if (\$uploadStartBtn) {
+    \$uploadStartBtn.addEventListener('click', async function () {
+      if (!\$uploadFile || !\$uploadFile.files || !\$uploadFile.files.length) {
+        if (\$uploadStatus) { \$uploadStatus.textContent = 'Choose a ZIP file first.'; \$uploadStatus.className = 'text-danger small ms-2'; }
+        return;
+      }
+
+      // Capture the optional replacement preferences before hiding the form.
+      replacePlugins = (\$uploadReplacePlugins && \$uploadReplacePlugins.checked) ? '1' : '0';
+      replaceThemes  = (\$uploadReplaceThemes  && \$uploadReplaceThemes.checked)  ? '1' : '0';
+
+      \$uploadStartBtn.disabled = true;
+      \$uploadStartBtn.textContent = 'Uploading…';
+      if (\$uploadStatus) { \$uploadStatus.textContent = ''; \$uploadStatus.className = 'text-muted small ms-2'; }
+
+      const fd = new FormData();
+      fd.append('csrf_token', CSRF);
+      fd.append('update_zip', \$uploadFile.files[0]);
+      fd.append('replace_plugins', replacePlugins);
+      fd.append('replace_themes', replaceThemes);
+
+      let data;
+      try {
+        const resp = await fetch(AJAX_BASE + 'ajax_update_upload.php', { method: 'POST', body: fd });
+        if (!resp.ok) throw new Error('Server returned HTTP ' + resp.status);
+        data = await resp.json();
+      } catch (err) {
+        if (\$uploadStatus) { \$uploadStatus.textContent = 'Upload failed: ' + err.message; \$uploadStatus.className = 'text-danger small ms-2'; }
+        \$uploadStartBtn.disabled = false;
+        \$uploadStartBtn.textContent = '⬆ Upload & Install';
+        return;
+      }
+
+      if (!data.success) {
+        if (\$uploadStatus) { \$uploadStatus.textContent = '✗ ' + (data.message || 'Upload rejected.'); \$uploadStatus.className = 'text-danger small ms-2'; }
+        \$uploadStartBtn.disabled = false;
+        \$uploadStartBtn.textContent = '⬆ Upload & Install';
+        return;
+      }
+
+      // Package accepted and staged; hand off to the same stage pipeline the
+      // GitHub "Update Now" button drives.
+      const \$uploadCard = document.getElementById('lum-upload-card');
+      if (\$uploadCard)   \$uploadCard.classList.add('d-none');
+      if (\$progressArea) \$progressArea.classList.remove('d-none');
+      if (data.details && data.details.length) appendLog(data.details);
+
+      await runUpdateStage('preflight', data.version);
     });
   }
 

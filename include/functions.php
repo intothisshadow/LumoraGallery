@@ -188,6 +188,24 @@ function lumora_int(mixed $value, int $default = 0, int $min = 0, int $max = PHP
     return ($v >= $min && $v <= $max) ? $v : $default;
 }
 
+// ── ZIP archive helpers ───────────────────────────────────────────────────────
+
+/**
+ * True when a ZIP entry name is unsafe to extract: a path-traversal
+ * sequence, an absolute path, a Windows-style backslash, or a null byte.
+ * Shared by every ZIP-extraction entry point in the codebase —
+ * UpdaterService's release-package extraction/upload validation and
+ * ThemeService's theme-package install/update validation — so the exact
+ * same rule guards all of them from a single definition (LG-043).
+ */
+function lumora_is_unsafe_zip_entry_name(string $name): bool
+{
+    return str_contains($name, '..')
+        || str_starts_with($name, '/')
+        || str_contains($name, '\\')
+        || str_contains($name, "\0");
+}
+
 // ── Path & URL helpers ────────────────────────────────────────────────────────
 
 /**

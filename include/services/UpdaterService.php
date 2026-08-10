@@ -118,6 +118,16 @@ class UpdaterService
      */
     private const ALWAYS_PROTECTED = ['config.php', 'albums', 'cache'];
 
+    /**
+     * Max ZIP entries / total uncompressed bytes accepted from an
+     * administrator-uploaded release package (LG-042) — a provider-fetched
+     * release has no such cap since it comes from a trusted, configured
+     * source, but a manual upload is arbitrary admin-supplied input and
+     * needs its own sanity limits before anything is extracted.
+     */
+    private const MAX_UPLOAD_ENTRIES = 20000;
+    private const MAX_UPLOAD_UNCOMPRESSED_SIZE = 500 * 1024 * 1024;
+
     // ── Path helpers ──────────────────────────────────────────────────────────
 
     /** Working directory for all update artefacts. */
@@ -345,50 +355,17 @@ class UpdaterService
             );
         }
 
-        $details = [];
-        $errors  = [];
-
-        // PHP ZipArchive extension.
-        if (!class_exists('ZipArchive')) {
-            $errors[] = 'PHP ZipArchive extension is required. Enable ext-zip on your server.';
-        } else {
-            $details[] = '✓ PHP ZipArchive available';
-        }
-
-        // PHP version compatibility (from update check cache).
+        // PHP version compatibility is checked against the release-check cache's
+        // minimum_php (fetched for the specific tagged release being installed);
+        // acquireLockFromUpload() runs the exact same shared checks against the
+        // uploaded package's own LUMORA_MIN_PHP instead, since a manual upload
+        // may not correspond to any GitHub release at all.
         $cached = UpdateService::getCachedStatus();
-        $minPhp = $cached['minimum_php'];
-        if ($minPhp !== null && version_compare(PHP_VERSION, $minPhp, '<')) {
-            $errors[] = 'This release requires PHP ' . $minPhp
-                . '. Your server is running PHP ' . PHP_VERSION
-                . '. Please upgrade PHP before installing this update.';
-        } else {
-            $details[] = '✓ PHP ' . PHP_VERSION . ' is compatible';
-        }
+        $infra  = self::runInfraChecks($cached['minimum_php']);
+        $details = $infra['details'];
 
-        // Disk space (require at least 80 MB free for download + extract + backup).
-        $cacheDir   = LUMORA_ROOT . 'cache';
-        $freeBytes  = disk_free_space(is_dir($cacheDir) ? $cacheDir : LUMORA_ROOT);
-        if ($freeBytes === false) {
-            $details[] = '⚠ Could not determine available disk space; proceeding with caution';
-        } elseif ($freeBytes < 83886080) {
-            $errors[] = 'Insufficient disk space: '
-                . lumora_format_bytes((int) $freeBytes) . ' available; '
-                . 'at least 80 MB is recommended for the update process.';
-        } else {
-            $details[] = '✓ ' . lumora_format_bytes((int) $freeBytes) . ' disk space available';
-        }
-
-        // Write permission.
-        if (!is_writable(LUMORA_ROOT)) {
-            $errors[] = 'The Lumora root directory is not writable by the web server. '
-                . 'Please adjust file permissions and try again.';
-        } else {
-            $details[] = '✓ File system is writable';
-        }
-
-        if (!empty($errors)) {
-            return self::fail(self::STAGE_PREFLIGHT, 'Pre-flight checks failed.', $errors);
+        if (!empty($infra['errors'])) {
+            return self::fail(self::STAGE_PREFLIGHT, 'Pre-flight checks failed.', $infra['errors']);
         }
 
         // Fetch provider metadata for download URL + optional checksum.
@@ -452,6 +429,254 @@ class UpdaterService
     }
 
     /**
+     * Shared hosting-environment checks — ZipArchive extension, PHP version
+     * (against a caller-supplied minimum, which comes from a different
+     * source depending on the caller), free disk space, and filesystem
+     * writability. Used by both stagePreflight() (a provider-fetched
+     * release's minimum_php from the release-check cache) and
+     * acquireLockFromUpload() (an uploaded package's own LUMORA_MIN_PHP,
+     * read directly out of its version.php — see that method's docblock).
+     *
+     * @return array{errors: list<string>, details: list<string>}
+     */
+    private static function runInfraChecks(?string $minPhp): array
+    {
+        $details = [];
+        $errors  = [];
+
+        // PHP ZipArchive extension.
+        if (!class_exists('ZipArchive')) {
+            $errors[] = 'PHP ZipArchive extension is required. Enable ext-zip on your server.';
+        } else {
+            $details[] = '✓ PHP ZipArchive available';
+        }
+
+        // PHP version compatibility.
+        if ($minPhp !== null && version_compare(PHP_VERSION, $minPhp, '<')) {
+            $errors[] = 'This release requires PHP ' . $minPhp
+                . '. Your server is running PHP ' . PHP_VERSION
+                . '. Please upgrade PHP before installing this update.';
+        } else {
+            $details[] = '✓ PHP ' . PHP_VERSION . ' is compatible';
+        }
+
+        // Disk space (require at least 80 MB free for download + extract + backup).
+        $cacheDir   = LUMORA_ROOT . 'cache';
+        $freeBytes  = disk_free_space(is_dir($cacheDir) ? $cacheDir : LUMORA_ROOT);
+        if ($freeBytes === false) {
+            $details[] = '⚠ Could not determine available disk space; proceeding with caution';
+        } elseif ($freeBytes < 83886080) {
+            $errors[] = 'Insufficient disk space: '
+                . lumora_format_bytes((int) $freeBytes) . ' available; '
+                . 'at least 80 MB is recommended for the update process.';
+        } else {
+            $details[] = '✓ ' . lumora_format_bytes((int) $freeBytes) . ' disk space available';
+        }
+
+        // Write permission.
+        if (!is_writable(LUMORA_ROOT)) {
+            $errors[] = 'The Lumora root directory is not writable by the web server. '
+                . 'Please adjust file permissions and try again.';
+        } else {
+            $details[] = '✓ File system is writable';
+        }
+
+        return ['errors' => $errors, 'details' => $details];
+    }
+
+    /**
+     * Validate an administrator-uploaded ZIP archive and initialize an
+     * update session for it exactly as stagePreflight() does for a
+     * provider-fetched release — except the target version is read
+     * directly out of the uploaded archive's own version.php
+     * (LUMORA_VERSION) instead of the release-check cache, and the
+     * minimum-PHP requirement is likewise read from the archive's own
+     * LUMORA_MIN_PHP rather than provider metadata, since a manually
+     * uploaded package may not correspond to any GitHub release at all
+     * (LG-042 — "Upload ZIP" alongside the GitHub-based updater).
+     *
+     * Once accepted, the uploaded file is moved to the exact same
+     * archivePath($version) a downloaded release would occupy —
+     * stageDownload() already skips re-fetching when a non-empty archive
+     * is already present there, so every stage from Download onward runs
+     * completely unmodified via the normal run_stage AJAX flow; no other
+     * stage needs to know or care that this update came from an upload
+     * rather than a network fetch.
+     *
+     * @param array<string,mixed> $options Same shape stagePreflight() accepts
+     *                                     (replace_plugins/replace_themes).
+     * @return array{success: bool, stage: string, message: string, next: string|null, details: list<string>}
+     */
+    public static function acquireLockFromUpload(string $uploadedTmpPath, array $options = []): array
+    {
+        if (self::isUpdateRunning()) {
+            return self::fail(
+                self::STAGE_PREFLIGHT,
+                'Another update is already in progress. '
+                . 'If no update is running, the previous session may have been interrupted. '
+                . 'Use the Abort button to reset.'
+            );
+        }
+
+        if (!is_file($uploadedTmpPath)) {
+            return self::fail(self::STAGE_PREFLIGHT, 'The uploaded file could not be found.');
+        }
+
+        if (!class_exists('ZipArchive')) {
+            return self::fail(self::STAGE_PREFLIGHT, 'PHP ZipArchive extension is required. Enable ext-zip on your server.');
+        }
+
+        $zip = new \ZipArchive();
+        if ($zip->open($uploadedTmpPath, \ZipArchive::RDONLY) !== true) {
+            return self::fail(self::STAGE_PREFLIGHT, 'The uploaded file is not a valid ZIP archive.');
+        }
+
+        $numFiles = $zip->count();
+        if ($numFiles === 0) {
+            $zip->close();
+            return self::fail(self::STAGE_PREFLIGHT, 'The uploaded archive is empty.');
+        }
+        if ($numFiles > self::MAX_UPLOAD_ENTRIES) {
+            $zip->close();
+            return self::fail(self::STAGE_PREFLIGHT, 'The archive contains too many files to be a valid Lumora Gallery release package.');
+        }
+
+        $names             = [];
+        $totalUncompressed = 0;
+        for ($i = 0; $i < $numFiles; $i++) {
+            $stat = $zip->statIndex($i);
+            if ($stat === false) continue;
+
+            $name = (string) $stat['name'];
+            if (lumora_is_unsafe_zip_entry_name($name)) {
+                $zip->close();
+                return self::fail(
+                    self::STAGE_PREFLIGHT,
+                    'Archive contains an unsafe path entry: ' . $name . '. Aborting for security.'
+                );
+            }
+
+            $names[]            = $name;
+            $totalUncompressed += (int) $stat['size'];
+        }
+
+        if ($totalUncompressed > self::MAX_UPLOAD_UNCOMPRESSED_SIZE) {
+            $zip->close();
+            return self::fail(self::STAGE_PREFLIGHT, 'The archive is too large to be processed safely.');
+        }
+
+        $versionEntry = self::findZipVersionEntry($names);
+        if ($versionEntry === null) {
+            $zip->close();
+            return self::fail(
+                self::STAGE_PREFLIGHT,
+                'Could not locate version.php inside the uploaded archive. '
+                . 'The archive may not be a valid Lumora Gallery release package.'
+            );
+        }
+
+        $versionContent = $zip->getFromName($versionEntry);
+        $zip->close();
+
+        if ($versionContent === false) {
+            return self::fail(self::STAGE_PREFLIGHT, 'Could not read version.php from the uploaded archive.');
+        }
+
+        if (!preg_match("/define\\(\\s*'LUMORA_VERSION'\\s*,\\s*'([0-9]+(?:\\.[0-9]+)*)'\\s*\\)/", $versionContent, $vm)) {
+            return self::fail(
+                self::STAGE_PREFLIGHT,
+                'Could not determine the version of the uploaded package (LUMORA_VERSION not found in version.php).'
+            );
+        }
+        $version = $vm[1];
+
+        $minPhp = null;
+        if (preg_match("/define\\(\\s*'LUMORA_MIN_PHP'\\s*,\\s*'([0-9]+(?:\\.[0-9]+)*)'\\s*\\)/", $versionContent, $pm)) {
+            $minPhp = $pm[1];
+        }
+
+        $infra = self::runInfraChecks($minPhp);
+        if (!empty($infra['errors'])) {
+            return self::fail(self::STAGE_PREFLIGHT, 'Pre-flight checks failed.', $infra['errors']);
+        }
+
+        self::ensureUpdatesDir();
+        $archivePath = self::archivePath($version);
+
+        // Move (not copy) — PHP's upload tmp file is single-use for this request.
+        if (!@rename($uploadedTmpPath, $archivePath)) {
+            // rename() can fail across filesystem boundaries (e.g. a tmp dir on
+            // a different mount than cache/); fall back to copy + delete.
+            if (!copy($uploadedTmpPath, $archivePath)) {
+                return self::fail(
+                    self::STAGE_PREFLIGHT,
+                    'Could not store the uploaded archive. Check permissions on cache/.updates/.'
+                );
+            }
+            @unlink($uploadedTmpPath);
+        }
+
+        $acquired = self::acquireLock($version, [
+            'download_url'    => null,
+            'sha256'          => null,
+            'provider'        => 'Manual Upload',
+            'replace_plugins' => (bool) ($options['replace_plugins'] ?? false),
+            'replace_themes'  => (bool) ($options['replace_themes']  ?? false),
+        ]);
+
+        if (!$acquired) {
+            return self::fail(
+                self::STAGE_PREFLIGHT,
+                'Could not create the update working directory. Ensure the cache/ directory is writable.'
+            );
+        }
+
+        self::logUpdate('info', "Manual ZIP upload accepted for v{$version} ({$numFiles} entries)");
+
+        $details = array_merge($infra['details'], [
+            '✓ Archive validated (' . $numFiles . ' entries)',
+            '✓ Detected version: ' . $version,
+        ]);
+
+        return self::ok(
+            self::STAGE_PREFLIGHT,
+            'Uploaded package accepted (v' . $version . ').',
+            null,
+            $details
+        );
+    }
+
+    /**
+     * Locate a version.php entry inside a ZIP's flat entry-name list, up to
+     * two directory levels deep — mirrors findAppRoot()'s three checked
+     * depths, but against zip entry names rather than an already-extracted
+     * filesystem tree, so the target version can be read straight out of
+     * the archive before anything is extracted.
+     *
+     * @param list<string> $names
+     */
+    private static function findZipVersionEntry(array $names): ?string
+    {
+        if (in_array('version.php', $names, true)) {
+            return 'version.php';
+        }
+
+        $candidates = [];
+        foreach ($names as $name) {
+            if (!str_ends_with($name, '/version.php')) continue;
+            $depth = substr_count(rtrim($name, '/'), '/');
+            if ($depth <= 2 && !isset($candidates[$depth])) {
+                $candidates[$depth] = $name;
+            }
+        }
+
+        if (empty($candidates)) return null;
+
+        ksort($candidates);
+        return reset($candidates);
+    }
+
+    /**
      * Stage 2 — Download the release archive.
      */
     private static function stageDownload(): array
@@ -465,11 +690,12 @@ class UpdaterService
         $dlUrl       = $lock['download_url'];
         $archivePath = self::archivePath($version);
 
-        if ($dlUrl === null) {
-            return self::fail(self::STAGE_DOWNLOAD, 'No download URL in update lock. Please restart from Pre-flight.');
-        }
-
         // Resume: if a non-empty archive already exists, skip re-download.
+        // Checked before the download_url requirement below because a
+        // manually uploaded package (LG-042 — acquireLockFromUpload())
+        // deliberately has no download_url at all: the archive is already
+        // staged at this exact path, so this is the normal, expected path
+        // for that flow, not a resume-after-interruption edge case.
         if (file_exists($archivePath) && filesize($archivePath) > 0) {
             self::logUpdate('info', "Archive already present at {$archivePath}; skipping download");
             return self::ok(
@@ -478,6 +704,10 @@ class UpdaterService
                 self::STAGE_VERIFY,
                 ['Previously downloaded archive found; proceeding to verification.']
             );
+        }
+
+        if ($dlUrl === null) {
+            return self::fail(self::STAGE_DOWNLOAD, 'No download URL in update lock. Please restart from Pre-flight.');
         }
 
         self::logUpdate('info', "Downloading v{$version} from {$dlUrl}");
@@ -744,12 +974,7 @@ class UpdaterService
         for ($i = 0; $i < $numEntries; $i++) {
             $name = $zip->getNameIndex($i);
             if ($name === false) continue;
-            if (
-                str_contains($name, '..')   ||
-                str_starts_with($name, '/') ||
-                str_contains($name, '\\') ||
-                str_contains($name, "\0")
-            ) {
+            if (lumora_is_unsafe_zip_entry_name($name)) {
                 $zip->close();
                 return self::fail(
                     self::STAGE_EXTRACT,

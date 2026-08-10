@@ -253,7 +253,8 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
             'images'     => ['icon' => '📸', 'label' => 'Images',     'url' => 'images.php',     'permission' => ['manage_images', 'edit_own_images']],
         ]],
         ['label' => 'Settings', 'items' => [
-            'config' => ['icon' => '⚙️', 'label' => 'Configuration', 'url' => 'config.php', 'permission' => 'site_configuration'],
+            'config'     => ['icon' => '⚙️', 'label' => 'Configuration', 'url' => 'config.php',     'permission' => 'site_configuration'],
+            'appearance' => ['icon' => '🎨', 'label' => 'Appearance',    'url' => 'appearance.php', 'permission' => 'site_configuration'],
         ]],
         ['label' => 'Maintenance', 'items' => [
             'migrate'      => ['icon' => '📥', 'label' => 'Import',                   'url' => 'migrate.php',      'permission' => 'site_configuration'],

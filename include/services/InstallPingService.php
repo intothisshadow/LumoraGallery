@@ -49,7 +49,7 @@ class InstallPingService
      * UpdateService's release-check source (the GitHub Releases API) — the
      * two features must stay fully independent.
      */
-    private const ENDPOINT = 'https://coding.unloved-heart.net/lumoragallery/ping.php';
+    private const ENDPOINT = 'https://coding.unloved-heart.net/lumoragallery/install-tracking-server/ping.php';
 
     /** Minimum interval between pings once enabled (~30 days). */
     private const PING_INTERVAL = 2592000;
