@@ -440,6 +440,7 @@ if ($action === 'new' || $action === 'edit') {
                     list="lum-available-folders" id="lum-folder-input"
                     placeholder="e.g. Xena/Season1/1x01-SinsOfThePast">
              <datalist id="lum-available-folders"></datalist>
+             <div class="lum-folder-scan-heading">📂 Folders already on disk</div>
              <div class="lum-folder-searching" id="lum-folder-searching">
                <span class="lum-folder-searching__spinner" aria-hidden="true"></span>
                Searching for folders on disk…

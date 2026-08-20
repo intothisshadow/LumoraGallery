@@ -296,7 +296,8 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
     // expanded regardless of its stored state, via data-nav-force-open.
     $collapsible_labels = ['Settings', 'Maintenance', 'Users'];
 
-    $nav_html = '';
+    $nav_html        = '';
+    $has_collapsible = false;
     foreach ($nav_sections as $section) {
         $visible_items = array_filter($section['items'], $has_nav_permission);
         if (empty($visible_items)) continue;
@@ -305,6 +306,9 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
         $is_collapsible = $label !== null && in_array($label, $collapsible_labels, true);
         $slug           = $is_collapsible ? strtolower($label) : '';
         $contains_active = $is_collapsible && array_key_exists($active, $visible_items);
+        if ($is_collapsible) {
+            $has_collapsible = true;
+        }
 
         if ($label !== null) {
             if ($is_collapsible) {
@@ -345,6 +349,26 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
         if ($is_collapsible) {
             $nav_html .= '</ul></li>';
         }
+    }
+
+    // Expand/Collapse All (LG-048) — one toggle at the top of the nav (before
+    // Dashboard/Gallery) and a second, identical one at the bottom (after
+    // Users), so it's reachable without scrolling a long sidebar either way.
+    // Both share the same class/data attribute rather than unique IDs, so
+    // the script below can address and keep them in sync together. Skipped
+    // entirely when the current user's permissions leave zero collapsible
+    // sections visible (e.g. a Contributor) — nothing for it to do.
+    if ($has_collapsible) {
+        $expand_toggle_html = '<li class="lum-admin-nav-expand-all">'
+            . '<button type="button" class="lum-admin-nav-expand-toggle" data-nav-expand-all aria-expanded="true">'
+            . '<svg class="lum-admin-nav-expand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+            . ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+            . '<polyline points="7 8 12 13 17 8"></polyline>'
+            . '<polyline points="7 13 12 18 17 13"></polyline>'
+            . '</svg>'
+            . '<span class="lum-admin-nav-expand-label">Collapse All</span>'
+            . '</button></li>';
+        $nav_html = $expand_toggle_html . $nav_html . $expand_toggle_html;
     }
 
     echo <<<HTML
@@ -422,6 +446,16 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
       var state = {};
       try { state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {}; } catch (e) { state = {}; }
 
+      // slug -> { collapsed, apply(isCollapsed) } — built while wiring each
+      // section's own toggle, then reused by the Expand/Collapse All
+      // buttons (LG-048) below so they can drive every section's state
+      // without duplicating the apply()/persist logic.
+      var sections = {};
+
+      function persist() {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+      }
+
       document.querySelectorAll('.lum-admin-nav-toggle').forEach(function (btn) {
         var slug  = btn.getAttribute('data-nav-toggle');
         var group = document.getElementById('lum-nav-group-' + slug);
@@ -431,19 +465,54 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
         // regardless of its stored collapsed state, so you never land on a
         // page whose own nav item is hidden.
         var forceOpen = group.hasAttribute('data-nav-force-open');
-        var collapsed = !forceOpen && !!state[slug];
+        var entry = { collapsed: !forceOpen && !!state[slug] };
 
-        function apply(isCollapsed) {
+        entry.apply = function (isCollapsed) {
+          entry.collapsed = isCollapsed;
           btn.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
           group.classList.toggle('lum-admin-nav-collapsed', isCollapsed);
-        }
-        apply(collapsed);
+        };
+        entry.apply(entry.collapsed);
+        sections[slug] = entry;
 
         btn.addEventListener('click', function () {
-          collapsed = !collapsed;
-          apply(collapsed);
-          state[slug] = collapsed;
-          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+          entry.apply(!entry.collapsed);
+          state[slug] = entry.collapsed;
+          persist();
+          syncExpandAllButtons();
+        });
+      });
+
+      // Expand/Collapse All (LG-048) — two buttons (top + bottom of the nav)
+      // sharing the same class/attribute, always kept in sync with each
+      // other and with the individual section toggles above.
+      var expandAllButtons = document.querySelectorAll('[data-nav-expand-all]');
+
+      function allCollapsed() {
+        var slugs = Object.keys(sections);
+        if (slugs.length === 0) return false;
+        return slugs.every(function (slug) { return sections[slug].collapsed; });
+      }
+
+      function syncExpandAllButtons() {
+        var isAllCollapsed = allCollapsed();
+        expandAllButtons.forEach(function (btn) {
+          btn.setAttribute('aria-expanded', isAllCollapsed ? 'false' : 'true');
+          var label = btn.querySelector('.lum-admin-nav-expand-label');
+          if (label) label.textContent = isAllCollapsed ? 'Expand All' : 'Collapse All';
+        });
+      }
+      syncExpandAllButtons();
+
+      expandAllButtons.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var collapseThem = !allCollapsed();
+          Object.keys(sections).forEach(function (slug) {
+            sections[slug].apply(collapseThem);
+            state[slug] = collapseThem;
+          });
+          persist();
+          syncExpandAllButtons();
         });
       });
     })();

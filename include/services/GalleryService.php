@@ -1509,8 +1509,9 @@ class GalleryService
             'folder'
         ));
 
-        $found = [];
-        self::scanAlbumFoldersRecursive($albums_root, $albums_root, $used, $found);
+        $found       = [];
+        $dirs_walked = 0;
+        self::scanAlbumFoldersRecursive($albums_root, $albums_root, $used, $found, $dirs_walked);
 
         sort($found, SORT_STRING);
         return $found;
@@ -1520,20 +1521,47 @@ class GalleryService
     private const MAX_AVAILABLE_FOLDERS = 1000;
 
     /**
+     * Hard cap on how many directories listAvailableAlbumFolders() will visit in total
+     * (LG-049 bugfix), independent of MAX_AVAILABLE_FOLDERS — a gallery where almost
+     * every folder is already claimed can have $found stay at 0 indefinitely while
+     * still walking tens of thousands of directories, so the "found" cap alone never
+     * bounds the worst case.
+     */
+    private const MAX_SCANNED_DIRS = 5000;
+
+    /**
      * Recursive worker for listAvailableAlbumFolders(). Walks $dir (an
      * absolute, already realpath()-resolved directory) depth-first,
      * appending every unclaimed, safely-contained subdirectory's
      * albums-root-relative path to $found by reference. Stops early once
-     * self::MAX_AVAILABLE_FOLDERS candidates have been collected.
+     * self::MAX_AVAILABLE_FOLDERS candidates have been collected or
+     * self::MAX_SCANNED_DIRS directories have been visited.
      *
-     * @param array<string, int> $used  Folder paths already in {PREFIX}albums, as a lookup set.
-     * @param list<string>       $found Accumulator, passed by reference.
+     * Does not recurse into a directory once it's known to directly contain
+     * a file (LG-049 bugfix) — that's a leaf album folder, and re-scanning
+     * every image file inside it just to confirm it has no subdirectories
+     * was the dominant cost on large galleries (an album with thousands of
+     * images meant thousands of wasted is_dir() stat calls per claimed
+     * album), enough to exceed max_execution_time and abort the request
+     * with no valid JSON response — which is why the "No unclaimed folders
+     * found" notice silently never appeared on big galleries: the fetch()
+     * failed before the frontend ever got a response to read.
+     *
+     * @param array<string, int> $used        Folder paths already in {PREFIX}albums, as a lookup set.
+     * @param list<string>       $found       Accumulator, passed by reference.
+     * @param int                $dirs_walked Total directories visited so far, passed by reference.
      */
-    private static function scanAlbumFoldersRecursive(string $albums_root, string $dir, array $used, array &$found): void
-    {
-        if (count($found) >= self::MAX_AVAILABLE_FOLDERS) {
+    private static function scanAlbumFoldersRecursive(
+        string $albums_root,
+        string $dir,
+        array  $used,
+        array  &$found,
+        int    &$dirs_walked
+    ): void {
+        if (count($found) >= self::MAX_AVAILABLE_FOLDERS || $dirs_walked >= self::MAX_SCANNED_DIRS) {
             return;
         }
+        $dirs_walked++;
 
         $entries = @scandir($dir);
         if ($entries === false) {
@@ -1541,7 +1569,7 @@ class GalleryService
         }
 
         foreach ($entries as $entry) {
-            if (count($found) >= self::MAX_AVAILABLE_FOLDERS) {
+            if (count($found) >= self::MAX_AVAILABLE_FOLDERS || $dirs_walked >= self::MAX_SCANNED_DIRS) {
                 return;
             }
             if ($entry === '.' || $entry === '..' || str_starts_with($entry, '.')) {
@@ -1562,11 +1590,16 @@ class GalleryService
             $relative = str_replace(DIRECTORY_SEPARATOR, '/', $relative);
             $clean    = lumora_sanitize_folder($relative);
 
-            if ($clean !== '' && $clean === $relative && !isset($used[$clean]) && self::dirHasDirectFile($real)) {
+            $has_direct_file = self::dirHasDirectFile($real);
+            if ($clean !== '' && $clean === $relative && !isset($used[$clean]) && $has_direct_file) {
                 $found[] = $clean;
             }
 
-            self::scanAlbumFoldersRecursive($albums_root, $real, $used, $found);
+            // A directory that already holds files directly is a leaf album
+            // folder — don't walk into it (see docblock above).
+            if (!$has_direct_file) {
+                self::scanAlbumFoldersRecursive($albums_root, $real, $used, $found, $dirs_walked);
+            }
         }
     }
 

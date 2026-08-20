@@ -105,6 +105,16 @@ html, body { height: 100%; }
   overflow-y: auto;
 }
 
+/* Without this, once the nav list (below) grows taller than the sidebar's
+   own height — e.g. every collapsible section expanded at once, especially
+   now the Expand/Collapse All rows (LG-048) add two more lines — the flex
+   column's default shrink behavior squeezes *every* child to fit, this one
+   included, clipping the gallery name down to a sliver instead of letting
+   the nav list underneath do the scrolling on its own. */
+.lum-admin-gallery-name {
+  flex-shrink: 0;
+}
+
 .lum-admin-nav-heading {
   padding: 0;
 }
@@ -152,6 +162,54 @@ html, body { height: 100%; }
 
 .lum-admin-nav-toggle[aria-expanded="false"] .lum-admin-nav-chevron {
   transform: rotate(-90deg);
+}
+
+/* ── Expand/Collapse All (LG-048) ────────────────────────────
+   Deliberately styled as a control, not a section heading — a thin
+   bordered pill rather than plain uppercase label text, so it doesn't
+   read as just another section title. */
+.lum-admin-nav-expand-all {
+  padding: .4rem .75rem;
+}
+
+.lum-admin-nav-expand-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  width: 100%;
+  padding: .4rem .6rem;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: .3rem;
+  color: rgba(255,255,255,.65);
+  font-size: .75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color .15s, border-color .15s, background-color .15s;
+}
+
+.lum-admin-nav-expand-toggle:hover,
+.lum-admin-nav-expand-toggle:focus-visible {
+  color: #fff;
+  border-color: rgba(255,255,255,.5);
+  background: var(--lum-adm-hover);
+}
+
+.lum-admin-nav-expand-toggle:focus-visible {
+  outline: 2px solid var(--lum-adm-accent);
+  outline-offset: 1px;
+}
+
+.lum-admin-nav-expand-icon {
+  width: .8rem;
+  height: .8rem;
+  flex-shrink: 0;
+  transition: transform .15s ease;
+}
+
+.lum-admin-nav-expand-toggle[aria-expanded="false"] .lum-admin-nav-expand-icon {
+  transform: rotate(180deg);
 }
 
 .lum-admin-nav-group.lum-admin-nav-collapsed .lum-admin-nav-sub {
@@ -547,11 +605,24 @@ html, body { height: 100%; }
 }
 
 /* ── Folder suggestions (New Album Folder Path, LG-040) ─────── */
+
+/* Always-visible label above the spinner/suggestions/empty-notice states
+   (LG-050) — the spinner alone is easy to miss, especially now that a fast
+   scan (LG-049) can resolve before a user's eye catches it; this stays put
+   regardless of which state below it is showing, so the folder-lookup
+   feature itself doesn't go unnoticed. */
+.lum-folder-scan-heading {
+  margin-top: .6rem;
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--lum-adm-head);
+}
+
 .lum-folder-searching {
   display: flex;
   align-items: center;
   gap: .5rem;
-  margin-top: .6rem;
+  margin-top: .25rem;
   font-size: .8rem;
   color: var(--lum-adm-muted);
 }
@@ -840,6 +911,21 @@ html, body { height: 100%; }
   .lum-admin-nav-toggle {
     /* Comfortable touch target for the collapsible-section chevron. */
     min-height: 44px;
+  }
+  .lum-admin-nav-expand-all {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    padding: .3rem .5rem;
+  }
+  .lum-admin-nav-expand-toggle {
+    /* Comfortable touch target, matching the other mobile nav controls;
+       nowrap since the horizontal strip has no room to wrap onto a
+       second line the way it can in the vertical desktop sidebar. */
+    width: auto;
+    min-height: 44px;
+    white-space: nowrap;
+    padding: .4rem .75rem;
   }
   .lum-admin-nav-group {
     display: flex;

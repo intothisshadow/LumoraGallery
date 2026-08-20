@@ -8,6 +8,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Expand/Collapse All toggle for the admin sidebar (LG-048).** Two synced
+  buttons — one above Dashboard/Gallery, one below Users/Groups — expand or
+  collapse all three collapsible sidebar sections (Settings, Maintenance,
+  Users) at once, reachable without scrolling a long sidebar either way.
+  Both buttons stay in sync with each other and with manual individual
+  section clicks, and share the same `localStorage`-backed state the
+  per-section toggles already used. Fixed a follow-up bug where expanding
+  every section clipped the gallery name at the top of the sidebar down to
+  a sliver — `.lum-admin-sidebar` is a flex column, and without
+  `flex-shrink: 0` the gallery name shrank along with everything else once
+  the nav list grew taller than the sidebar, instead of the nav list simply
+  scrolling on its own.
+
+- **Persistent heading above the New Album folder-scan area (LG-050).** The
+  "Searching for folders on disk…" spinner was easy to miss — especially
+  now that a fast scan (LG-049) can resolve before it's even noticed — so
+  the folder-suggestion feature itself went unnoticed. A small
+  `📂 Folders already on disk` label above it now stays visible regardless
+  of which state (searching, suggestions, or "none found") is currently
+  showing underneath.
+
+### Fixed
+
+- **New Album's "No unclaimed folders found on disk" notice (LG-044) could
+  silently never appear on large galleries (LG-049).** The folder-scan
+  behind it recursed into every subdirectory unconditionally, including
+  leaf album folders it had just confirmed already held image files —
+  meaning it re-scanned every image in every claimed album just to check
+  for subdirectories that couldn't exist there. On a real large gallery
+  this was enough to exceed PHP's execution time limit, aborting the
+  request with no response for the page to read — so the "Searching for
+  folders on disk…" spinner would simply disappear with neither
+  suggestions nor the empty-result notice ever showing. Fixed by no longer
+  recursing into a directory once it's known to directly contain a file,
+  plus an independent hard cap on total directories visited as a backstop.
+
 ## [1.16.0] — 2026-08-20
 
 ### Added
