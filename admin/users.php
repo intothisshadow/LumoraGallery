@@ -593,16 +593,16 @@ foreach ($users as $u) {
          . 'Delete</button></form>';
 
     $rows .= '<tr>'
-           . '<td class="text-muted small align-middle">' . $uid . '</td>'
+           . '<td class="text-muted small align-middle d-none d-md-table-cell">' . $uid . '</td>'
            . '<td class="align-middle">'
            .   '<a href="' . $edit_url . '" class="fw-semibold text-decoration-none">'
            .   $uname_h . '</a>' . $self_tag
            . '</td>'
-           . '<td class="align-middle">' . $role_b . '</td>'
-           . '<td class="align-middle small">' . $email_h . '</td>'
-           . '<td class="align-middle">' . $status_b . '</td>'
-           . '<td class="align-middle small">' . $login_h . '</td>'
-           . '<td class="align-middle">'
+           . '<td class="align-middle" data-label="Role">' . $role_b . '</td>'
+           . '<td class="align-middle small d-none d-md-table-cell">' . $email_h . '</td>'
+           . '<td class="align-middle" data-label="Status">' . $status_b . '</td>'
+           . '<td class="align-middle small d-none d-lg-table-cell">' . $login_h . '</td>'
+           . '<td class="align-middle lum-stack-actions">'
            .   '<div class="d-flex gap-1 flex-wrap">'
            .   '<a href="' . $edit_url . '" class="btn btn-sm btn-outline-primary">Edit</a>'
            .   $albums_btn . $tog . $del
@@ -631,15 +631,15 @@ $content = <<<HTML
 
 <div class="lum-adm-card p-0 mt-2 mb-3">
   <div class="table-responsive">
-    <table class="table table-hover mb-0">
+    <table class="table table-hover lum-adm-table-stack mb-0">
       <thead>
         <tr>
-          <th class="text-muted fw-normal" style="width:50px">ID</th>
+          <th class="text-muted fw-normal d-none d-md-table-cell" style="width:50px">ID</th>
           <th>Username</th>
           <th>Role</th>
-          <th>Email</th>
+          <th class="d-none d-md-table-cell">Email</th>
           <th>Status</th>
-          <th>Last Login</th>
+          <th class="d-none d-lg-table-cell">Last Login</th>
           <th>Actions</th>
         </tr>
       </thead>

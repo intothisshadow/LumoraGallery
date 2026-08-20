@@ -49,6 +49,8 @@ $content    = '';
 $page_title = '';
 
 if ($view !== '') {
+    HookService::doAction('lumora_pageview', 'site', 0);
+
     // ── Special gallery-wide views ──────────────────────────────────────────
     $view_titles = [
         'latest'      => 'Latest Images',
@@ -96,6 +98,7 @@ if ($view !== '') {
     } else {
         $page_title = h($cat['name']) . ' — ';
         $nav_cat_id = $cat_id;
+        HookService::doAction('lumora_pageview', 'category', $cat_id);
         $breadcrumb = lumora_render_breadcrumb(get_category_breadcrumb($cat_id));
 
         // Sub-categories
@@ -140,6 +143,7 @@ if ($view !== '') {
     }
 } else {
     // ── Home page ─────────────────────────────────────────────────────────
+    HookService::doAction('lumora_pageview', 'site', 0);
     $stats               = get_gallery_stats();
     $root_cats           = get_categories(0);
     $latest_images_count = max(0, (int) lumora_config('latest_images_count', '8'));

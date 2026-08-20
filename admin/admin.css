@@ -359,6 +359,36 @@ html, body { height: 100%; }
   opacity: .4;
 }
 
+/* Mobile fallback (LG-047): native HTML5 drag-and-drop never fires from
+   touch input, so the drag handle above is hidden on mobile (see
+   `d-none d-md-inline-block` on .lum-drag-handle in the markup) and these
+   Up/Down buttons take its place there instead. */
+.lum-reorder-btns {
+  gap: .25rem;
+  margin-right: .4rem;
+  vertical-align: middle;
+}
+
+.lum-reorder-btn {
+  border: 1px solid var(--lum-adm-border);
+  background: var(--lum-adm-surface);
+  color: var(--lum-adm-text);
+  border-radius: .3rem;
+  width: 2rem;
+  height: 2rem;
+  line-height: 1;
+  font-size: .7rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.lum-reorder-btn:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+}
+
 /* Drop indicators: a coloured bar above/below the row, or a highlighted
    background when dropping directly onto a row to reparent (categories only). */
 .lum-drag-row.lum-drop-above {
@@ -738,7 +768,41 @@ html, body { height: 100%; }
 }
 
 /* ── Responsive ───────────────────────────────────────────── */
+
+/* Brand block in the topbar: shrinks and truncates instead of overflowing
+   or wrapping onto a second line once the hamburger toggle appears. */
+.lum-admin-brand {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  max-width: 70vw;
+  overflow: hidden;
+}
+
+.lum-admin-brand-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 991.98px) {
+  /* Below the navbar-expand-lg breakpoint the toggler pushes the brand
+     into a tighter space alongside it. */
+  .lum-admin-brand {
+    max-width: 55vw;
+    font-size: .95rem;
+  }
+}
+
 @media (max-width: 767px) {
+  /* Sidebar and main content must stack vertically instead of staying
+     side-by-side in the row layout — without this, the sidebar (now
+     width:100% below) and main both remain flex-row siblings, so the
+     sidebar's default align-items:stretch pulls it to the full content
+     height and main gets squeezed into a sliver beside it. */
+  .lum-admin-layout {
+    flex-direction: column;
+  }
   .lum-admin-sidebar {
     position: static;
     width: 100%;
@@ -746,12 +810,14 @@ html, body { height: 100%; }
     flex-direction: row;
     flex-wrap: wrap;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .lum-admin-nav {
     display: flex;
     flex-direction: row;
     flex-wrap: nowrap;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .lum-admin-nav li a {
     white-space: nowrap;
@@ -771,6 +837,10 @@ html, body { height: 100%; }
     padding: 0 .5rem;
     white-space: nowrap;
   }
+  .lum-admin-nav-toggle {
+    /* Comfortable touch target for the collapsible-section chevron. */
+    min-height: 44px;
+  }
   .lum-admin-nav-group {
     display: flex;
   }
@@ -785,9 +855,160 @@ html, body { height: 100%; }
   .lum-admin-nav-sub li a {
     padding-left: 1rem;
   }
+  .lum-admin-nav li a {
+    /* Comfortable touch target in the horizontally-scrolling mobile nav. */
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
   .lum-admin-main {
     margin-left: 0;
+    padding: 1rem !important;
   }
   .lum-admin-gallery-name,
   .lum-admin-version { display: none; }
+
+  /* ── Stat cards ─────────────────────────────────────────── */
+  .lum-adm-stat { padding: .75rem; }
+  .lum-adm-stat-num { font-size: 1.4rem; }
+
+  /* ── Cards / toolbars ───────────────────────────────────── */
+  .lum-adm-card { padding: 1rem; }
+
+  /* Toolbars built from d-flex + gap wrap onto multiple lines already
+     (flex-wrap); give the wrapped rows breathing room and let filter
+     forms take the full width instead of shrinking to content. */
+  .lum-adm-card form.d-flex,
+  .lum-admin-main > div.d-flex.flex-wrap {
+    row-gap: .6rem;
+  }
+
+  /* ── Drag-and-drop reorder handles ─────────────────────────
+     HTML5 drag-and-drop doesn't fire on touch, but the handle still
+     needs a comfortable tap target since rows remain tappable/focusable. */
+  .lum-drag-handle {
+    padding: .4rem .6rem .4rem 0;
+    font-size: 1.1rem;
+  }
+
+  /* ── Table → card stacking ──────────────────────────────────
+     Even after hiding secondary columns (see the `d-none d-md-table-cell`
+     columns in admin/*.php list pages), an icon/badge-heavy row can still
+     be wider than a phone screen, forcing an awkward horizontal scroll
+     inside .table-responsive. Tables marked .lum-adm-table-stack instead
+     turn each row into a bordered card of stacked cells; a `data-label`
+     attribute on a <td> prefixes its value with a small caption (e.g.
+     data-label="Status") — cells without one (checkbox, thumbnail,
+     the main title block, the actions row) render as-is. */
+  .lum-adm-table-stack thead { display: none; }
+  .lum-adm-table-stack,
+  .lum-adm-table-stack tbody,
+  .lum-adm-table-stack tr,
+  .lum-adm-table-stack td {
+    display: block;
+    width: 100%;
+  }
+  .lum-adm-table-stack tr {
+    border: 1px solid var(--lum-adm-border);
+    border-radius: .5rem;
+    margin-bottom: .65rem;
+    padding: .6rem .75rem;
+    background: var(--lum-adm-surface);
+  }
+  .lum-adm-table-stack tr.lum-tree-cat-header {
+    background: var(--lum-adm-tree-cat);
+    border-color: var(--lum-adm-tree-bdr);
+  }
+  /* Plain block by default (not flex) so multi-line cell content — e.g.
+     the Title/Filename cell's stacked <div>s — lays out normally instead
+     of becoming flex items that resist wrapping below their content's
+     natural width. overflow-wrap covers unbroken strings (filenames)
+     that would otherwise force the row wider than the viewport. */
+  .lum-adm-table-stack td {
+    border: none !important;
+    padding: .3rem 0;
+    overflow-wrap: anywhere;
+  }
+  /* Only label:value cells (Status, Images, etc.) need the flex row that
+     puts the caption on the left and the value on the right. */
+  .lum-adm-table-stack td[data-label] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .6rem;
+  }
+  .lum-adm-table-stack td[data-label]::before {
+    content: attr(data-label);
+    font-weight: 600;
+    font-size: .68rem;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: var(--lum-adm-muted);
+    flex: 0 0 auto;
+  }
+  /* Cells meant to sit side-by-side at the top of the card (checkbox +
+     thumbnail) instead of each taking a full-width row of their own.
+     !important is needed because the desktop-layout `style="width:30px"` /
+     `style="width:70px"` inline attribute on these same <td>s otherwise
+     outranks any external stylesheet rule, including this one. */
+  .lum-adm-table-stack td.lum-stack-inline {
+    display: inline-flex;
+    width: auto !important;
+    vertical-align: middle;
+  }
+  .lum-adm-table-stack td.lum-stack-actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  /* ── Plugins page: description clamp ────────────────────────
+     A plugin's plugin.json description can run several sentences —
+     fine on desktop, but on a phone it wraps into a wall of text that
+     dwarfs the card's actual controls. Clamp to 3 lines on mobile only. */
+  .lum-plugin-desc {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* ── Updates page: source tabs ─────────────────────────────── */
+  .lum-upd-source-tabs {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .lum-upd-source-tab {
+    flex: 1 1 auto;
+    text-align: center;
+  }
+
+  /* ── Appearance page: theme card grid ──────────────────────── */
+  .lum-theme-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* ── Folder suggestions list ────────────────────────────────── */
+  .lum-folder-suggestions__list {
+    max-height: 8rem;
+  }
+
+  /* ── Reorder toast ──────────────────────────────────────────── */
+  .lum-reorder-toast {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .lum-admin-brand { max-width: 48vw; font-size: .85rem; }
+  h1.h4 { font-size: 1.15rem; }
+  .lum-admin-main { padding: .75rem !important; }
+  .lum-adm-card { padding: .85rem; }
+  .lum-adm-stat-num { font-size: 1.2rem; }
+  .lum-adm-stat-lbl { font-size: .68rem; }
+
+  /* Bootstrap modals: tighten the default margin so dialogs use the
+     full viewport width on phones rather than leaving cramped gutters. */
+  .modal-dialog { margin: .5rem; }
 }

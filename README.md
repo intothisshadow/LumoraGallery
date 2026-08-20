@@ -73,6 +73,7 @@ Lumora/
 │   ├── images.php              Image management (edit, delete, move, bulk actions)
 │   ├── installation.php        Installation Settings — update base URL after domain/server migration; nine-item health check; configuration change log; web server/capability detection; static asset cache header installer
 │   ├── migrate.php             Migration hub — discovers and launches importer plugins
+│   ├── plugins.php             Feature plugin manager — enable/disable plugins discovered under plugins/
 │   ├── tools.php               Admin tools (File Integrity Check, Reload Dimensions, Regenerate Thumbnails, Regenerate Missing Thumbnails)
 │   ├── update.php              Updates page — consolidated status/source metadata grid, interactive Latest Release card (checksum bar, Markdown release notes, re-download), Full Backups panel (create/restore/delete ZIP snapshots), System Status checks, Update Settings (channel/frequency/token), in-dashboard updater (10-stage AJAX workflow with automatic update backup + rollback) sourced from either a GitHub release or an administrator-uploaded ZIP, schema migrations, update history
 │   ├── forgot_password.php  Password recovery — generates a reset link to lumora_recovery.txt
@@ -101,7 +102,9 @@ Lumora/
 │   │   ├── UserService.php     User CRUD, role constants, permission framework (delegates to GroupService)
 │   │   ├── GroupService.php    Permission groups — CRUD, permission catalog (ALL_PERMISSIONS), system-group safeguards
 │   │   ├── AlbumAssignmentService.php  Per-contributor album assignments — assign/unassign/set, userCanAccessAlbum() access check, cascade cleanup
-│   │   └── InstallPingService.php  Opt-in anonymous install ping — UUID generation, ~monthly cadence, dedicated endpoint separate from UpdateService
+│   │   ├── InstallPingService.php  Opt-in anonymous install ping — UUID generation, ~monthly cadence, dedicated endpoint separate from UpdateService
+│   │   ├── HookService.php     Minimal action/filter registry — the extension points feature plugins hook into
+│   │   └── PluginService.php   Feature-plugin discovery, enable/disable state, loads enabled plugins' bootstrap.php each request
 │   ├── migrations/             Versioned PHP schema migration classes
 │   │   ├── AbstractMigration.php              Base class — up(), down(), tableExists(), columnExists(), indexExists()
 │   │   ├── Migration0001_CreateMigrationsTable.php  Self-bootstrapping first migration — creates {PREFIX}migrations table
@@ -121,15 +124,24 @@ Lumora/
 │   ├── index.php
 │   └── schema.sql
 ├── plugins/                    Optional plugins
-│   └── coppermine-importer/    Official Coppermine → Lumora migration plugin
-│       ├── CoppermineImporter.php  Core importer class (categories, albums, images, cover sync)
-│       ├── plugin.json         Plugin manifest (consumed by admin/migrate.php)
-│       ├── version.php         Single source of truth for plugin version
-│       ├── README.md           Plugin documentation and Metadata Sync tool reference
-│       └── admin/              Plugin admin pages
-│           ├── index.php       Four-step import wizard
-│           ├── ajax_import.php AJAX chunk processor for import steps
-│           └── sync_metadata.php Post-import cover-thumbnail sync tool
+│   ├── coppermine-importer/    Official Coppermine → Lumora migration plugin (type: importer)
+│   │   ├── CoppermineImporter.php  Core importer class (categories, albums, images, cover sync)
+│   │   ├── plugin.json         Plugin manifest (consumed by admin/migrate.php)
+│   │   ├── version.php         Single source of truth for plugin version
+│   │   ├── README.md           Plugin documentation and Metadata Sync tool reference
+│   │   └── admin/              Plugin admin pages
+│   │       ├── index.php       Four-step import wizard
+│   │       ├── ajax_import.php AJAX chunk processor for import steps
+│   │       └── sync_metadata.php Post-import cover-thumbnail sync tool
+│   └── lumora-visitor-stats/   Jetpack-style traffic overview (type: feature — hooks into core via HookService; disabled by default)
+│       ├── VisitorStatsService.php  Pageview logging + summary/trend/top-content/referrer queries, own {PREFIX}stats_hits table
+│       ├── plugin.json         Plugin manifest (consumed by admin/plugins.php)
+│       ├── version.php         Plugin version + pageview retention constant
+│       ├── activate.php        Creates {PREFIX}stats_hits — runs once, only when the plugin is enabled
+│       ├── bootstrap.php       Registers this plugin's hooks — runs on every request while enabled
+│       ├── README.md           Plugin documentation
+│       └── admin/
+│           └── stats.php       Visitor Stats admin page (trend chart, top images/albums, top referrers, who's online)
 ├── themes/                     Theme folders
 │   ├── default/
 │   │   ├── template.html       Bootstrap 5 base template
@@ -196,10 +208,11 @@ migration straightforward — point Lumora at the same `albums/` directory and r
 - **Light / dark / auto colour mode** — a ☀️/🌙/🖥️ toggle in the theme's navigation bar cycles Auto (follows the OS) → Dark → Light; the preference is applied before first paint (no flash of the wrong theme) and remembered in `localStorage`
 
 ### Admin panel
-- **Dashboard** — stats cards + latest images
+- **Dashboard** — stats cards + latest images (+ any enabled feature plugin's own widget, e.g. Visitor Stats' "Last 7 Days" summary)
+- **Plugins** (`admin/plugins.php`, gated on `site_configuration`) — lists every discovered "feature" plugin (see [Plugins](#plugins) below) with an Enable/Disable toggle. Disabled by default; disabling a plugin stops it running immediately without deleting its data.
 - **Users** — paginated staff account list (10/25/50 per page); create accounts with role selector; edit username, email, and role; reset any account's password (no current-password check); enable/disable accounts; delete accounts; guards prevent self-deletion, self-deactivation, and removal of the last active administrator; migration guard redirects to the Updates page if schema migration hasn't run yet. **Role-based page access:** admin, moderator, and contributor accounts can all log in; each admin page and its AJAX endpoints are gated on the permission the role's group holds — moderators get Categories, Albums, Images, and Tools but not Configuration, Installation, Import, Updates, or Users; contributors get Batch Add and Images, plus Albums scoped to whichever albums they've been assigned. The sidebar navigation only shows the pages the current role can access. **Groups** — a companion page (`admin/groups.php`, gated on `user_management`) lets administrators view every permission group (the three built-in system groups plus any custom ones), create new custom groups, rename any group, grant or revoke individual permissions per group, and delete unused custom groups; system groups can't be deleted, a group with active members can't be deleted until they're reassigned, and the admin group can never lose the permissions needed to reach Users/Groups or Configuration. **Contributor album assignments:** an "Assign Albums" link next to each contributor row (and a matching card on the edit-user screen) opens a filterable checkbox picker (`admin/user_albums.php`) for granting access to specific albums — gated on `manage_albums`, so moderators can manage assignments without needing the Users page itself.
-- **Categories** — full parent/child hierarchy tree view (root categories at top; children indented with `└ ` connectors and depth steps; subcategory count indicator); drag-and-drop reordering and reparenting (drag a row onto another category to move it under that category; dragging into one of its own descendants is rejected); create, edit, delete; nested (parent/child); re-parents children on delete; optional cover image (ID-based, falls back to first image in category's albums)
-- **Albums** — for admin/moderator: hierarchy view by default (albums grouped under their category with subcategories nested beneath their parent; uncategorized albums in a dedicated section; falls back to flat paginated table when search or category filter is active); drag-and-drop reordering within a category in hierarchy view; search albums by name (case-insensitive partial match; search preserved across pagination); paginated flat list (25/50/100 per page, session-persisted; item count summary; category filter); create, edit, delete; auto-generated folder names or custom; filesystem directory creation; empty folder removed automatically on album delete. For contributors: a flat, unpaginated list of only their assigned albums, with no New Album button, no category filter, and no per-row Delete button; they can edit an assigned album's metadata and cover image but not reassign its category. The album edit screen shows an "Assigned to: …" note (visible to admin/moderator only) when the album has contributor assignments.
+- **Categories** — full parent/child hierarchy tree view (root categories at top; children indented with `└ ` connectors and depth steps; subcategory count indicator); drag-and-drop reordering and reparenting on desktop (drag a row onto another category to move it under that category; dragging into one of its own descendants is rejected), with Up/Down buttons as a touch-friendly mobile fallback for reordering (reparenting stays desktop-only); create, edit, delete; nested (parent/child); re-parents children on delete; optional cover image (ID-based, falls back to first image in category's albums)
+- **Albums** — for admin/moderator: hierarchy view by default (albums grouped under their category with subcategories nested beneath their parent; uncategorized albums in a dedicated section; falls back to flat paginated table when search or category filter is active); drag-and-drop reordering within a category in hierarchy view on desktop, with Up/Down buttons as a touch-friendly mobile fallback; search albums by name (case-insensitive partial match; search preserved across pagination); paginated flat list (25/50/100 per page, session-persisted; item count summary; category filter); create, edit, delete; auto-generated folder names or custom; filesystem directory creation; empty folder removed automatically on album delete. For contributors: a flat, unpaginated list of only their assigned albums, with no New Album button, no category filter, and no per-row Delete button; they can edit an assigned album's metadata and cover image but not reassign its category. The album edit screen shows an "Assigned to: …" note (visible to admin/moderator only) when the album has contributor assignments.
 - **Images** — per-album paginated image grid (24/page); search images by filename or title (scoped to an album or across all albums; cross-album results include the category › album path); edit title, sort position, and visibility; optional file replacement via multipart upload (validates type, size, image integrity; regenerates thumbnail and updates dimensions/filesize); single-image delete cleans up disk files and resets album/category cover references; bulk delete and bulk move to another album (up to 500 images per AJAX call); per-image thumbnail regeneration; **Bulk Rename** (`manage_images` only) — select images within one album and rename them by pattern (prefix, suffix, sequential numbering via `{num}`, and/or the original name via `{name}`), with a preview step that flags duplicate or colliding filenames before anything is applied; original and thumbnail files are renamed together, extensions are always preserved, and the whole batch is rolled back automatically if any file operation fails partway through
 - **Batch Add** — scan `albums/{folder}/` for new images, process in 50-image AJAX chunks (handles 9000+ without timeout); album picker scoped to assigned albums for contributors
 - **Configuration** — all settings in one form; live image processor status; gallery behavior and upload limit controls
@@ -289,6 +302,53 @@ All settings are managed in **Admin → Configuration**. Key options:
 Settings are stored in the `{PREFIX}config` database table and cached by the `LumoraConfig` static class per request.
 
 The image processor (Imagick or GD) is detected automatically at runtime and shown as a read-only status in Admin → Configuration. No path or binary configuration is required.
+
+---
+
+## Plugins
+
+Lumora has two kinds of plugin, both living under `plugins/{id}/plugin.json`:
+
+- **Importer plugins** (`"type": "importer"`, e.g. `coppermine-importer`) — discovered by
+  `admin/migrate.php` and run on demand; unaffected by anything below.
+- **Feature plugins** (`"type": "feature"`, e.g. `lumora-visitor-stats`) — extend core
+  behaviour by registering hooks, without patching any core file. Managed from
+  **Admin → Plugins**; every feature plugin ships **disabled by default** (opt-in).
+
+Feature plugins hook into two small core services:
+
+- **`HookService`** — a minimal action/filter registry. `HookService::doAction($hook, ...$args)`
+  fires every callback registered on `$hook`; `HookService::applyFilters($hook, $value, ...$args)`
+  passes `$value` through every registered callback and returns the (possibly modified) result.
+- **`PluginService`** — discovers plugin manifests, tracks each feature plugin's
+  enabled/disabled state (stored in `{PREFIX}config`, no dedicated table), and — once per
+  request, after config is loaded — requires the `bootstrap.php` of every enabled, compatible
+  feature plugin so it can register its hooks.
+
+A feature plugin's manifest may declare, relative to its own folder:
+
+| Key | Runs | Purpose |
+|-----|------|---------|
+| `bootstrap` | Every request, while enabled | Registers hooks only — must never write to the database itself |
+| `activate` | Once, the moment the plugin is enabled | Creates the plugin's own database table(s) |
+| `deactivate` | Once, the moment the plugin is disabled | Optional cleanup that stops short of dropping data |
+
+Current extension points: `lumora_pageview` (action — fires on every public pageview with
+`(string $type, int $item_id)`), `admin_nav_sections` (filter — a plugin can add its own
+sidebar item to the admin nav), and `admin_dashboard_widgets_html` (filter — a plugin can
+append its own widget HTML to the Dashboard).
+
+### Visitor Stats (`plugins/lumora-visitor-stats/`)
+
+A Jetpack-style traffic overview, and the first plugin built on the hook system above.
+Once enabled from **Admin → Plugins**, it adds its own **Visitor Stats** page (daily
+pageview trend chart over a 7/30/90-day range, Today/Week/Month/All-Time totals, top
+images, top albums, top referrers, and the existing Who-Is-Online numbers) plus a compact
+"Last 7 Days" widget on the Dashboard. It logs to its own `{PREFIX}stats_hits` table
+(created only on enable), filters out common bot/crawler user agents, and stores only a
+SHA-256 hash of the visitor's IP (never the raw address) and the referring host (never a
+full URL or query string) — pruned automatically after 90 days. See
+`plugins/lumora-visitor-stats/README.md` for details.
 
 ---
 

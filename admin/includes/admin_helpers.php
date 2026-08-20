@@ -260,6 +260,7 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
             'migrate'      => ['icon' => '📥', 'label' => 'Import',                   'url' => 'migrate.php',      'permission' => 'site_configuration'],
             'updates'      => ['icon' => '🔔', 'label' => 'Updates' . $update_badge,  'url' => 'update.php',       'permission' => 'view_updates'],
             'tools'        => ['icon' => '🔧', 'label' => 'Tools',                    'url' => 'tools.php',        'permission' => 'maintenance_tools'],
+            'plugins'      => ['icon' => '🧩', 'label' => 'Plugins',                  'url' => 'plugins.php',      'permission' => 'site_configuration'],
             'installation' => ['icon' => '🖥️', 'label' => 'Installation',             'url' => 'installation.php', 'permission' => 'site_configuration'],
         ]],
         ['label' => 'Users', 'items' => [
@@ -268,6 +269,12 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
             'groups'  => ['icon' => '🛡️', 'label' => 'Groups',    'url' => 'groups.php',   'permission' => 'user_management'],
         ]],
     ];
+
+    // Enabled feature plugins can add their own nav item(s) to an existing
+    // section (or a brand-new section) via this filter — see
+    // HookService/PluginService. Applied before the permission filter below
+    // so a plugin-added item's own 'permission' key is still honoured.
+    $nav_sections = HookService::applyFilters('admin_nav_sections', $nav_sections);
 
     // 'permission' === null means every logged-in role may see the item
     // (dashboard, account); an array means any one of the listed permissions
@@ -324,8 +331,13 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
 
         foreach ($visible_items as $key => $item) {
             $cls = ($key === $active) ? ' class="active"' : '';
+            // 'href', when present, is used as-is (already an absolute or
+            // base-relative URL) — used by plugin-added nav items, whose
+            // page lives outside admin/ (e.g. plugins/<id>/admin/*.php).
+            // Built-in items only ever set 'url', resolved against admin/.
+            $href = $item['href'] ?? ($admin_url . h($item['url']));
             $nav_html .= '<li' . $cls . '>'
-                . '<a href="' . $admin_url . h($item['url']) . '">'
+                . '<a href="' . $href . '">'
                 . $item['icon'] . ' ' . $item['label']
                 . '</a></li>';
         }
@@ -362,12 +374,12 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{$title_h} — Lumora Gallery Admin</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
-  <link rel="stylesheet" href="{$admin_url}admin.css">
+  <link rel="stylesheet" href="{$admin_url}admin.css?v={$ver}">
 </head>
 <body class="lum-admin">
 
 <nav class="navbar navbar-expand-lg navbar-dark lum-admin-topbar px-3">
-  <a class="navbar-brand fw-bold" href="{$admin_url}">⚡ Lumora Gallery Admin <span class="opacity-50 fw-normal small">v{$ver}</span></a>
+  <a class="navbar-brand fw-bold lum-admin-brand" href="{$admin_url}"><span class="lum-admin-brand-text">⚡ Lumora Gallery Admin</span> <span class="opacity-50 fw-normal small lum-admin-version">v{$ver}</span></a>
   <button class="navbar-toggler ms-auto me-2" type="button" data-bs-toggle="collapse"
           data-bs-target="#adminNav" aria-controls="adminNav" aria-expanded="false">
     <span class="navbar-toggler-icon"></span>

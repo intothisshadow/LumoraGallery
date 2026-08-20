@@ -130,5 +130,10 @@ if (!empty($latest)) {
     $latest_html .= '</div>';
 }
 
-$content = $update_notice . $migration_notice . $stat_html . $ql . $latest_html;
+// ── Plugin dashboard widgets ──────────────────────────────────────────────────
+// Feature plugins (e.g. a visitor-stats plugin) can inject their own widget
+// HTML here without any core changes — see HookService/PluginService.
+$plugin_widgets_html = HookService::applyFilters('admin_dashboard_widgets_html', '');
+
+$content = $update_notice . $migration_notice . $stat_html . $ql . $plugin_widgets_html . $latest_html;
 lum_admin_page('Dashboard', $content, 'dashboard');

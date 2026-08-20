@@ -378,11 +378,11 @@ foreach ($groups as $g) {
 
     $rows .= '<tr>'
            . '<td class="align-middle">' . $name_cell . '</td>'
-           . '<td class="align-middle"><code class="small">' . $slug_h . '</code></td>'
-           . '<td class="align-middle">' . $type_b . '</td>'
-           . '<td class="align-middle small">' . $perm_ct . ' permission' . ($perm_ct === 1 ? '' : 's') . '</td>'
-           . '<td class="align-middle small">' . $user_ct . ' user' . ($user_ct === 1 ? '' : 's') . '</td>'
-           . '<td class="align-middle">' . $actions . '</td>'
+           . '<td class="align-middle d-none d-md-table-cell"><code class="small">' . $slug_h . '</code></td>'
+           . '<td class="align-middle" data-label="Type">' . $type_b . '</td>'
+           . '<td class="align-middle small" data-label="Permissions">' . $perm_ct . ' permission' . ($perm_ct === 1 ? '' : 's') . '</td>'
+           . '<td class="align-middle small" data-label="Users">' . $user_ct . ' user' . ($user_ct === 1 ? '' : 's') . '</td>'
+           . '<td class="align-middle lum-stack-actions">' . $actions . '</td>'
            . '</tr>';
 }
 
@@ -398,11 +398,11 @@ $content .= <<<HTML
 
 <div class="lum-adm-card p-0 mt-2 mb-3">
   <div class="table-responsive">
-    <table class="table table-hover mb-0">
+    <table class="table table-hover lum-adm-table-stack mb-0">
       <thead>
         <tr>
           <th>Name</th>
-          <th>Identifier</th>
+          <th class="d-none d-md-table-cell">Identifier</th>
           <th>Type</th>
           <th>Permissions</th>
           <th>Users</th>

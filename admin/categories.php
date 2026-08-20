@@ -152,7 +152,10 @@ function render_category_tree_rows(
     if (!isset($cats_by_parent[$parent_id])) return '';
     $html = '';
 
-    foreach ($cats_by_parent[$parent_id] as $c) {
+    $siblings      = $cats_by_parent[$parent_id];
+    $sibling_count = count($siblings);
+
+    foreach ($siblings as $i => $c) {
         $id = (int) $c['id'];
         if (isset($visited[$id])) continue; // cycle guard
         $visited[$id] = true;
@@ -170,8 +173,20 @@ function render_category_tree_rows(
             ? '<span class="lum-tree-connector" aria-hidden="true">└ </span>'
             : '';
 
+        // Native HTML5 drag-and-drop (the handle below) never fires from touch
+        // input, so mobile gets an Up/Down button fallback instead (LG-047) —
+        // each swaps this row with its immediate sibling within the same
+        // parent via the same reorder endpoint the drag handler already uses.
+        // Reparenting (drag "into" another category) stays desktop/drag-only.
+        $up_disabled   = $i === 0                  ? ' disabled' : '';
+        $down_disabled = $i === $sibling_count - 1  ? ' disabled' : '';
+
         $name_cell = '<div class="lum-tree-name" style="padding-left:' . $indent_px . 'px">'
-            . '<span class="lum-drag-handle" title="Drag to reorder or reparent" aria-hidden="true">&#9776;</span>'
+            . '<span class="lum-drag-handle d-none d-md-inline-block" title="Drag to reorder or reparent" aria-hidden="true">&#9776;</span>'
+            . '<span class="lum-reorder-btns d-inline-flex d-md-none" role="group" aria-label="Reorder">'
+            .   '<button type="button" class="lum-reorder-btn lum-move-up" title="Move up"' . $up_disabled . '>&#9650;</button>'
+            .   '<button type="button" class="lum-reorder-btn lum-move-down" title="Move down"' . $down_disabled . '>&#9660;</button>'
+            . '</span>'
             . $connector . $name_h . '</div>';
 
         // Album count badge (shown on every row).
@@ -189,10 +204,10 @@ function render_category_tree_rows(
         $html .=
             '<tr class="lum-drag-row" draggable="true" data-cat-id="' . $id . '" data-parent-id="' . $parent_id . '">'
             . '<td>' . $name_cell . $sub_indicator . '</td>'
-            . '<td>' . $album_badge . '</td>'
-            . '<td class="text-muted small">' . $pos_v . '</td>'
-            . '<td><a href="' . $edit_url . '" class="btn btn-sm btn-outline-secondary">Edit</a></td>'
-            . '<td>'
+            . '<td data-label="Albums">' . $album_badge . '</td>'
+            . '<td class="text-muted small d-none d-md-table-cell">' . $pos_v . '</td>'
+            . '<td class="lum-stack-actions"><a href="' . $edit_url . '" class="btn btn-sm btn-outline-secondary">Edit</a></td>'
+            . '<td class="lum-stack-actions">'
             .   '<form method="post" action="' . $base_h . '" data-confirm="' . $del_conf . '"'
             .       ' onsubmit="return confirm(this.dataset.confirm)">'
             .     '<input type="hidden" name="action"     value="delete">'
@@ -369,6 +384,32 @@ $drag_script = <<<HTML
     draggedRow = null;
   });
 
+  function persistOrder(movedId, newParentId, orderedIds) {
+    showToast('Saving order\u2026', false);
+
+    var body = new URLSearchParams();
+    body.set('csrf_token', CSRF);
+    body.set('moved_id', String(movedId));
+    body.set('new_parent_id', String(newParentId));
+    body.set('ordered_ids', JSON.stringify(orderedIds));
+
+    fetch(REORDER_URL, { method: 'POST', body: body })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data && data.success) {
+          showToast('Order saved \u2014 refreshing\u2026', false);
+          window.location.reload();
+        } else {
+          showToast((data && data.error) || 'Could not save the new order.', true);
+          setTimeout(hideToast, 4000);
+        }
+      })
+      .catch(function () {
+        showToast('Network error \u2014 could not save the new order.', true);
+        setTimeout(hideToast, 4000);
+      });
+  }
+
   table.addEventListener('drop', function (e) {
     var targetRow = e.target.closest('tr.lum-drag-row');
     if (!targetRow || !draggedRow || targetRow === draggedRow) return;
@@ -399,29 +440,32 @@ $drag_script = <<<HTML
       siblingIds.splice(insertAt, 0, movedId);
     }
 
-    showToast('Saving order\u2026', false);
+    persistOrder(movedId, newParentId, siblingIds);
+  });
 
-    var body = new URLSearchParams();
-    body.set('csrf_token', CSRF);
-    body.set('moved_id', String(movedId));
-    body.set('new_parent_id', String(newParentId));
-    body.set('ordered_ids', JSON.stringify(siblingIds));
+  // Mobile fallback (LG-047): Up/Down buttons swap a row with its immediate
+  // sibling within the same parent \u2014 drag-and-drop's "reorder" half, without
+  // reparenting, since native drag never fires from touch input.
+  table.addEventListener('click', function (e) {
+    var btn = e.target.closest('.lum-move-up, .lum-move-down');
+    if (!btn || btn.disabled) return;
+    var row = btn.closest('tr.lum-drag-row');
+    if (!row) return;
 
-    fetch(REORDER_URL, { method: 'POST', body: body })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (data && data.success) {
-          showToast('Order saved \u2014 refreshing\u2026', false);
-          window.location.reload();
-        } else {
-          showToast((data && data.error) || 'Could not save the new order.', true);
-          setTimeout(hideToast, 4000);
-        }
-      })
-      .catch(function () {
-        showToast('Network error \u2014 could not save the new order.', true);
-        setTimeout(hideToast, 4000);
-      });
+    var parentId = parseInt(row.dataset.parentId, 10);
+    var siblings = allRows().filter(function (r) {
+      return parseInt(r.dataset.parentId, 10) === parentId;
+    });
+    var idx = siblings.indexOf(row);
+    var swapWith = btn.classList.contains('lum-move-up') ? idx - 1 : idx + 1;
+    if (idx === -1 || swapWith < 0 || swapWith >= siblings.length) return;
+
+    var orderedIds = siblings.map(function (r) { return parseInt(r.dataset.catId, 10); });
+    var tmp = orderedIds[idx];
+    orderedIds[idx] = orderedIds[swapWith];
+    orderedIds[swapWith] = tmp;
+
+    persistOrder(parseInt(row.dataset.catId, 10), parentId, orderedIds);
   });
 })();
 </script>
@@ -432,11 +476,11 @@ $content =
     . '<span class="text-muted small">' . h($summary) . ' &middot; drag rows (&#9776;) to reorder or reparent</span>'
     . '<a href="' . $new_h . '" class="btn btn-primary btn-sm">+ New Category</a>'
     . '</div>'
-    . '<div class="table-responsive"><table class="table table-hover lum-adm-table align-middle">'
+    . '<div class="table-responsive"><table class="table table-hover lum-adm-table lum-adm-table-stack align-middle">'
     . '<thead><tr>'
     . '<th>Name</th>'
     . '<th style="width:90px">Albums</th>'
-    . '<th style="width:60px">Pos</th>'
+    . '<th class="d-none d-md-table-cell" style="width:60px">Pos</th>'
     . '<th style="width:70px"></th>'
     . '<th style="width:90px"></th>'
     . '</tr></thead>'

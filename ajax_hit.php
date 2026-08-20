@@ -65,6 +65,7 @@ $session_key = 'img_hit_' . $image_id;
 
 if (empty($_SESSION[$session_key])) {
     increment_image_hits($image_id);
+    HookService::doAction('lumora_pageview', 'image', $image_id);
     $_SESSION[$session_key] = true;
 }
 

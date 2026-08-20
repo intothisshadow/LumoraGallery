@@ -8,6 +8,97 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.16.0] — 2026-08-20
+
+### Added
+
+- **Mobile-friendly reorder fallback for the Categories/Albums drag-and-drop
+  (LG-047).** The Categories tree and the Albums hierarchy view's
+  drag-to-reorder both use native HTML5 drag-and-drop, which never fires
+  from touch input, making reordering unusable on a phone despite the
+  drag handle being visible there. Both pages now show Up/Down buttons
+  instead of the drag handle on mobile — they swap a row with its
+  immediate sibling within the same group (same parent category / same
+  category section) using the same reorder endpoints drag-and-drop already
+  posts to, with the first/last item in a group getting a disabled button
+  at that end. Reparenting (dragging a category "into" another) remains
+  desktop/drag-only.
+
+- **New "feature" plugin architecture with a minimal hook system (LG-045),
+  and a Visitor Stats plugin built on it.** Previously the only plugin type
+  was the on-demand "importer" (Coppermine, etc.), discovered by
+  `admin/migrate.php` and run manually. `HookService` (actions + filters)
+  and `PluginService` (discovery, enable/disable, and per-request loading of
+  enabled plugins) let a new plugin type — "feature" plugins — extend core
+  behaviour by registering hooks in its own `bootstrap.php`, with zero
+  patches to core files needed for a plugin to add itself. A new **Admin →
+  Plugins** page lists every discovered feature plugin with an Enable/Disable
+  toggle; every feature plugin ships disabled by default (opt-in).
+  Three extension points exist so far: `lumora_pageview` (fires on every
+  public pageview — home, category, album, image), `admin_nav_sections`
+  (a plugin can add its own sidebar nav item), and
+  `admin_dashboard_widgets_html` (a plugin can add its own Dashboard widget).
+  The first plugin built on this — **Visitor Stats** (`plugins/lumora-visitor-stats/`)
+  — adds a Jetpack-style traffic overview: a daily pageview trend chart
+  (7/30/90-day range), Today/Week/Month/All-Time totals, top images, top
+  albums, top referrers, and the existing Who-Is-Online numbers, all on its
+  own admin page, plus a compact "Last 7 Days" widget on the Dashboard when
+  enabled. It logs pageviews to its own database table (created only when
+  the plugin is enabled, never touching core's schema), filters out common
+  bot/crawler traffic, and stores only a SHA-256 hash of the visitor's IP
+  (never the raw address) and the referring host (never a full URL or query
+  string) — pruned automatically after 90 days.
+
+- **Mobile/responsive styling for the admin panel (LG-046).** The admin
+  chrome previously had only a bare-minimum mobile treatment (a horizontally
+  scrolling sidebar nav). `admin/admin.css` now truncates the topbar brand
+  instead of overflowing at narrow widths, gives the mobile nav links and
+  the collapsible-section chevrons full 44px touch targets, wraps the
+  Updates page's source tabs, collapses the Appearance page's theme card
+  grid to one column, and tightens card/stat-card padding and modal margins
+  on phones. Most page content (Bootstrap grid columns, `.table-responsive`
+  tables, flex-wrap toolbars) was already responsive; this fills in the
+  admin-specific components that weren't. Also fixed a pre-existing bug
+  where `.lum-admin-layout` never switched to a column flex direction on
+  mobile, so the sidebar and main content stayed side-by-side instead of
+  stacking — the sidebar's default `align-items: stretch` pulled it to the
+  full content height and squeezed main content into a sliver beside it.
+  Live-device testing also surfaced that several list tables (Categories,
+  Images, Albums, Users, Groups) were too column-heavy to fit a phone
+  screen even inside their `.table-responsive` wrapper. Non-essential
+  columns (Pos, ID, Dimensions, Size, Views, Added, Category, Folder,
+  Email, Last Login, Identifier) now hide below the `md`/`lg` breakpoints
+  via Bootstrap's `d-none d-md-table-cell`/`d-none d-lg-table-cell`
+  utilities, leaving each table's primary identifying and action columns
+  visible without a horizontal scroll on mobile. Hiding columns wasn't
+  enough for the two most icon/badge-heavy tables — Images (checkbox,
+  thumbnail, title, status badge, 3 action buttons) and Albums (title,
+  image count, status badge, 4-5 action buttons) still overflowed a phone
+  width even after trimming — so those two now use a new
+  `.lum-adm-table-stack` treatment: each row renders as a bordered card
+  with its cells stacked vertically (small caption + value) instead of a
+  horizontally-scrolling table row. The first version of this still
+  overflowed on real data: giving every `<td>` `display: flex` made a
+  cell's inner `<div>`s lay out as flex items on one line instead of
+  stacking, so an unbroken long filename (real thumbnail filenames run
+  30-40+ characters) forced the row wide instead of wrapping. Fixed by
+  only applying `display: flex` to label:value cells (`[data-label]`) and
+  adding `overflow-wrap: anywhere` as the default for all stacked cells.
+  Also clamped a feature plugin's description on the Plugins page
+  (`admin/plugins.php`) to 3 lines on mobile — a `plugin.json` description
+  can run several sentences, which dwarfed the card's Manage/Disable
+  controls on a phone screen. The Users table (`admin/users.php`) had the
+  same action-row overflow as Images/Albums (up to 4 buttons — Edit,
+  Albums, Enable/Disable, Delete — plus Role and Status badges) even after
+  hiding its ID/Email/Last Login columns, so it now uses the same
+  `.lum-adm-table-stack` card layout on mobile. The Groups table
+  (`admin/groups.php`) also turned out to need it despite having only one
+  action button — real group names plus Type/Permissions/Users columns
+  still didn't fit — so it's now on the same treatment too. Given two
+  guesses in a row turned out wrong, Categories (`admin/categories.php`)
+  was converted proactively rather than waiting for another report — all
+  five admin list tables now use `.lum-adm-table-stack` on mobile.
+
 ## [1.15.1] — 2026-08-10
 
 ### Added

@@ -19,7 +19,8 @@ declare(strict_types=1);
  *                       AbstractUpdateProvider, GitHubUpdateProvider, UpdaterService,
  *                       BackupService, InstallationService, GroupService, UserService,
  *                       AlbumAssignmentService, InstallPingService,
- *                       ServerEnvironmentService, CacheHeaderService
+ *                       ServerEnvironmentService, CacheHeaderService,
+ *                       HookService, PluginService
  *   8. functions.php  (utility helpers + legacy forwarding wrappers)
  *   9. auth.php
  *  10. thumb.php     (legacy forwarding wrappers → ThumbnailService)
@@ -28,6 +29,8 @@ declare(strict_types=1);
  *      below and lumora_ensure_session() in functions.php)
  * 12a. Remember-me auto-login (persistent cookie re-authentication)
  *  13. Gallery config loaded from DB via LumoraConfig::load()
+ * 13a. Enabled feature plugins' bootstrap.php required (LG-045) — see
+ *      PluginService::loadEnabledPlugins()
  *  14. Timezone applied from config
  *  15. LiteSpeed Cache purge hook registered for admin-panel POST requests
  *      (LG-033) — CacheHeaderService::purgeLiteSpeedCache() itself checks the
@@ -126,6 +129,8 @@ require_once LUMORA_INCLUDE . 'services/AlbumAssignmentService.php';
 require_once LUMORA_INCLUDE . 'services/InstallPingService.php';
 require_once LUMORA_INCLUDE . 'services/ServerEnvironmentService.php';
 require_once LUMORA_INCLUDE . 'services/CacheHeaderService.php';
+require_once LUMORA_INCLUDE . 'services/HookService.php';
+require_once LUMORA_INCLUDE . 'services/PluginService.php';
 
 // ── 8–11. Legacy includes (wrappers + utilities) ─────────────────────────────
 require_once LUMORA_INCLUDE . 'functions.php';
@@ -160,6 +165,14 @@ if (!lumora_is_logged_in()) {
 
 // ── 13. Gallery config ───────────────────────────────────────────────────────
 lumora_load_config();
+
+// ── 13a. Enabled feature plugins ─────────────────────────────────────────────
+// Requires each enabled plugin's bootstrap.php so it can register its hooks
+// (HookService::addAction/addFilter) for this request. Must run after config
+// is loaded (enabled/disabled state lives in {PREFIX}config) and after every
+// core service class above is defined, since a plugin's bootstrap may call
+// into any of them. See PluginService's class docblock.
+PluginService::loadEnabledPlugins();
 
 // ── 14. Timezone ─────────────────────────────────────────────────────────────
 // Apply the timezone stored in config (default UTC).

@@ -1,0 +1,13 @@
+{
+  "id": "lumora-visitor-stats",
+  "type": "feature",
+  "name": "Visitor Stats",
+  "version": "1.0.0",
+  "min_lumora": "1.15.1",
+  "description": "Jetpack-style traffic overview: a daily pageview chart, top images/albums, and top referrers on their own admin page, plus a compact widget on the Dashboard. Bot traffic is filtered out; only a hashed IP and the referring host (never a full URL) are ever stored.",
+  "author": "Ariane",
+  "license": "GPL-3.0-or-later",
+  "admin_url": "plugins/lumora-visitor-stats/admin/stats.php",
+  "bootstrap": "bootstrap.php",
+  "activate": "activate.php"
+}

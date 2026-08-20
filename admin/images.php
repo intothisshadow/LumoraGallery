@@ -498,11 +498,11 @@ HTML;
 
             $rows .= <<<HTML
 <tr>
-  <td class="pe-0" style="width:30px">
+  <td class="pe-0 lum-stack-inline" style="width:30px">
     <input type="checkbox" class="form-check-input lum-img-check" value="{$img_id_v}" onchange="lumUpdCount()">
   </td>
-  <td class="text-muted small text-nowrap" style="width:50px">{$img_id_v}</td>
-  <td style="width:70px">
+  <td class="text-muted small text-nowrap d-none d-md-table-cell" style="width:50px">{$img_id_v}</td>
+  <td class="lum-stack-inline" style="width:70px">
     <a href="{$orig_url_h}" target="_blank" rel="noopener">
       <img src="{$thumb_url_h}" alt="{$filename_h}" loading="lazy"
            style="max-width:60px;max-height:48px;object-fit:contain;border-radius:3px">
@@ -510,15 +510,15 @@ HTML;
   </td>
   <td>
     <div class="fw-semibold small">{$title_h}</div>
-    <div class="text-muted" style="font-size:.73rem;font-family:monospace">{$filename_h}</div>
+    <div class="text-muted" style="font-size:.73rem;font-family:monospace;overflow-wrap:anywhere">{$filename_h}</div>
     {$album_info_h}
   </td>
-  <td class="text-muted small text-nowrap">{$dims_h}</td>
-  <td class="text-muted small text-nowrap">{$size_h}</td>
-  <td class="text-muted small">{$hits_h}</td>
-  <td class="text-muted small text-nowrap">{$date_h}</td>
-  <td>{$vis_h}</td>
-  <td>
+  <td class="text-muted small text-nowrap d-none d-md-table-cell">{$dims_h}</td>
+  <td class="text-muted small text-nowrap d-none d-md-table-cell">{$size_h}</td>
+  <td class="text-muted small d-none d-lg-table-cell">{$hits_h}</td>
+  <td class="text-muted small text-nowrap d-none d-lg-table-cell">{$date_h}</td>
+  <td data-label="Status">{$vis_h}</td>
+  <td class="lum-stack-actions">
     <div class="d-flex gap-1 flex-nowrap">
       <a href="{$edit_url_h}" class="btn btn-sm btn-outline-secondary" title="Edit details">✏️</a>
       <button type="button" class="btn btn-sm btn-outline-secondary"
@@ -535,16 +535,19 @@ HTML;
         }
 
         $content .= '<div class="table-responsive">'
-            . '<table class="table table-hover lum-adm-table align-middle">'
+            . '<table class="table table-hover lum-adm-table lum-adm-table-stack align-middle">'
             . '<thead><tr>'
             . '<th style="width:30px">'
             .   '<input type="checkbox" class="form-check-input" id="lum-check-all-header"'
             .   ' onchange="lumSelAll(this.checked)" title="Select / deselect all">'
             . '</th>'
-            . '<th class="text-muted" style="width:50px">ID</th>'
+            . '<th class="text-muted d-none d-md-table-cell" style="width:50px">ID</th>'
             . '<th>Thumb</th>'
             . '<th>Title / Filename' . ($is_search ? ' / Album' : '') . '</th>'
-            . '<th>Dimensions</th><th>Size</th><th>Views</th><th>Added</th>'
+            . '<th class="d-none d-md-table-cell">Dimensions</th>'
+            . '<th class="d-none d-md-table-cell">Size</th>'
+            . '<th class="d-none d-lg-table-cell">Views</th>'
+            . '<th class="d-none d-lg-table-cell">Added</th>'
             . '<th>Status</th><th>Actions</th>'
             . '</tr></thead>'
             . '<tbody>' . $rows . '</tbody>'

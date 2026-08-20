@@ -188,8 +188,14 @@ function album_cat_options(array $cats, int $selected = 0): string
  * @param string               $base_h    HTML-escaped base URL.
  * @param string               $csrf      HTML-escaped CSRF token.
  */
-function render_album_row(array $a, int $indent_px, string $base_h, string $csrf): string
-{
+function render_album_row(
+    array $a,
+    int   $indent_px,
+    string $base_h,
+    string $csrf,
+    int   $sibling_index = 0,
+    int   $sibling_count = 1
+): string {
     $title_h    = h($a['title']);
     $folder_h   = h($a['folder']);
     $vis_h      = $a['visibility']
@@ -202,23 +208,34 @@ function render_album_row(array $a, int $indent_px, string $base_h, string $csrf
     $view_url   = h(lumora_base_url() . 'album.php?album='        . (int) $a['id']);
     $del_conf   = h('Delete album \'' . $a['title'] . '\'? All DB records will be removed. If the album folder is empty it will also be deleted; otherwise files on disk are kept.');
 
+    // Native HTML5 drag-and-drop (the handle below) never fires from touch
+    // input, so mobile gets an Up/Down button fallback instead (LG-047) —
+    // each swaps this row with its immediate sibling within the same
+    // category section via the same reorder endpoint the drag handler uses.
+    $up_disabled   = $sibling_index === 0                    ? ' disabled' : '';
+    $down_disabled = $sibling_index === $sibling_count - 1   ? ' disabled' : '';
+
     $title_cell = '<div style="padding-left:' . $indent_px . 'px">'
-        . '<span class="lum-drag-handle" title="Drag to reorder within this category" aria-hidden="true">&#9776;</span>'
+        . '<span class="lum-drag-handle d-none d-md-inline-block" title="Drag to reorder within this category" aria-hidden="true">&#9776;</span>'
+        . '<span class="lum-reorder-btns d-inline-flex d-md-none" role="group" aria-label="Reorder">'
+        .   '<button type="button" class="lum-reorder-btn lum-move-up" title="Move up"' . $up_disabled . '>&#9650;</button>'
+        .   '<button type="button" class="lum-reorder-btn lum-move-down" title="Move down"' . $down_disabled . '>&#9660;</button>'
+        . '</span>'
         . '<a href="' . $edit_url . '">' . $title_h . '</a>'
         . '</div>';
 
     return '<tr class="lum-drag-row" draggable="true" data-album-id="' . (int) $a['id'] . '" data-category-id="' . (int) $a['category_id'] . '">'
         . '<td>' . $title_cell . '</td>'
-        . '<td><code class="small">' . $folder_h . '</code></td>'
-        . '<td>' . $img_cnt . '</td>'
-        . '<td>' . $vis_h . '</td>'
-        . '<td>'
+        . '<td class="d-none d-md-table-cell"><code class="small">' . $folder_h . '</code></td>'
+        . '<td data-label="Images">' . $img_cnt . '</td>'
+        . '<td data-label="Status">' . $vis_h . '</td>'
+        . '<td class="lum-stack-actions">'
         .   '<a href="' . $batch_url  . '" class="btn btn-sm btn-outline-primary"    title="Batch Add">&#x2B06;&#xFE0F;</a>'
         .   '<a href="' . $images_url . '" class="btn btn-sm btn-outline-secondary"  title="Manage Images">&#x1F4F8;</a>'
         .   '<a href="' . $view_url   . '" class="btn btn-sm btn-outline-secondary"  title="View album" target="_blank">&#x2197;</a>'
         .   '<a href="' . $edit_url   . '" class="btn btn-sm btn-outline-secondary"  title="Edit">&#x270F;&#xFE0F;</a>'
         . '</td>'
-        . '<td>'
+        . '<td class="lum-stack-actions">'
         .   '<form method="post" action="' . $base_h . '" data-confirm="' . $del_conf . '"'
         .       ' onsubmit="return confirm(this.dataset.confirm)">'
         .     '<input type="hidden" name="action"     value="delete">'
@@ -252,11 +269,11 @@ function render_assigned_album_row(array $a): string
 
     return '<tr>'
         . '<td><a href="' . $edit_url . '">' . $title_h . '</a></td>'
-        . '<td>' . $cat_h . '</td>'
-        . '<td><code>' . $folder_h . '</code></td>'
-        . '<td>' . $img_cnt . '</td>'
-        . '<td>' . $vis_h . '</td>'
-        . '<td>'
+        . '<td class="d-none d-md-table-cell">' . $cat_h . '</td>'
+        . '<td class="d-none d-md-table-cell"><code>' . $folder_h . '</code></td>'
+        . '<td data-label="Images">' . $img_cnt . '</td>'
+        . '<td data-label="Status">' . $vis_h . '</td>'
+        . '<td class="lum-stack-actions">'
         .   '<a href="' . $batch_url  . '" class="btn btn-sm btn-outline-primary"   title="Batch Add">&#x2B06;&#xFE0F;</a>'
         .   '<a href="' . $images_url . '" class="btn btn-sm btn-outline-secondary" title="Manage Images">&#x1F4F8;</a>'
         .   '<a href="' . $view_url   . '" class="btn btn-sm btn-outline-secondary" title="View album" target="_blank">&#x2197;</a>'
@@ -322,8 +339,8 @@ function render_album_tree(
 
         // Album rows nested one level deeper than the category header.
         $album_indent_px = ($depth + 1) * 20;
-        foreach ($cat_albums as $a) {
-            $html .= render_album_row($a, $album_indent_px, $base_h, $csrf);
+        foreach (array_values($cat_albums) as $i => $a) {
+            $html .= render_album_row($a, $album_indent_px, $base_h, $csrf, $i, $cat_album_count);
         }
 
         // Recurse into child categories.
@@ -585,9 +602,12 @@ if (!$can_manage_all) {
         '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">'
         . '<span class="text-muted small">' . $summary . '</span>'
         . '</div>'
-        . '<div class="table-responsive"><table class="table table-hover lum-adm-table align-middle">'
+        . '<div class="table-responsive"><table class="table table-hover lum-adm-table lum-adm-table-stack align-middle">'
         . '<thead><tr>'
-        . '<th>Title</th><th>Category</th><th>Folder</th><th>Images</th><th>Visibility</th><th>Actions</th>'
+        . '<th>Title</th>'
+        . '<th class="d-none d-md-table-cell">Category</th>'
+        . '<th class="d-none d-md-table-cell">Folder</th>'
+        . '<th>Images</th><th>Visibility</th><th>Actions</th>'
         . '</tr></thead>'
         . '<tbody>' . $rows . '</tbody></table></div>';
 
@@ -650,8 +670,8 @@ if ($hierarchy_mode) {
         $uc_badge   = '<span class="badge rounded-pill text-bg-secondary ms-2">' . $uc_count . '</span>';
         $uc_header  = '<div><em class="text-muted">(No Category)</em>' . $uc_badge . '</div>';
         $rows .= '<tr class="lum-tree-cat-header"><td colspan="6">' . $uc_header . '</td></tr>';
-        foreach ($uncategorized as $a) {
-            $rows .= render_album_row($a, 20, $base_h, $csrf);
+        foreach (array_values($uncategorized) as $i => $a) {
+            $rows .= render_album_row($a, 20, $base_h, $csrf, $i, $uc_count);
         }
     }
 
@@ -752,25 +772,7 @@ if ($hierarchy_mode) {
     draggedRow = null;
   });
 
-  table.addEventListener('drop', function (e) {
-    var targetRow = e.target.closest('tr.lum-drag-row');
-    if (!targetRow || !draggedRow || targetRow === draggedRow) return;
-    if (targetRow.dataset.categoryId !== draggedRow.dataset.categoryId) return;
-    e.preventDefault();
-
-    var mode = targetRow.classList.contains('lum-drop-above') ? 'above' : 'below';
-    clearDropClasses();
-
-    var categoryId = parseInt(draggedRow.dataset.categoryId, 10);
-    var movedId    = parseInt(draggedRow.dataset.albumId, 10);
-
-    var siblings = allRows()
-      .filter(function (r) { return parseInt(r.dataset.categoryId, 10) === categoryId && r !== draggedRow; });
-    var targetIndex = siblings.indexOf(targetRow);
-    var insertAt = mode === 'above' ? targetIndex : targetIndex + 1;
-    var orderedIds = siblings.map(function (r) { return parseInt(r.dataset.albumId, 10); });
-    orderedIds.splice(insertAt, 0, movedId);
-
+  function persistOrder(categoryId, orderedIds) {
     showToast('Saving order\u2026', false);
 
     var body = new URLSearchParams();
@@ -793,6 +795,53 @@ if ($hierarchy_mode) {
         showToast('Network error \u2014 could not save the new order.', true);
         setTimeout(hideToast, 4000);
       });
+  }
+
+  table.addEventListener('drop', function (e) {
+    var targetRow = e.target.closest('tr.lum-drag-row');
+    if (!targetRow || !draggedRow || targetRow === draggedRow) return;
+    if (targetRow.dataset.categoryId !== draggedRow.dataset.categoryId) return;
+    e.preventDefault();
+
+    var mode = targetRow.classList.contains('lum-drop-above') ? 'above' : 'below';
+    clearDropClasses();
+
+    var categoryId = parseInt(draggedRow.dataset.categoryId, 10);
+    var movedId    = parseInt(draggedRow.dataset.albumId, 10);
+
+    var siblings = allRows()
+      .filter(function (r) { return parseInt(r.dataset.categoryId, 10) === categoryId && r !== draggedRow; });
+    var targetIndex = siblings.indexOf(targetRow);
+    var insertAt = mode === 'above' ? targetIndex : targetIndex + 1;
+    var orderedIds = siblings.map(function (r) { return parseInt(r.dataset.albumId, 10); });
+    orderedIds.splice(insertAt, 0, movedId);
+
+    persistOrder(categoryId, orderedIds);
+  });
+
+  // Mobile fallback (LG-047): Up/Down buttons swap a row with its immediate
+  // sibling within the same category section \u2014 native drag never fires
+  // from touch input.
+  table.addEventListener('click', function (e) {
+    var btn = e.target.closest('.lum-move-up, .lum-move-down');
+    if (!btn || btn.disabled) return;
+    var row = btn.closest('tr.lum-drag-row');
+    if (!row) return;
+
+    var categoryId = parseInt(row.dataset.categoryId, 10);
+    var siblings = allRows().filter(function (r) {
+      return parseInt(r.dataset.categoryId, 10) === categoryId;
+    });
+    var idx = siblings.indexOf(row);
+    var swapWith = btn.classList.contains('lum-move-up') ? idx - 1 : idx + 1;
+    if (idx === -1 || swapWith < 0 || swapWith >= siblings.length) return;
+
+    var orderedIds = siblings.map(function (r) { return parseInt(r.dataset.albumId, 10); });
+    var tmp = orderedIds[idx];
+    orderedIds[idx] = orderedIds[swapWith];
+    orderedIds[swapWith] = tmp;
+
+    persistOrder(categoryId, orderedIds);
   });
 })();
 </script>
@@ -804,10 +853,10 @@ HTML;
         . '<span class="text-muted small">' . $summary_text . ' &middot; drag rows (&#9776;) to reorder within a category</span>'
         . '<a href="' . $new_h . '" class="btn btn-primary btn-sm">+ New Album</a>'
         . '</div>'
-        . '<div class="table-responsive"><table class="table table-hover lum-adm-table align-middle">'
+        . '<div class="table-responsive"><table class="table table-hover lum-adm-table lum-adm-table-stack align-middle">'
         . '<thead><tr>'
         . '<th>Title</th>'
-        . '<th>Folder</th>'
+        . '<th class="d-none d-md-table-cell">Folder</th>'
         . '<th style="width:70px">Images</th>'
         . '<th style="width:90px">Visibility</th>'
         . '<th>Actions</th>'
@@ -863,17 +912,17 @@ if (empty($albums)) {
         $del_conf   = h('Delete album \'' . $a['title'] . '\'? All DB records will be removed. If the album folder is empty it will also be deleted; otherwise files on disk are kept.');
         $rows .= '<tr>'
             . '<td><a href="' . $edit_url . '">' . $title_h . '</a></td>'
-            . '<td>' . $cat_h . '</td>'
-            . '<td><code>' . $folder_h . '</code></td>'
-            . '<td>' . $img_cnt . '</td>'
-            . '<td>' . $vis_h . '</td>'
-            . '<td>'
+            . '<td class="d-none d-md-table-cell">' . $cat_h . '</td>'
+            . '<td class="d-none d-md-table-cell"><code>' . $folder_h . '</code></td>'
+            . '<td data-label="Images">' . $img_cnt . '</td>'
+            . '<td data-label="Status">' . $vis_h . '</td>'
+            . '<td class="lum-stack-actions">'
             .   '<a href="' . $batch_url  . '" class="btn btn-sm btn-outline-primary"   title="Batch Add">&#x2B06;&#xFE0F;</a>'
             .   '<a href="' . $images_url . '" class="btn btn-sm btn-outline-secondary" title="Manage Images">&#x1F4F8;</a>'
             .   '<a href="' . $view_url   . '" class="btn btn-sm btn-outline-secondary" title="View album" target="_blank">&#x2197;</a>'
             .   '<a href="' . $edit_url   . '" class="btn btn-sm btn-outline-secondary" title="Edit">&#x270F;&#xFE0F;</a>'
             . '</td>'
-            . '<td>'
+            . '<td class="lum-stack-actions">'
             .   '<form method="post" action="' . $base_h . '" data-confirm="' . $del_conf . '"'
             .       ' onsubmit="return confirm(this.dataset.confirm)">'
             .     '<input type="hidden" name="action"     value="delete">'
@@ -941,9 +990,12 @@ $content =
     . '</div>'
     . '</div>'
     . $pag_bar
-    . '<div class="table-responsive"><table class="table table-hover lum-adm-table align-middle">'
+    . '<div class="table-responsive"><table class="table table-hover lum-adm-table lum-adm-table-stack align-middle">'
     . '<thead><tr>'
-    . '<th>Title</th><th>Category</th><th>Folder</th><th>Images</th><th>Visibility</th><th>Actions</th><th></th>'
+    . '<th>Title</th>'
+    . '<th class="d-none d-md-table-cell">Category</th>'
+    . '<th class="d-none d-md-table-cell">Folder</th>'
+    . '<th>Images</th><th>Visibility</th><th>Actions</th><th></th>'
     . '</tr></thead>'
     . '<tbody>' . $rows . '</tbody></table></div>'
     . $pag_bar;
