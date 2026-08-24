@@ -84,6 +84,13 @@
 
   /* Keyboard focus ring — its own token so it can be tuned per mode. */
   --fs-focus-ring:         var(--fs-accent);
+
+  /* PhotoSwipe v5's own theming tokens — unaffected by data-bs-theme,
+     since the lightbox is always dark chrome regardless of the site's
+     colour mode. */
+  --pswp-bg:                   #1a0a2a;
+  --pswp-icon-color:           #f0eef5;
+  --pswp-icon-color-secondary: #b98ee8;
 }
 
 /* ── Dark mode overrides ──────────────────────────────────── */
@@ -730,11 +737,70 @@ html[data-bs-theme="dark"] {
 /* ── Empty state ──────────────────────────────────────────── */
 .lum-empty { border-radius: var(--fs-radius); }
 
-/* ── PhotoSwipe download button ───────────────────────────── */
+/* ── PhotoSwipe lightbox ───────────────────────────────────── */
+/* PhotoSwipe's own chrome (top bar, counter, caption, next/prev
+   arrows) otherwise ships completely unstyled — this gives it the
+   same accent identity as the rest of the theme instead of
+   PhotoSwipe's generic black default. Built entirely from --fs-accent/
+   --fs-accent-light/--pswp-bg (via color-mix()) rather than hardcoded
+   hex, so a theme forked from this one via custom.css (see this
+   theme's own README.md) automatically re-colors the lightbox too,
+   with zero extra rules needed. */
+.pswp__top-bar {
+  background: linear-gradient(90deg, var(--fs-accent) 0%, var(--fs-accent-light) 100%) !important;
+}
+
+.pswp__button {
+  color: var(--pswp-icon-color);
+  opacity: 1;
+}
+
+.pswp__button:hover {
+  opacity: .85;
+}
+
 .pswp__button--download-button {
   width: 50px;
   height: 60px;
   padding: 10px;
+  background-color: transparent;
+  transition: background-color .2s;
+}
+
+.pswp__button--download-button:hover {
+  background-color: color-mix(in srgb, var(--fs-accent) 55%, transparent);
+}
+
+.pswp__counter {
+  color: var(--pswp-icon-color);
+  font-family: var(--fs-font-family);
+  font-size: .82rem;
+  opacity: 1;
+}
+
+.pswp__caption {
+  background: linear-gradient(to top, color-mix(in srgb, var(--pswp-bg) 82%, transparent) 0%, transparent 100%);
+}
+
+.pswp__caption__center {
+  color: var(--pswp-icon-color);
+  font-family: var(--fs-font-family);
+  font-size: .88rem;
+  margin: 0 auto;
+  max-width: 800px;
+  text-align: center;
+}
+
+/* Next/prev arrows — a soft circular backdrop rather than PhotoSwipe's
+   bare icon, so they read clearly against any image. */
+.pswp__button--arrow .pswp__icn {
+  background: color-mix(in srgb, var(--fs-accent) 45%, transparent);
+  border-radius: 50%;
+  transition: background .2s;
+}
+
+.pswp__button--arrow:hover .pswp__icn {
+  background: color-mix(in srgb, var(--fs-accent) 65%, transparent);
 }
 
 /* ── Category list (row layout) ───────────────────────────── */
