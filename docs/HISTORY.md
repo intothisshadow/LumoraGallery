@@ -4,6 +4,134 @@ Long-term archive of completed work, migrated from TODO.md on release.
 
 ---
 
+## v1.17.0 — Released 2026-08-28
+
+### Added
+
+- **LG-048 — Expand/Collapse All toggle for admin sidebar (top + bottom).**
+  Added two synced toggles — one before Dashboard/Gallery, one after
+  Users/Groups — that expand/collapse all three collapsible sections
+  (Settings, Maintenance, Users) at once (`admin/includes/admin_helpers.php`).
+  `$has_collapsible` gates rendering entirely for a role that sees zero
+  collapsible sections. The existing per-section collapse-state `<script>`
+  was refactored so each toggle's `apply(isCollapsed)` is stored in a
+  `slug -> entry` map instead of being a private closure, letting the new
+  Expand/Collapse All buttons drive every section's state through the same
+  function individual toggles use, so persistence/sync logic isn't
+  duplicated. Both expand-all buttons share one class/data-attribute
+  (`[data-nav-expand-all]`, not unique IDs) and a shared `syncExpandAllButtons()`
+  keeps their label/icon/`aria-expanded` in sync with each other *and* with
+  whatever state manual individual-section clicks leave things in — clicking
+  one button, the other button, or all three section toggles by hand all
+  converge on the same aggregate label. New `.lum-admin-nav-expand-all` /
+  `.lum-admin-nav-expand-toggle` / `.lum-admin-nav-expand-icon` styles in
+  `admin/admin.css`, plus mobile-specific tightening (`white-space: nowrap`,
+  `min-height: 44px`) since the label wrapped to two lines in the
+  horizontal-scroll-strip mobile nav (LG-046) without it.
+  **Follow-up fix (same day):** expanding all sections clipped the gallery
+  name at the top of the sidebar down to a sliver — `.lum-admin-sidebar` is
+  a flex column with `overflow-y: auto`, and `.lum-admin-gallery-name` had
+  no `flex-shrink: 0`, so once the nav `<ul>` grew taller than the
+  sidebar's own height, flexbox's default shrink behavior squeezed every
+  flex child including the gallery name, rather than leaving it full size
+  and letting the nav list scroll on its own. Fixed by adding
+  `flex-shrink: 0` to `.lum-admin-gallery-name`.
+
+- **LG-050 — Persistent heading above the New Album folder-scan area.**
+  Ariane noted that the "Searching for folders on disk…" spinner is easy to
+  miss — especially now that LG-049 made scans fast, it can resolve before
+  a user's eye even catches it, so the folder-suggestion feature itself
+  went unnoticed. Added a small always-visible `📂 Folders already on disk`
+  heading (`admin/albums.php`, new `.lum-folder-scan-heading` style in
+  `admin/admin.css`) right above the spinner row — unlike the spinner or
+  the suggestions/empty-notice below it, this one never hides, so there's
+  a constant visual anchor for the feature regardless of how fast the scan
+  finishes.
+
+### Security
+
+- **LG-051 — Replaced `lumora_recovery.txt` with an uploadable, self-deleting
+  `reset-password.php`.** `admin/forgot_password.php` previously fell back
+  to a mail-free password reset by writing the reset URL to
+  `lumora_recovery.txt` in the gallery root (`LUMORA_ROOT`, the web doc
+  root). That put a live, single-use reset token in a web-reachable
+  location with a predictable, undocumented-but-guessable filename: anyone
+  who requested it (no login needed to reach the "Forgot Password" form at
+  all) and then fetched `https://yoursite/lumora_recovery.txt` directly got
+  the reset link before the actual admin did, entirely unauthenticated.
+  Related to TODO-security.md #5 (same file, different issue).
+
+  Ported Lumora Guestbook's solution to the identical "mail-free, no-SSH
+  admin password reset" problem instead of patching around the doc-root
+  placement: a standalone, uploadable **`reset-password.php`** in the
+  gallery root, opened directly in a browser with no login required (trust
+  model = filesystem/FTP access, identical to `install/index.php`), listing
+  every account eligible for recovery — any group holding both User
+  Management and Configuration permissions, via the new
+  `UserService::getRecoveryAccounts()` (permission-based, not the literal
+  `admin` slug — same lookup `forgot_password.php`'s existing recovery
+  logic used, now shared rather than duplicated) — that deletes itself
+  after a successful reset (with a manual-deletion fallback message if
+  `unlink()` fails, e.g. file ownership doesn't match the PHP process
+  user). No recovery file, no token sitting in a guessable web-reachable
+  path, ever.
+
+  The admin-login rate limiter, previously inlined in `admin/login.php`,
+  was extracted to the new `include/services/RateLimitService.php` so both
+  `admin/login.php` and `reset-password.php` share one per-IP lockout —
+  the same way Guestbook shares its login lockout with its own
+  reset-password.php. The admin panel now shows a persistent warning (a
+  twin of the existing `install/`-still-present warning) with a one-click
+  authenticated delete link (`admin/delete_reset_script.php`) while
+  `reset-password.php` is still present, and
+  `UpdaterService::stageCleanup()` auto-removes a reappeared
+  `reset-password.php` after a successful update the same way it already
+  handles a reappeared `install/` directory — release files get copied
+  back over the live install on every update, so this file would otherwise
+  silently return even after an admin deleted it. No `lumora_recovery.txt`
+  was found on the source tree or the local preview install to clean up.
+
+### Fixed
+
+- **LG-049 — Fix: New Album's "No unclaimed folders found" notice silently
+  never appeared on big galleries.** Ariane reported that on a gallery with
+  hundreds of thousands of images, the New Album page's "Searching for
+  folders on disk…" spinner would disappear with neither the
+  folder-suggestion list nor the "No unclaimed folders found on disk"
+  notice (LG-044) ever appearing — just silence.
+
+  Root cause: `GalleryService::scanAlbumFoldersRecursive()` (backing
+  `listAvailableAlbumFolders()`, called by `admin/ajax_list_folders.php`)
+  recursed into *every* subdirectory it found unconditionally, including a
+  directory it had just confirmed was already a claimed album's leaf
+  folder (i.e. one directly containing image files). Recursing into that
+  directory meant a `scandir()` + `is_dir()` stat call for every single
+  image file inside it, just to confirm there were no subdirectories to
+  find — for an album with several thousand images, repeated for every
+  claimed album in the gallery, this dwarfed the actual directory-tree
+  walk it was meant to be. At real scale this was enough to exceed PHP's
+  `max_execution_time`, fatally aborting the request with no valid JSON
+  body — a failure mode the frontend's `fetch()` handler already treats as
+  silent-by-design (indistinguishable from a genuine network hiccup, per
+  its existing comment), so nothing visibly broke; the notice just never
+  had a response to read.
+
+  Fix (`include/services/GalleryService.php`): stop recursing into a
+  directory once `dirHasDirectFile()` confirms it directly holds a file —
+  a leaf album folder has no reason to be walked further. Also added a
+  `MAX_SCANNED_DIRS` (5000) hard cap on total directories visited,
+  independent of the existing `MAX_AVAILABLE_FOLDERS` (1000) cap on
+  results *found* — a gallery where nearly everything is already claimed
+  could previously walk unboundedly since `$found` never grew, so the
+  found-cap alone never bounded worst-case time.
+
+  Added regression coverage (`PHP Test Suite/Tests/Integration/ListAvailableAlbumFoldersTest.php`,
+  4 new tests) asserting the behavioral change directly — a stray
+  subdirectory left inside an already-claimed album folder is no longer
+  discovered — rather than via a timing threshold, since reproducing the
+  original timeout's filesystem scale isn't practical to seed in a fast
+  test.
+
 ## v1.16.0 — Released 2026-08-20
 
 ### Added

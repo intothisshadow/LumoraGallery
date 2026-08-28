@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.17.0] — 2026-08-28
+
 ### Added
 
 - **Expand/Collapse All toggle for the admin sidebar (LG-048).** Two synced
