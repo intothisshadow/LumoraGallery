@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **"Check for Updates Now" could silently fail with a JSON parse error
+  when the latest release's notes contained a multi-byte character near
+  the 2,000-byte truncation point.** `GitHubUpdateProvider::mapRelease()`
+  truncated long release notes with a byte-based `substr($notes, 0,
+  1997)`. Release notes routinely contain emoji (4-byte UTF-8 characters);
+  when the byte-1997 cutoff landed in the middle of one, the truncated
+  string became invalid UTF-8, which made `json_encode()` return `false`
+  for the *entire* update-check payload — `admin/ajax_update_check.php`
+  then echoed nothing at all, surfacing in the browser as `Unexpected end
+  of JSON input` with no indication of the real cause. Fixed by truncating
+  with `mb_strcut()` instead, which caps the same byte length but always
+  stops on a character boundary.
+
 ## [1.17.0] — 2026-08-28
 
 ### Added

@@ -250,8 +250,13 @@ class GitHubUpdateProvider extends AbstractUpdateProvider
         $notes = isset($data['body']) ? trim((string) $data['body']) : null;
         if ($notes === '') $notes = null;
         // Truncate very long release notes for storage in the config table.
+        // mb_strcut() (not substr()) — a byte-based cut can land in the middle
+        // of a multi-byte UTF-8 character (release notes commonly contain
+        // emoji), producing an invalid UTF-8 tail that makes json_encode()
+        // return false for the whole payload, silently emptying the AJAX
+        // update-check response.
         if ($notes !== null && strlen($notes) > 2000) {
-            $notes = substr($notes, 0, 1997) . '…';
+            $notes = mb_strcut($notes, 0, 1997, 'UTF-8') . '…';
         }
 
         $releaseName  = isset($data['name']) ? trim((string) $data['name']) : null;
