@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.17.1] — 2026-08-28
+
 ### Fixed
 
 - **"Check for Updates Now" could silently fail with a JSON parse error
