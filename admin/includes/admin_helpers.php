@@ -10,7 +10,9 @@ declare(strict_types=1);
  *   lum_admin_pagination()  — render Bootstrap 5 pagination controls
  *   lum_admin_page()        — render a full admin page (sidebar nav is filtered
  *                             to the items the current user's role grants
- *                             access to — see GroupService::getGroupPermissions())
+ *                             access to — see GroupService::getGroupPermissions()).
+ *                             Also shows persistent warnings while install/
+ *                             or reset-password.php are still present.
  *
  * @package    LumoraGallery
  * @subpackage Admin
@@ -229,6 +231,23 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
         ? '<div class="alert alert-danger alert-dismissible fade show py-2 mb-3" role="alert">'
           . '<strong>Security warning:</strong> The <code>install/</code> directory still exists. '
           . 'Delete it immediately via FTP or your hosting control panel to prevent unauthorised reinstallation.'
+          . '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>'
+          . '</div>'
+        : '';
+
+    // Same reasoning as $install_warn above — reset-password.php (LUMORA_ROOT,
+    // an unauthenticated emergency password reset, see that file's own
+    // docblock) is meant to be deleted right after use, and self-deletes when
+    // it can. This is the fallback for when it can't (file ownership doesn't
+    // match the web server user) or an admin uploaded it and never ended up
+    // needing it. The delete link can safely require login here, unlike
+    // reset-password.php itself, since an admin account already exists by
+    // the time anyone sees this warning at all.
+    $reset_script_warn = is_file(LUMORA_ROOT . 'reset-password.php')
+        ? '<div class="alert alert-danger alert-dismissible fade show py-2 mb-3" role="alert">'
+          . '<strong>Security warning:</strong> <code>reset-password.php</code> still exists in the gallery root. '
+          . 'It resets an admin password with no login required, so it is a security risk to leave in place. '
+          . '<a href="' . $admin_url . 'delete_reset_script.php?csrf_token=' . $csrf . '">Delete it now</a>.'
           . '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>'
           . '</div>'
         : '';
@@ -523,6 +542,7 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
   <main class="lum-admin-main p-3 p-md-4">
     <h1 class="h4 mb-3">{$title_h}</h1>
     {$install_warn}
+    {$reset_script_warn}
     {$flash}
     {$content}
   </main>

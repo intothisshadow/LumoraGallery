@@ -29,10 +29,12 @@ declare(strict_types=1);
  * Password Reset (DB version 7):
  *   - Same split-token scheme as remember-me.
  *   - Tokens expire after 1 hour and are single-use.
- *   - The reset URL is always written to lumora_recovery.txt in LUMORA_ROOT
- *     so admins without email can retrieve it via FTP / file manager.
- *   - If the admin account has an email address set, a best-effort send via
- *     mail() is attempted in addition to the recovery file.
+ *   - The reset URL is sent by a best-effort mail() call when the admin
+ *     account has an email address set (admin/forgot_password.php). Hosts
+ *     without outbound mail configured have no way to retrieve it from that
+ *     page — reset-password.php in the gallery root is the mail-free
+ *     fallback instead (LG-051; superseded the old lumora_recovery.txt
+ *     file, a predictable, unauthenticated, web-reachable path).
  *   - DB operations on {PREFIX}password_reset_tokens are wrapped in
  *     catch(\Throwable) so that pre-v7 installations (table absent) are
  *     unaffected — lumora_create_reset_token() is the only function that

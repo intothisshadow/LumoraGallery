@@ -76,8 +76,9 @@ Lumora/
 │   ├── plugins.php             Feature plugin manager — enable/disable plugins discovered under plugins/
 │   ├── tools.php               Admin tools (File Integrity Check, Reload Dimensions, Regenerate Thumbnails, Regenerate Missing Thumbnails)
 │   ├── update.php              Updates page — consolidated status/source metadata grid, interactive Latest Release card (checksum bar, Markdown release notes, re-download), Full Backups panel (create/restore/delete ZIP snapshots), System Status checks, Update Settings (channel/frequency/token), in-dashboard updater (10-stage AJAX workflow with automatic update backup + rollback) sourced from either a GitHub release or an administrator-uploaded ZIP, schema migrations, update history
-│   ├── forgot_password.php  Password recovery — generates a reset link to lumora_recovery.txt
+│   ├── forgot_password.php  Password recovery — emails a reset link (no mail-free fallback; see reset-password.php)
 │   ├── reset_password.php   Password reset — validates token, sets new password
+│   ├── delete_reset_script.php  One-click authenticated delete for a still-present reset-password.php
 │   ├── login.php / logout.php
 │   └── admin.css
 ├── albums/                     Image storage — original + thumb_* thumbnails
@@ -99,7 +100,8 @@ Lumora/
 │   │   ├── InstallationService.php  Installation settings detection, migration helpers, health checks, audit logging
 │   │   ├── ServerEnvironmentService.php  Web server detection (LiteSpeed/OpenLiteSpeed/Apache/nginx/Caddy) and HTTP/2, HTTP/3, Brotli, active-LSCache capability flags
 │   │   ├── CacheHeaderService.php  Managed .htaccess cache-control block for static assets (Apache/LiteSpeed-compatible) and opt-in LiteSpeed Cache purge-header integration
-│   │   ├── UserService.php     User CRUD, role constants, permission framework (delegates to GroupService)
+│   │   ├── UserService.php     User CRUD, role constants, permission framework (delegates to GroupService), getRecoveryAccounts() for password-recovery target lookup
+│   │   ├── RateLimitService.php  Shared per-IP failure lockout (login.php + reset-password.php)
 │   │   ├── GroupService.php    Permission groups — CRUD, permission catalog (ALL_PERMISSIONS), system-group safeguards
 │   │   ├── AlbumAssignmentService.php  Per-contributor album assignments — assign/unassign/set, userCanAccessAlbum() access check, cascade cleanup
 │   │   ├── InstallPingService.php  Opt-in anonymous install ping — UUID generation, ~monthly cadence, dedicated endpoint separate from UpdateService
@@ -155,6 +157,7 @@ Lumora/
 ├── album.php                   Public album view (pagination, sort, lightbox)
 ├── index.php                   Public home, category browse, special views
 ├── migrate.php                 CLI-only schema migration runner (--dry-run, --status, --rollback)
+├── reset-password.php          Unauthenticated emergency admin password reset (same trust model as install/index.php); self-deletes after use
 ├── config.sample.php           Template for manual config.php
 └── version.php                 Version constants
 ```
@@ -223,7 +226,7 @@ migration straightforward — point Lumora at the same `albums/` directory and r
   - **Reload Dimensions** — re-reads pixel dimensions and file sizes from disk and updates the database; runs in 100-image AJAX chunks; useful after manual file operations or migrations
   - **Regenerate Thumbnails** — regenerates thumbnails via `lumora_generate_thumb()` for every image; runs in 20-image AJAX chunks; respects Imagick/GD availability
   - **Regenerate Missing Thumbnails** — regenerates thumbnails only for images where the thumbnail file is missing or empty, leaving existing valid thumbnails untouched; runs in 500-image AJAX chunks; significantly faster than a full regeneration when only a small fraction of thumbnails are absent (e.g. after manual file additions or a partial batch-add failure)
-- **Account** — update username and email address; change password with current-password verification; **Forgot password** link on the login page generates a secure reset link written to `lumora_recovery.txt` in the gallery root (1-hour single-use token, email attempted if address is set)
+- **Account** — update username and email address; change password with current-password verification; **Forgot password** link on the login page emails a secure, 1-hour single-use reset link to the recovery account's address, if one is set (see Security Notes below for the mail-free fallback, `reset-password.php`)
 - **Installation Settings** — update the base URL and other installation-specific settings after moving to a new domain, subdirectory, or server; nine-item health check (database connectivity, albums and cache directories, config.php, site URL, PHP version, image processor, PDO MySQL, ZipArchive) runnable on demand via AJAX; configuration change log with full audit trail (last 15 entries from `{PREFIX}config_changes`); JSON environment snapshot export; CSRF and password re-authentication required for all setting changes; Migration Helpers accordion with guided steps for domain changes, subdirectory changes, HTTPS enablement, and server migrations; **System Information** panel showing the detected web server (with a LiteSpeed/OpenLiteSpeed badge) and detected HTTP/2, HTTP/3, Brotli, and active-LSCache capabilities; a **Static Asset Cache Headers** card that installs (or removes) a clearly-marked, additive `mod_expires`/`mod_headers` block in the site's root `.htaccess` for long-lived image/thumbnail/font caching and shorter-lived CSS/JS caching — read identically by Apache and LiteSpeed/OpenLiteSpeed, inert on nginx/Caddy
 - **LiteSpeed Cache (LSCache) purge** — an opt-in toggle (Admin → Configuration → Performance, off by default) that sends an `X-LiteSpeed-Purge` header after admin content changes (image/album/category/theme/configuration changes) so LSCache never serves a stale page; a complete no-op unless both the toggle is on and the current server is detected as LiteSpeed/OpenLiteSpeed
 - **Updates** — a consolidated Installed/Status/Source metadata grid (installed version, database schema version, installed filesystem path, release channel, provider/repository, link to all releases); a Latest Release card with a stability badge (Stable/Prerelease), Markdown-rendered release notes, a checksum verification bar, and a **Re-download release** action that downloads and SHA-256-verifies the archive independently of a full install; when a new release is available, an **⬆ Install Update** card with a 10-stage progress UI (`preflight → download → verify → backup → maintenance → extract → validate → replace → migrate → cleanup`) — each stage is a separate AJAX call so progress is reported in real time, with an automatic **update backup** (database + `config.php` only) before any file replacement, one-click Rollback on failure, and an Abort option for stuck sessions; a separate **📦 Install from Uploaded ZIP** panel lets an administrator install or reinstall from a release ZIP uploaded directly — useful when the server can't reach GitHub over outbound HTTPS, or to install a build that isn't published as a GitHub release — feeding the uploaded package's own detected version into the exact same 10-stage progress pipeline, backup, and rollback-on-failure behaviour as a GitHub-sourced update; a separate **Full Backups** panel for on-demand full-installation ZIP snapshots (code + config + a database dump, excluding `albums/` and `cache/`) with create/restore/delete actions, keeping up to 3; a **System Status** table (PHP version, ZIP/cURL extensions, file permissions, disk space, temp directory writability) as a live pass/fail check independent of update status; **Update Settings** for the release channel (stable/prerelease), automatic-check toggle and frequency (daily/weekly), and an optional GitHub token for a higher API rate limit; update history table shows the last 10 attempts (installs, rollbacks, and backup restores); custom themes and plugins are preserved by default during an install (`update_preserve_themes` / `update_preserve_plugins` config keys); after replacing application files, any file a previous version installed that the new release no longer ships is automatically removed, tracked via a small manifest (`cache/.updates/file-manifest.json`) — this never touches `albums/`, `config.php`, `cache/`, or (when preserved) `themes/`/`plugins/`, regardless of manifest history
@@ -406,15 +409,23 @@ Lumora automatically detects LiteSpeed and OpenLiteSpeed and can take advantage 
 - **Unique table prefix** — the installer auto-generates a random `lum_XXXXXXXX_` prefix for every new installation, making database table names harder to guess in shared-database environments. Advanced users can override the prefix during installation. Existing installations using `lum_` or any other prefix are entirely unaffected.
 - The `install/` directory is automatically removed by the installer after a successful fresh install, and by the built-in updater after a successful upgrade. Verify it is gone after either operation; if not, delete it manually via FTP or your hosting control panel.
 - All POST actions use CSRF tokens. Admin routes require an authenticated session.
-- **Login rate limiting** — the admin login page tracks failed attempts per IP address in `cache/.login_ratelimit.json`. After 5 failures within a 15-minute window the form is locked, a 2-second server-side delay is enforced, and a lockout message is shown. Individual failures each add a 1-second delay. The IP record is cleared after a successful login.
+- **Login rate limiting** — the admin login page and `reset-password.php` (below) share a per-IP failure lockout (`RateLimitService`, backed by `cache/.login_ratelimit.json`). After 5 failures within a 15-minute window the form is locked, a 2-second server-side delay is enforced, and a lockout message is shown. Individual failures each add a 1-second delay. The IP record is cleared after a successful login or reset.
 - Passwords are hashed with `password_hash()` / `PASSWORD_DEFAULT`.
 - The **Remember Me** cookie uses a split-token scheme: the validator is stored as
   `SHA-256(validator)` in the database only; the plain value travels only in the
   browser cookie. Tokens are rotated on every use and all tokens for a user are
   revoked on explicit logout.
-- **Password recovery** uses the same split-token scheme. The reset URL is written
-  to `lumora_recovery.txt` in the gallery root — protect or delete this file after
-  use. The token expires after 1 hour and is single-use.
+- **Password recovery** — "Forgot password?" (`admin/forgot_password.php`) emails a
+  single-use, 1-hour reset link to the recovery account's address, if one is set.
+  There is no mail-free fallback on that page. When outbound mail isn't configured,
+  use **`reset-password.php`** in the gallery root instead: an unauthenticated
+  emergency reset with the same trust model as `install/index.php` (reaching the
+  file at all requires filesystem/FTP access). It lists every account eligible for
+  recovery (any group with both User Management and Configuration permissions),
+  self-deletes after a successful reset, and is nagged about in the admin panel
+  (with a one-click authenticated delete) until removed. The built-in updater also
+  removes it automatically if a later release re-copies it back after you've
+  deleted it — the same handling `install/` already gets.
 
 ---
 

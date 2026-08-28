@@ -188,6 +188,43 @@ class UserService
     // ── Read queries ──────────────────────────────────────────────────────────
 
     /**
+     * Accounts eligible as a password-recovery target: every user belonging
+     * to a group (role) that holds both 'user_management' and
+     * 'site_configuration' — i.e. an account that can actually reach
+     * Users/Groups and Configuration once logged back in — rather than
+     * literally `role = 'admin'`. Groups are dynamic as of Migration0007, so
+     * an administrator's account may have been moved to a custom group with
+     * equivalent permissions; matching by permission keeps recovery working
+     * in that case. Oldest account first. Used by admin/forgot_password.php
+     * (mails/writes a reset link to the single oldest match) and
+     * reset-password.php (the unauthenticated emergency reset, which lists
+     * every match for the admin to choose from). See TODO-security.md #5.
+     *
+     * @return list<array{id: int, username: string, email: string}>
+     */
+    public static function getRecoveryAccounts(): array
+    {
+        $recovery_roles = [];
+        foreach (GroupService::getAllGroups() as $g) {
+            if (in_array('user_management', $g['permissions'], true)
+                && in_array('site_configuration', $g['permissions'], true)
+            ) {
+                $recovery_roles[] = $g['slug'];
+            }
+        }
+
+        if ($recovery_roles === []) {
+            return [];
+        }
+
+        $ph = implode(',', array_fill(0, count($recovery_roles), '?'));
+        return LumoraDB::fetchAll(
+            "SELECT id, username, email FROM `{PREFIX}users` WHERE role IN ({$ph}) ORDER BY id ASC",
+            $recovery_roles
+        );
+    }
+
+    /**
      * Count all user accounts.
      */
     public static function countUsers(): int

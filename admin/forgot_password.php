@@ -3,23 +3,26 @@ declare(strict_types=1);
 /**
  * Lumora Gallery — Forgot Password
  *
- * Generates a single-use, time-limited (1 hour) password-reset URL and
- * writes it to lumora_recovery.txt in the gallery root so the admin can
- * retrieve it via FTP or a file manager without needing SMTP configured.
- *
- * If the admin account has an email address set, a best-effort send via
- * PHP's mail() function is attempted in addition to the recovery file.
+ * Generates a single-use, time-limited (1 hour) password-reset URL and, if
+ * the admin account has an email address set, sends it via a best-effort
+ * PHP mail() call. There is no mail-free fallback here any more — a host
+ * with no outbound mail configured has no way to retrieve the link from
+ * this page. See reset-password.php in the gallery root for that case: a
+ * standalone, uploadable, self-deleting emergency password reset with the
+ * same trust model as install/index.php (filesystem/FTP access). See
+ * LG-051 — this page previously wrote the link to lumora_recovery.txt, a
+ * predictable, unauthenticated, web-reachable path.
  *
  * Requires the {PREFIX}password_reset_tokens table (DB version 7).
  * If the table is absent a clear error is shown instead of crashing.
  *
  * Recovery target: the account looked up is the oldest user belonging to
  * any group that holds both 'user_management' and 'site_configuration'
- * (see GroupService) — not literally `role = 'admin'`. Groups are dynamic
- * as of Migration0007, so an administrator's account may have been moved
- * to a custom group with equivalent permissions; matching by permission
- * rather than by the fixed 'admin' slug keeps recovery working in that
- * case. See TODO-security.md #5.
+ * (see UserService::getRecoveryAccounts()) — not literally `role = 'admin'`.
+ * Groups are dynamic as of Migration0007, so an administrator's account may
+ * have been moved to a custom group with equivalent permissions; matching
+ * by permission rather than by the fixed 'admin' slug keeps recovery
+ * working in that case. See TODO-security.md #5.
  *
  * @package    LumoraGallery
  * @subpackage Admin
@@ -38,9 +41,10 @@ if (lumora_is_logged_in()) {
     lumora_redirect(lumora_base_url() . 'admin/dashboard.php');
 }
 
-$sent    = false;
-$error   = '';
-$csrf    = lumora_csrf_token();
+$sent           = false;
+$mail_attempted = false;
+$error          = '';
+$csrf           = lumora_csrf_token();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     lumora_csrf_validate();
@@ -50,23 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // actually reach Users/Groups and Configuration once logged back in,
     // regardless of whether it uses the built-in 'admin' slug or a custom
     // group with equivalent permissions.
-    $recovery_roles = [];
-    foreach (GroupService::getAllGroups() as $g) {
-        if (in_array('user_management', $g['permissions'], true)
-            && in_array('site_configuration', $g['permissions'], true)
-        ) {
-            $recovery_roles[] = $g['slug'];
-        }
-    }
-
-    $user = null;
-    if (!empty($recovery_roles)) {
-        $ph = implode(',', array_fill(0, count($recovery_roles), '?'));
-        $user = LumoraDB::fetchOne(
-            "SELECT id, username, email FROM `{PREFIX}users` WHERE role IN ({$ph}) ORDER BY id ASC LIMIT 1",
-            $recovery_roles
-        );
-    }
+    $user = UserService::getRecoveryAccounts()[0] ?? null;
 
     if ($user) {
         try {
@@ -76,23 +64,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 . 'admin/reset_password.php?token='
                 . urlencode($token_data['selector'] . ':' . $token_data['validator']);
 
-            // ── Write recovery file ───────────────────────────────────────────
-            // Always write to disk — the admin can retrieve this via FTP even
-            // when email is not configured.
-            $recovery_path = LUMORA_ROOT . 'lumora_recovery.txt';
-            $file_content  =
-                "Lumora Gallery — Password Reset\n"
-                . str_repeat('-', 60) . "\n"
-                . 'Generated : ' . date('Y-m-d H:i:s') . "\n"
-                . 'Expires   : ' . $token_data['expires_at'] . "\n"
-                . "\nReset URL:\n" . $reset_url . "\n"
-                . "\n" . str_repeat('-', 60) . "\n"
-                . "Delete this file after use.\n";
-
-            file_put_contents($recovery_path, $file_content);
-
             // ── Best-effort email ─────────────────────────────────────────────
-            if (!empty($user['email']) && function_exists('mail')) {
+            $mail_attempted = !empty($user['email']) && function_exists('mail');
+            if ($mail_attempted) {
                 $gallery_name = lumora_config('gallery_name', 'Lumora Gallery');
                 $host         = $_SERVER['HTTP_HOST'] ?? 'localhost';
                 $subject      = 'Password Reset — ' . $gallery_name;
@@ -142,23 +116,36 @@ $login_h  = h(lumora_base_url() . 'admin/login.php');
 
 if ($error !== '') {
     $body_html = '<div class="alert alert-danger py-2">' . h($error) . '</div>';
+} elseif ($sent && $mail_attempted) {
+    $body_html = <<<HTML
+<div class="alert alert-success py-2">
+  <strong>Reset link sent.</strong><br>
+  Check the email address on file for the admin account. The link is valid
+  for <strong>1 hour</strong>.
+</div>
+<a href="{$login_h}" class="btn btn-outline-secondary w-100 mt-1">← Back to Login</a>
+HTML;
 } elseif ($sent) {
     $body_html = <<<HTML
 <div class="alert alert-success py-2">
-  <strong>Reset link prepared.</strong><br>
-  Check <code>lumora_recovery.txt</code> in your gallery root directory
-  (retrieve it via FTP or your hosting file manager).
-  The link is valid for <strong>1 hour</strong>.
-  If a recovery email address is set on the account, an email has also been sent.
+  <strong>Request received.</strong><br>
+  If a matching admin account exists, a reset link has been sent to its
+  email address (valid for <strong>1 hour</strong>). If no mail address is
+  configured on that account, use <code>reset-password.php</code> in your
+  gallery root directory instead (upload it via FTP if it isn't there
+  already) — an unauthenticated emergency reset with the same trust model
+  as the installer.
 </div>
 <a href="{$login_h}" class="btn btn-outline-secondary w-100 mt-1">← Back to Login</a>
 HTML;
 } else {
     $body_html = <<<HTML
 <p class="text-muted small mb-3">
-  A reset link will be written to <code>lumora_recovery.txt</code> in your
-  gallery root directory. Retrieve it via FTP or your hosting file manager.
-  If an email address is set on the admin account a copy will also be sent.
+  A reset link will be emailed to the admin account's address, if one is
+  set. If outbound mail isn't configured on this host, use
+  <code>reset-password.php</code> in your gallery root directory instead —
+  an unauthenticated emergency reset with the same trust model as the
+  installer.
 </p>
 <form method="post" action="">
   <input type="hidden" name="csrf_token" value="{$csrf_h}">

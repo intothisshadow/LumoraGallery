@@ -68,11 +68,6 @@ if (!$token_invalid && $_SERVER['REQUEST_METHOD'] === 'POST') {
             lumora_consume_reset_token($selector);
             // Also clean up any remember-me tokens to force fresh login.
             lumora_clear_remember_tokens($user_id);
-            // Delete the recovery file now that the reset is complete.
-            $recovery_path = LUMORA_ROOT . 'lumora_recovery.txt';
-            if (is_file($recovery_path)) {
-                unlink($recovery_path);
-            }
             $pw_success = true;
         } else {
             $pw_error = 'Password change failed. Please try again.';

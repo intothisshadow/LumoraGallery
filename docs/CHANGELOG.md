@@ -31,6 +31,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   of which state (searching, suggestions, or "none found") is currently
   showing underneath.
 
+### Security
+
+- **Replaced `lumora_recovery.txt` with an uploadable, self-deleting
+  `reset-password.php` (LG-051).** `admin/forgot_password.php` previously
+  fell back to a mail-free password reset by writing the live, single-use
+  reset URL to `lumora_recovery.txt` in the gallery root — a predictable,
+  undocumented-but-guessable, unauthenticated web-reachable path reachable
+  by anyone who requested a reset and then fetched that file directly,
+  before the actual admin did. That write is now removed entirely;
+  `forgot_password.php` is email-only. In its place, **`reset-password.php`**
+  in the gallery root is an unauthenticated emergency reset with the same
+  trust model as `install/index.php` — reaching the file at all already
+  means filesystem/FTP access, which is the authentication. It lists every
+  account eligible for password recovery (any group holding both User
+  Management and Configuration permissions — matching `forgot_password.php`'s
+  existing permission-based lookup rather than the literal `admin` slug),
+  shares the admin-login rate limiter (`RateLimitService`, new — the same
+  per-IP lockout that used to live only in `admin/login.php`), and
+  self-deletes after a successful reset (with a manual-deletion fallback
+  message if `unlink()` fails, e.g. file ownership doesn't match the PHP
+  process user). The admin panel now shows a persistent warning with a
+  one-click authenticated delete link (`admin/delete_reset_script.php`)
+  while the file is still present, mirroring the existing `install/`
+  warning. The built-in updater's post-update cleanup, which already
+  auto-removes a reappeared `install/` directory, now does the same for a
+  reappeared `reset-password.php`, since release files get copied back
+  over the live install on every update.
+
 ### Fixed
 
 - **New Album's "No unclaimed folders found on disk" notice (LG-044) could

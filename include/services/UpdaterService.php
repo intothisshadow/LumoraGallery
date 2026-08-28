@@ -1310,6 +1310,28 @@ class UpdaterService
                     }
                 }
             }
+
+            // Auto-remove a reappeared reset-password.php on a successful
+            // upgrade, the same way install/ is handled just above — release
+            // files get copied back over the live install on every update, so
+            // an admin who deleted this emergency-reset script (LG-051)
+            // would otherwise see it silently return.
+            $resetScript = LUMORA_ROOT . 'reset-password.php';
+            if (is_file($resetScript)) {
+                if (!is_writable($resetScript)) {
+                    $details[] = '⚠ reset-password.php is not writable by the web server — delete it manually via FTP';
+                    self::logUpdate('warning', 'reset-password.php is not writable; automatic removal skipped (check permissions)');
+                } else {
+                    try {
+                        unlink($resetScript);
+                        $details[] = '✓ reset-password.php removed';
+                        self::logUpdate('info', 'reset-password.php removed automatically after upgrade');
+                    } catch (\Throwable $e) {
+                        $details[] = '⚠ reset-password.php removal failed: ' . $e->getMessage() . ' — delete it manually via FTP';
+                        self::logUpdate('warning', 'reset-password.php removal failed: ' . $e->getMessage());
+                    }
+                }
+            }
         }
 
         // Release the update lock.

@@ -18,7 +18,7 @@ declare(strict_types=1);
  *                       MigrationService, UpdateService, SchemaService,
  *                       AbstractUpdateProvider, GitHubUpdateProvider, UpdaterService,
  *                       BackupService, InstallationService, GroupService, UserService,
- *                       AlbumAssignmentService, InstallPingService,
+ *                       RateLimitService, AlbumAssignmentService, InstallPingService,
  *                       ServerEnvironmentService, CacheHeaderService,
  *                       HookService, PluginService
  *   8. functions.php  (utility helpers + legacy forwarding wrappers)
@@ -125,6 +125,7 @@ require_once LUMORA_INCLUDE . 'services/BackupService.php';
 require_once LUMORA_INCLUDE . 'services/InstallationService.php';
 require_once LUMORA_INCLUDE . 'services/GroupService.php';
 require_once LUMORA_INCLUDE . 'services/UserService.php';
+require_once LUMORA_INCLUDE . 'services/RateLimitService.php';
 require_once LUMORA_INCLUDE . 'services/AlbumAssignmentService.php';
 require_once LUMORA_INCLUDE . 'services/InstallPingService.php';
 require_once LUMORA_INCLUDE . 'services/ServerEnvironmentService.php';
