@@ -390,6 +390,17 @@ Lumora includes an opt-in, off-by-default mechanism to anonymously count active 
 
 ---
 
+## Cookies
+
+Lumora Gallery sets only two cookies, both strictly necessary — useful reference for writing your own site's privacy/cookie policy.
+
+- **Session cookie** (`PHPSESSID` or your server's configured session cookie name). Keeps a logged-in admin session working; set only for a logged-in user, never for an anonymous gallery visitor.
+- **Remember-me cookie** (`LUMORA_REMEMBER_COOKIE`), set only when a user checks "Remember me" on the login screen — never set otherwise, and cleared again on logout.
+
+Nothing else in Lumora Gallery core sets a cookie, and there is no visitor-facing login/commenting on the public gallery pages themselves to set one for. A plugin you install may set its own — check its own documentation.
+
+---
+
 ## LiteSpeed Support
 
 Lumora automatically detects LiteSpeed and OpenLiteSpeed and can take advantage of a couple of server-specific optimizations, while remaining fully functional on Apache, nginx, Caddy, or any other web server — none of this requires LiteSpeed, and nothing here is required for normal operation.
