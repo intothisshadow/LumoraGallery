@@ -4,6 +4,36 @@ Long-term archive of completed work, migrated from TODO.md on release.
 
 ---
 
+## v1.18.0 — Released 2026-08-31
+
+### Added
+
+- **LG-052 — Lumora Press Shortcodes plugin.** A new optional feature
+  plugin (`plugins/lumora-press-shortcodes/`, disabled by default) shows
+  a ready-to-copy `[lumora_gallery_album album_id="…"]` /
+  `[lumora_gallery_album image_id="…"]` shortcode on each album's and
+  image's own admin edit page, and the equivalent public-facing display
+  on the album page and in the image lightbox's existing "Direct image
+  URL" info panel — logged-in users only, the same gate that panel
+  already used. Companion to Lumora Press's own `LPP-015` ("Lumora
+  Gallery Shortcodes") plugin, which reads Lumora's database read-only
+  to render those shortcodes in posts/pages; this plugin only ever
+  matters to a site running both projects, and changes nothing when
+  disabled.
+
+  Four new hook points were added to core for the plugin to listen on —
+  the same "hooks belong in core, logic belongs in the plugin" split
+  already established by `lumora-visitor-stats`:
+  `admin_album_edit_extra_fields` / `admin_image_edit_extra_fields`
+  (filters on the Album/Image admin edit forms, passed the current
+  row) and `public_album_info_html` / `public_image_shortcode`
+  (the public-facing equivalents — the album page, and a `data-shortcode`
+  attribute threaded into the existing PhotoSwipe lightbox JS so the
+  "Direct image URL" info panel can show a Shortcode field alongside it).
+  New `.lum-shortcode-box`/`.lum-shortcode-*` CSS was added to both
+  bundled themes; the per-image lightbox field reuses the existing
+  `.lum-lightbox-info-*` classes.
+
 ## v1.17.0 — Released 2026-08-28
 
 ### Added
