@@ -1,0 +1,11 @@
+{
+  "id": "lumora-press-shortcodes",
+  "type": "feature",
+  "name": "Lumora Press Shortcodes",
+  "version": "1.0.0",
+  "min_lumora": "1.18.0",
+  "description": "Shows a ready-to-copy [lumora_gallery_album] shortcode on each album/image's admin and public info page, for pasting into Lumora Press posts via that project's own companion shortcode plugin (LPP-015). Static text generation only — no connection to a Lumora Press install.",
+  "author": "Ariane",
+  "license": "GPL-3.0-or-later",
+  "bootstrap": "bootstrap.php"
+}

@@ -92,11 +92,18 @@ $meta = '<small class="text-muted">'
     . ' &mdash; ' . number_format((int) $album['hits']) . ' album views'
     . '</small>';
 
+// Plugin-supplied info block (e.g. lumora-press-shortcodes) — logged-in
+// users only, same gate as the lightbox "copy image HTML" panel.
+$shortcode_html = lumora_is_logged_in()
+    ? HookService::applyFilters('public_album_info_html', '', $album)
+    : '';
+
 $content = $breadcrumb
     . '<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">'
     .   '<div><h1 class="h4 mb-0">' . h($album['title']) . '</h1>' . $meta . '</div>'
     . '</div>'
     . $desc_html
+    . $shortcode_html
     . lumora_render_sort_controls($sort, $sort_base)
     . lumora_render_thumbgrid($images, $pag)
     . lumora_render_lightbox_js($base_url);

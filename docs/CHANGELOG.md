@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Lumora Press Shortcodes plugin (LG-052).** A new optional feature
+  plugin (`plugins/lumora-press-shortcodes/`, disabled by default) shows
+  a ready-to-copy `[lumora_gallery_album album_id="…"]` /
+  `[lumora_gallery_album image_id="…"]` shortcode on each album's and
+  image's own admin edit page, and the equivalent public-facing display
+  on the album page and in the image lightbox's existing "Direct image
+  URL" info panel — logged-in users only, same gate as that panel
+  already used. Companion to Lumora Press's own `LPP-015` ("Lumora
+  Gallery Shortcodes") plugin; only matters to a site running both
+  projects, and changes nothing when disabled. Four new hook points
+  (`admin_album_edit_extra_fields`, `admin_image_edit_extra_fields`,
+  `public_album_info_html`, `public_image_shortcode`) were added to core
+  for this plugin to listen on — the same "hooks belong in core, logic
+  belongs in the plugin" split already used by `lumora-visitor-stats`.
+
 ### Fixed
 
 - **A bare `/admin/` request could be silently swallowed by an unrelated

@@ -135,15 +135,21 @@ Lumora/
 │   │       ├── index.php       Four-step import wizard
 │   │       ├── ajax_import.php AJAX chunk processor for import steps
 │   │       └── sync_metadata.php Post-import cover-thumbnail sync tool
-│   └── lumora-visitor-stats/   Jetpack-style traffic overview (type: feature — hooks into core via HookService; disabled by default)
-│       ├── VisitorStatsService.php  Pageview logging + summary/trend/top-content/referrer queries, own {PREFIX}stats_hits table
+│   ├── lumora-visitor-stats/   Jetpack-style traffic overview (type: feature — hooks into core via HookService; disabled by default)
+│   │   ├── VisitorStatsService.php  Pageview logging + summary/trend/top-content/referrer queries, own {PREFIX}stats_hits table
+│   │   ├── plugin.json         Plugin manifest (consumed by admin/plugins.php)
+│   │   ├── version.php         Plugin version + pageview retention constant
+│   │   ├── activate.php        Creates {PREFIX}stats_hits — runs once, only when the plugin is enabled
+│   │   ├── bootstrap.php       Registers this plugin's hooks — runs on every request while enabled
+│   │   ├── README.md           Plugin documentation
+│   │   └── admin/
+│   │       └── stats.php       Visitor Stats admin page (trend chart, top images/albums, top referrers, who's online)
+│   └── lumora-press-shortcodes/ Ready-to-copy [lumora_gallery_album] shortcode display (type: feature — hooks into core via HookService; disabled by default)
+│       ├── LumoraPressShortcodesService.php  Stateless shortcode text/HTML builders — no database access
 │       ├── plugin.json         Plugin manifest (consumed by admin/plugins.php)
-│       ├── version.php         Plugin version + pageview retention constant
-│       ├── activate.php        Creates {PREFIX}stats_hits — runs once, only when the plugin is enabled
+│       ├── version.php         Plugin version constant
 │       ├── bootstrap.php       Registers this plugin's hooks — runs on every request while enabled
-│       ├── README.md           Plugin documentation
-│       └── admin/
-│           └── stats.php       Visitor Stats admin page (trend chart, top images/albums, top referrers, who's online)
+│       └── README.md           Plugin documentation
 ├── themes/                     Theme folders
 │   ├── default/
 │   │   ├── template.html       Bootstrap 5 base template
@@ -338,8 +344,12 @@ A feature plugin's manifest may declare, relative to its own folder:
 
 Current extension points: `lumora_pageview` (action — fires on every public pageview with
 `(string $type, int $item_id)`), `admin_nav_sections` (filter — a plugin can add its own
-sidebar item to the admin nav), and `admin_dashboard_widgets_html` (filter — a plugin can
-append its own widget HTML to the Dashboard).
+sidebar item to the admin nav), `admin_dashboard_widgets_html` (filter — a plugin can
+append its own widget HTML to the Dashboard), `admin_album_edit_extra_fields` /
+`admin_image_edit_extra_fields` (filters — a plugin can append extra HTML to the Album/Image
+admin edit forms, passed the current album/image row), and `public_album_info_html` /
+`public_image_shortcode` (filters — the public-facing equivalents, on the album page and in
+the image lightbox's info panel respectively, both logged-in-users-only).
 
 ### Visitor Stats (`plugins/lumora-visitor-stats/`)
 
@@ -352,6 +362,17 @@ images, top albums, top referrers, and the existing Who-Is-Online numbers) plus 
 SHA-256 hash of the visitor's IP (never the raw address) and the referring host (never a
 full URL or query string) — pruned automatically after 90 days. See
 `plugins/lumora-visitor-stats/README.md` for details.
+
+### Lumora Press Shortcodes (`plugins/lumora-press-shortcodes/`)
+
+Shows a ready-to-copy `[lumora_gallery_album album_id="…"]` / `[lumora_gallery_album
+image_id="…"]` shortcode on each album's and image's own admin edit page, and the
+equivalent public-facing display (on the album page, and as an extra field in the image
+lightbox's existing "Direct image URL" info panel) — logged-in users only. Companion to a
+separate [Lumora Press](https://coding.unloved-heart.net/scripts/lumorapress) plugin
+(`LPP-015`) that reads Lumora's database read-only to render those shortcodes; this plugin
+only generates the text, with no live connection to a Lumora Press install and no settings
+screen of its own. See `plugins/lumora-press-shortcodes/README.md` for details.
 
 ---
 

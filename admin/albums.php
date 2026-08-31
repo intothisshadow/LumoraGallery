@@ -462,6 +462,12 @@ if ($action === 'new' || $action === 'edit') {
              <div class="form-text">Folder cannot be changed after creation.</div>
            </div>';
 
+    // Plugin-supplied extra fields (e.g. lumora-press-shortcodes) — only
+    // once the album actually exists, so an id/folder is available.
+    $extra_fields_html = ($action === 'edit' && $id_v > 0)
+        ? HookService::applyFilters('admin_album_edit_extra_fields', '', $album)
+        : '';
+
     $folder_lookup_script = '';
     if ($action === 'new') {
         $list_url_js = json_encode(lumora_base_url() . 'admin/ajax_list_folders.php');
@@ -571,6 +577,7 @@ HTML;
     </div>
     <button type="submit" class="btn btn-primary">Save Album</button>
   </form>
+  {$extra_fields_html}
 </div>
 {$folder_lookup_script}
 HTML;

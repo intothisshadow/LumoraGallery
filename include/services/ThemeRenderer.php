@@ -458,12 +458,22 @@ HTML;
                 if ($added_ts !== false) $added_str = date('j M Y', $added_ts);
             }
 
+            // Plugin-supplied shortcode text (e.g. lumora-press-shortcodes)
+            // shown in the lightbox info panel — logged-in users only, same
+            // gate as the panel itself (see renderLightboxJs()).
+            $shortcode_attr = '';
+            if (lumora_is_logged_in()) {
+                $shortcode = HookService::applyFilters('public_image_shortcode', '', $img);
+                if ($shortcode !== '') $shortcode_attr = ' data-shortcode="' . h($shortcode) . '"';
+            }
+
             $html .= '<figure class="lum-thumb-item">';
             $html .= '<a href="' . h($orig_url) . '"'
                 . ' data-pswp-width="' . $w . '"'
                 . ' data-pswp-height="' . $h . '"'
                 . ' data-download-url="' . h($orig_url) . '"'
                 . ' data-image-id="' . $img_id . '"'
+                . $shortcode_attr
                 . ' target="_blank">';
             $html .= '<img src="' . h($thumb_url) . '" alt="' . h($title) . '" loading="lazy">';
             $html .= '</a>';
@@ -822,6 +832,7 @@ HTML;
         downloadUrl: a.dataset.downloadUrl || a.href,
         imageId:     parseInt(a.dataset.imageId, 10) || 0,
         thumbUrl:    thumbEl ? thumbEl.src : (a.dataset.downloadUrl || a.href),
+        shortcode:   a.dataset.shortcode || '',
       };
     });
 
@@ -907,6 +918,8 @@ HTML;
           '<input type="text" class="lum-lightbox-info-url" readonly>' +
           '<span class="lum-lightbox-info-label">Embed HTML</span>' +
           '<textarea class="lum-lightbox-info-html" readonly rows="2"></textarea>' +
+          '<span class="lum-lightbox-info-label lum-lightbox-info-shortcode-label" hidden>Shortcode</span>' +
+          '<input type="text" class="lum-lightbox-info-url lum-lightbox-info-shortcode" readonly hidden>' +
           '<div class="lum-lightbox-info-actions">' +
             '<button type="button" class="lum-lightbox-info-copy">Copy HTML</button>' +
             '<span class="lum-lightbox-info-feedback" aria-live="polite"></span>' +
@@ -943,6 +956,13 @@ HTML;
 
       var htmlField = panel.querySelector('.lum-lightbox-info-html');
       htmlField.value = lumBuildSnippet(data.src, data.thumbUrl, 0, 0);
+
+      var scLabel = panel.querySelector('.lum-lightbox-info-shortcode-label');
+      var scField = panel.querySelector('.lum-lightbox-info-shortcode');
+      var hasShortcode = !!data.shortcode;
+      scLabel.hidden = !hasShortcode;
+      scField.hidden = !hasShortcode;
+      if (hasShortcode) scField.value = data.shortcode;
 
       var probe = new Image();
       probe.onload = function () {

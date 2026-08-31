@@ -270,6 +270,9 @@ if ($action === 'edit') {
     $max_mb        = (int) lumora_config('max_upload_size_mb', 0);
     $size_hint     = $max_mb > 0 ? 'Max ' . $max_mb . ' MB. ' : '';
 
+    // Plugin-supplied extra fields (e.g. lumora-press-shortcodes).
+    $extra_fields_html = HookService::applyFilters('admin_image_edit_extra_fields', '', $edit_image);
+
     $content = <<<HTML
 <a href="{$back_url_h}" class="btn btn-sm btn-outline-secondary mb-3">← Back to Image List</a>
 <div class="lum-adm-card">
@@ -285,6 +288,7 @@ if ($action === 'edit') {
       <div class="text-muted small">Added: {$added_h} · Views: {$hits_h}</div>
     </div>
   </div>
+  {$extra_fields_html}
   <form method="post" action="{$base_h}" enctype="multipart/form-data">
     <input type="hidden" name="action"     value="save">
     <input type="hidden" name="id"         value="{$img_id}">
