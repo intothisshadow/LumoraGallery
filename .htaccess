@@ -1,0 +1,41 @@
+# Lumora Gallery — root .htaccess
+#
+# Lumora Gallery needs no mod_rewrite rules of its own: every public URL is
+# query-string based (?cat=N, ?album=N, ?view=...), so plain Apache file/
+# directory resolution already serves every request correctly — index.php
+# for the front page, admin/index.php for /admin/, install/index.php for
+# /install/, and so on.
+#
+# This file exists only to STOP a parent directory's own RewriteEngine
+# rules from reaching into a Lumora Gallery install that happens to sit
+# in a subdirectory beneath an unrelated app (a common shared-hosting
+# layout: e.g. domains/example.com/public_html/.htaccess belonging to a
+# different app installed at the domain root, with Lumora Gallery living
+# in domains/example.com/public_html/gallery/). Apache merges .htaccess
+# files hierarchically from the filesystem root down to the file being
+# served, so without this, an ancestor .htaccess's RewriteRule directives
+# still apply here even though they were never written with Lumora
+# Gallery's own directory layout in mind.
+#
+# Real-world case that prompted this file: a Lumora Press install's own
+# root .htaccess deliberately excludes admin/ from its "serve real
+# files/directories directly" rule (Press's own admin/ is meant to be
+# routed through Press's front controller — see that project's
+# DECISIONS.md), so requests fall through to Press's catch-all
+# `RewriteRule ^ index.php`. When a Lumora Gallery install shared a
+# parent directory with a Press install on the same domain, that same
+# exclusion silently applied to Gallery's own admin/ too — a bare
+# /admin/ request (no filename) was rewritten to Press's index.php and
+# served the wrong app's homepage entirely, while /admin/index.php
+# (an explicit filename, matched by the parent's earlier "-f" rule
+# before the admin-specific exclusion) worked fine. `RewriteEngine Off`
+# stops mod_rewrite processing for anything under this directory tree,
+# restoring Apache's normal file/directory resolution regardless of
+# what any ancestor .htaccess tries to rewrite.
+<IfModule mod_rewrite.c>
+    RewriteEngine Off
+</IfModule>
+
+<FilesMatch "\.(ini|log|sh|sql|md)$">
+    Require all denied
+</FilesMatch>

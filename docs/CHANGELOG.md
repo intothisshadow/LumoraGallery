@@ -8,6 +8,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A bare `/admin/` request could be silently swallowed by an unrelated
+  app's own `.htaccess` when Lumora Gallery shared a parent directory
+  with it on the same domain.** Lumora Gallery ships with no root
+  `.htaccess` of its own, so an ancestor directory's `RewriteEngine`
+  rules (written for a different app's own layout) still applied here —
+  in one real case, a sibling Lumora Press install's root `.htaccess`
+  deliberately excludes its own `admin/` from being served directly,
+  routing it through Press's front controller instead; that same
+  exclusion silently caught Gallery's unrelated `admin/` folder too,
+  serving the wrong app's homepage for a bare `/admin/` request (an
+  explicit `/admin/index.php` request still worked, since it matched
+  an earlier, unscoped rule). A new root `.htaccess`
+  (`RewriteEngine Off`, since every Gallery URL is query-string based
+  and needs no rewriting at all) stops any ancestor `.htaccess` from
+  reaching into a Gallery install this way.
+
 ## [1.17.1] — 2026-08-28
 
 ### Fixed
