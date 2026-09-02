@@ -729,6 +729,14 @@ HTML;
         mkdir(LUMORA_ALBUMS_PATH, 0755, true);
     }
 
+    // Ensure covers/ directories exist (category/album cover image uploads).
+    foreach (['categories', 'albums'] as $cover_kind) {
+        $cover_dir = LUMORA_COVERS_PATH . $cover_kind;
+        if (!is_dir($cover_dir)) {
+            mkdir($cover_dir, 0755, true);
+        }
+    }
+
     // Clean up installer session data.
     unset($_SESSION['ins_db'], $_SESSION['ins_base_url'], $_SESSION['ins_csrf'], $_SESSION['ins_suggested_prefix']);
 

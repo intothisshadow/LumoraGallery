@@ -92,6 +92,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ? lumora_int($_POST['category_id'] ?? 0, 0, 0)
             : null; // resolved from the existing row below when editing
 
+        // Cover image upload: replaces or clears the existing cover_image.
+        // A file takes priority over the "remove" checkbox if both are
+        // somehow present at once. Leaving both alone (no new file, no
+        // removal requested) omits the key entirely so the existing
+        // cover_image is left untouched on edit.
+        $cover_data = [];
+        $current_cover = $edit_id > 0
+            ? LumoraDB::fetchValue('SELECT cover_image FROM `{PREFIX}albums` WHERE id = ?', [$edit_id])
+            : null;
+        $upload = ThumbnailService::processCoverUpload($_FILES['cover_image'] ?? [], 'albums', $current_cover);
+        if ($upload['error'] !== null) {
+            lum_flash($upload['error'], 'warning');
+        } elseif ($upload['ok']) {
+            $cover_data['cover_image'] = $upload['filename'];
+        } elseif (isset($_POST['remove_cover_image'])) {
+            if (!empty($current_cover)) {
+                ThumbnailService::deleteCoverImage('albums', (string) $current_cover);
+            }
+            $cover_data['cover_image'] = null;
+        }
+
         if ($edit_id > 0) {
             // Editing — don't change folder (to avoid breaking filesystem paths).
             $result = GalleryService::updateAlbum($edit_id, [
@@ -104,6 +125,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // GalleryService::updateAlbum() ignores this key entirely when
                 // $can_manage_all is false, leaving the existing category untouched.
                 'category_id'    => $cat_id ?? 0,
+                ...$cover_data,
             ], allow_category_change: $can_manage_all);
 
             if (is_string($result)) {
@@ -124,6 +146,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'visibility'     => $visibility,
                 'pos'            => $pos,
                 'thumb_image_id' => $thumb_image_id,
+                ...$cover_data,
             ]);
 
             if (is_string($result)) {
@@ -384,6 +407,26 @@ if ($action === 'new' || $action === 'edit') {
     $id_v    = (int)($album['id']             ?? 0);
     $folder_v= h($album['folder']            ?? '');
     $thumb_v = (int)($album['thumb_image_id'] ?? 0);
+
+    // Cover image preview + "remove" checkbox — only shown when a dedicated
+    // cover has actually been uploaded (thumb_image_id-picked or auto-picked
+    // covers have no file of their own to preview/remove here).
+    $cover_image_v      = $album['cover_image'] ?? null;
+    $cover_preview_html = '';
+    if (!empty($cover_image_v)) {
+        $cover_thumb_url_h = h(lumora_covers_url('albums') . rawurlencode(LUMORA_THUMB_PREFIX . $cover_image_v));
+        $cover_preview_html = <<<PREVIEW
+<div class="mb-2">
+  <img src="{$cover_thumb_url_h}" alt="Current cover" class="img-thumbnail" style="max-width:120px;max-height:120px;object-fit:contain">
+</div>
+<div class="form-check mb-2">
+  <input type="checkbox" name="remove_cover_image" value="1" class="form-check-input" id="lum-alb-remove-cover">
+  <label class="form-check-label" for="lum-alb-remove-cover">Remove current cover image</label>
+</div>
+PREVIEW;
+    }
+    $max_mb          = (int) lumora_config('max_upload_size_mb', 0);
+    $cover_size_hint = $max_mb > 0 ? ' Max ' . $max_mb . ' MB.' : '';
     $vis_pub = $vis_v === 0 ? ' selected' : '';
     $vis_prv = $vis_v === 1 ? ' selected' : '';
 
@@ -544,7 +587,7 @@ HTML;
 <a href="{$base_h}" class="btn btn-sm btn-outline-secondary mb-3">← Back to list</a>
 {$assigned_block}
 <div class="lum-adm-card">
-  <form method="post" action="{$base_h}">
+  <form method="post" action="{$base_h}" enctype="multipart/form-data">
     <input type="hidden" name="action"     value="save">
     <input type="hidden" name="id"         value="{$id_v}">
     <input type="hidden" name="csrf_token" value="{$csrf}">
@@ -571,9 +614,13 @@ HTML;
     </div>
     <div class="mb-4">
       <label class="form-label fw-semibold">Cover Image <small class="text-muted">(optional)</small></label>
+      {$cover_preview_html}
+      <input type="file" name="cover_image" class="form-control mb-2" accept="image/*">
+      <div class="form-text">Upload a dedicated cover image for this album.{$cover_size_hint} Takes priority over the Image ID below and the auto-picked cover.</div>
+      <label class="form-label mt-3">Or use an existing image by ID</label>
       <input type="number" name="thumb_image_id" value="{$thumb_v}" class="form-control"
              style="max-width:140px" min="0">
-      <div class="form-text">Image ID to use as the album cover thumbnail. 0 = auto-pick the first image in this album.</div>
+      <div class="form-text">Image ID to use as the album cover thumbnail. 0 = auto-pick the first image in this album. Ignored when a cover image is uploaded above.</div>
     </div>
     <button type="submit" class="btn btn-primary">Save Album</button>
   </form>

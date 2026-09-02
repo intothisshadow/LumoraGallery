@@ -375,9 +375,12 @@ class GalleryService
      *   - name is required.
      *   - thumb_image_id, if > 0, must reference an existing approved image;
      *     otherwise it's silently reset to 0 and a warning is returned.
+     *   - cover_image, if given, is stored as-is (already validated and
+     *     saved to disk by ThumbnailService::processCoverUpload() before
+     *     this method is called); null/omitted means no dedicated cover.
      *
      * @param array{name: string, description?: string, parent_id?: int, pos?: int,
-     *              thumb_image_id?: int} $data
+     *              thumb_image_id?: int, cover_image?: string|null} $data
      * @return array{id: int, warning: string|null}|string
      *         Array with the new category's ID and optional warning on
      *         success; an error message string on failure.
@@ -397,6 +400,7 @@ class GalleryService
             'description'    => trim((string) ($data['description'] ?? '')),
             'pos'            => (int) ($data['pos'] ?? 0),
             'thumb_image_id' => $thumb['id'],
+            'cover_image'    => $data['cover_image'] ?? null,
         ]);
 
         return ['id' => $id, 'warning' => $thumb['warning']];
@@ -411,9 +415,12 @@ class GalleryService
      *     root — parent_id = 0 — rather than rejected, matching the previous
      *     inline page behavior).
      *   - thumb_image_id validated the same way as createCategory().
+     *   - cover_image, if the key is present in $data, replaces the stored
+     *     value (string filename, or null to clear it); omitting the key
+     *     entirely leaves the existing cover_image untouched.
      *
      * @param array{name: string, description?: string, parent_id?: int, pos?: int,
-     *              thumb_image_id?: int} $data
+     *              thumb_image_id?: int, cover_image?: string|null} $data
      * @return array{warning: string|null}|string true-shaped array on
      *         success (with an optional warning), an error message string
      *         on failure.
@@ -432,13 +439,18 @@ class GalleryService
 
         $thumb = self::resolveThumbImageId((int) ($data['thumb_image_id'] ?? 0));
 
-        LumoraDB::update('categories', [
+        $updates = [
             'name'           => $name,
             'description'    => trim((string) ($data['description'] ?? '')),
             'parent_id'      => $parent_id,
             'pos'            => (int) ($data['pos'] ?? 0),
             'thumb_image_id' => $thumb['id'],
-        ], 'id = ?', [$id]);
+        ];
+        if (array_key_exists('cover_image', $data)) {
+            $updates['cover_image'] = $data['cover_image'];
+        }
+
+        LumoraDB::update('categories', $updates, 'id = ?', [$id]);
 
         return ['warning' => $thumb['warning']];
     }
@@ -450,6 +462,9 @@ class GalleryService
      * Returns null (no-op) when $id doesn't match an existing category,
      * matching the previous inline page behavior of silently doing nothing
      * — the page never flashed a message in that case either.
+     *
+     * An uploaded cover_image, if any, is removed from disk — it has no
+     * other referent once the category row is gone.
      *
      * @return string|null A human-readable result message, or null if the
      *                      category did not exist.
@@ -471,6 +486,10 @@ class GalleryService
             [$parent_id, $id]
         );
         LumoraDB::delete('categories', 'id = ?', [$id]);
+
+        if (!empty($cat['cover_image'])) {
+            ThumbnailService::deleteCoverImage('categories', (string) $cat['cover_image']);
+        }
 
         return 'Category deleted. Child items moved to parent.';
     }
@@ -774,9 +793,12 @@ class GalleryService
      *   - The album's folder directory is created on disk if missing; a
      *     failure to create it is reported as a warning, not a hard error,
      *     since the album row itself was still saved successfully.
+     *   - cover_image, if given, is stored as-is (already validated and
+     *     saved to disk by ThumbnailService::processCoverUpload() before
+     *     this method is called); null/omitted means no dedicated cover.
      *
      * @param array{category_id?: int, folder?: string, title: string, description?: string,
-     *              visibility?: int, pos?: int, thumb_image_id?: int} $data
+     *              visibility?: int, pos?: int, thumb_image_id?: int, cover_image?: string|null} $data
      * @return array{id: int, folder: string, warning: string|null}|string
      *         Array with the new album's ID, final folder name, and an
      *         optional warning on success; an error message string on
@@ -799,6 +821,7 @@ class GalleryService
             'visibility'     => ((int) ($data['visibility'] ?? 0)) === 1 ? 1 : 0,
             'pos'            => (int) ($data['pos'] ?? 0),
             'thumb_image_id' => $thumb['id'],
+            'cover_image'    => $data['cover_image'] ?? null,
             'created_at'     => date('Y-m-d H:i:s'),
         ];
 
@@ -831,7 +854,10 @@ class GalleryService
      * editable and this method has no folder parameter at all.
      *
      * @param array{title: string, description?: string, visibility?: int, pos?: int,
-     *              thumb_image_id?: int, category_id?: int} $data
+     *              thumb_image_id?: int, cover_image?: string|null, category_id?: int} $data
+     *              cover_image, if the key is present, replaces the stored value
+     *              (string filename, or null to clear it); omitting the key
+     *              entirely leaves the existing cover_image untouched.
      * @param bool $allow_category_change Whether category_id may be changed —
      *             pass false for a contributor editing an assigned album
      *             (category reassignment is a 'manage_albums'-only
@@ -857,6 +883,9 @@ class GalleryService
             'pos'            => (int) ($data['pos'] ?? 0),
             'thumb_image_id' => $thumb['id'],
         ];
+        if (array_key_exists('cover_image', $data)) {
+            $updates['cover_image'] = $data['cover_image'];
+        }
         if ($allow_category_change && array_key_exists('category_id', $data)) {
             $updates['category_id'] = (int) $data['category_id'];
         }
@@ -864,6 +893,42 @@ class GalleryService
         LumoraDB::update('albums', $updates, 'id = ?', [$id]);
 
         return ['warning' => $thumb['warning']];
+    }
+
+    /**
+     * Set an existing image as an album's cover via thumb_image_id — the
+     * "Use as Album Cover" action on the admin image edit page (LG-054), an
+     * alternative entry point to the same cover-image feature as the album
+     * form's own Cover Image field rather than a separate mechanism.
+     *
+     * Any uploaded cover_image on the album is cleared (and its files
+     * removed from disk via ThumbnailService::deleteCoverImage()) first —
+     * otherwise it would keep outranking thumb_image_id in
+     * ThemeRenderer::renderItemThumb()'s resolution order and this action
+     * would silently appear to do nothing. $imageId is not validated against
+     * resolveThumbImageId()'s "must be approved" rule here since the caller
+     * is choosing from the album's own existing images, not free-typing an ID.
+     *
+     * @return string|null An error message if the album doesn't exist, null
+     *                      on success.
+     */
+    public static function setAlbumCoverFromImage(int $albumId, int $imageId): ?string
+    {
+        $album = LumoraDB::fetchOne('SELECT * FROM `{PREFIX}albums` WHERE id = ?', [$albumId]);
+        if (!$album) {
+            return 'Album not found.';
+        }
+
+        if (!empty($album['cover_image'])) {
+            ThumbnailService::deleteCoverImage('albums', (string) $album['cover_image']);
+        }
+
+        LumoraDB::update('albums', [
+            'thumb_image_id' => $imageId,
+            'cover_image'    => null,
+        ], 'id = ?', [$albumId]);
+
+        return null;
     }
 
     /**
@@ -878,17 +943,24 @@ class GalleryService
      * no-op DELETE affecting 0 rows) — the page never checked for existence
      * first either, so this method doesn't introduce a new "not found" case.
      *
+     * An uploaded cover_image, if any, is removed from disk — it has no
+     * other referent once the album row is gone.
+     *
      * @return string A human-readable result message describing what
      *                happened to the album's on-disk folder, suitable for a
      *                flash message.
      */
     public static function deleteAlbum(int $id): string
     {
-        $album = LumoraDB::fetchOne('SELECT folder FROM `{PREFIX}albums` WHERE id = ?', [$id]);
+        $album = LumoraDB::fetchOne('SELECT folder, cover_image FROM `{PREFIX}albums` WHERE id = ?', [$id]);
 
         LumoraDB::delete('images', 'album_id = ?', [$id]);
         LumoraDB::delete('albums', 'id = ?', [$id]);
         AlbumAssignmentService::removeAllAssignmentsForAlbum($id);
+
+        if ($album && !empty($album['cover_image'])) {
+            ThumbnailService::deleteCoverImage('albums', (string) $album['cover_image']);
+        }
 
         $folder_msg = ' Image files on disk were NOT removed.';
         if ($album && $album['folder'] !== '') {

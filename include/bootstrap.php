@@ -63,6 +63,7 @@ define('LUMORA_ALBUMS_PATH', LUMORA_ROOT . 'albums'  . DIRECTORY_SEPARATOR);
 define('LUMORA_THEMES_PATH', LUMORA_ROOT . 'themes'  . DIRECTORY_SEPARATOR);
 define('LUMORA_ADMIN_PATH',  LUMORA_ROOT . 'admin'   . DIRECTORY_SEPARATOR);
 define('LUMORA_PLUGINS_PATH', LUMORA_ROOT . 'plugins' . DIRECTORY_SEPARATOR);
+define('LUMORA_COVERS_PATH', LUMORA_ROOT . 'covers'  . DIRECTORY_SEPARATOR);
 
 /** Coppermine-compatible thumbnail prefix. */
 define('LUMORA_THUMB_PREFIX', 'thumb_');

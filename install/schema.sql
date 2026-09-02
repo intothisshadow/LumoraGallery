@@ -222,6 +222,7 @@ CREATE TABLE IF NOT EXISTS `{PREFIX}categories` (
   `description`    text          NOT NULL,
   `pos`            int           NOT NULL DEFAULT 0,
   `thumb_image_id` int UNSIGNED  NOT NULL DEFAULT 0 COMMENT 'FK to images.id, 0 = auto-pick first album image',
+  `cover_image`    varchar(255)  NULL DEFAULT NULL COMMENT 'Bare filename of an uploaded cover image under covers/categories/, NULL = none',
   PRIMARY KEY (`id`),
   KEY `parent_id` (`parent_id`),
   KEY `pos`       (`pos`)
@@ -235,6 +236,8 @@ CREATE TABLE IF NOT EXISTS `{PREFIX}categories` (
 -- ──────────────────────────────────────────────────────────────────────────────
 -- folder: path relative to albums/ directory, e.g. "00001" or "xena/season1"
 -- thumb_image_id: FK to images.id, used as the album cover (0 = auto-pick first image)
+-- cover_image: uploaded cover filename under covers/albums/, takes priority over
+--              thumb_image_id when set (NULL = none)
 -- visibility: 0 = public, 1 = private/hidden
 -- ──────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS `{PREFIX}albums` (
@@ -247,6 +250,7 @@ CREATE TABLE IF NOT EXISTS `{PREFIX}albums` (
   `pos`            int              NOT NULL DEFAULT 0,
   `hits`           int UNSIGNED     NOT NULL DEFAULT 0,
   `thumb_image_id` int UNSIGNED     NOT NULL DEFAULT 0,
+  `cover_image`    varchar(255)     NULL DEFAULT NULL COMMENT 'Bare filename of an uploaded cover image under covers/albums/, NULL = none',
   `created_at`     datetime         NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `folder`      (`folder`),

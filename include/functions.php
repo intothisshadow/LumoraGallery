@@ -236,6 +236,27 @@ function lumora_album_url(string $folder): string
 }
 
 /**
+ * Absolute filesystem path to a covers/ subdirectory, with trailing separator.
+ *
+ * @param string $kind 'categories' or 'albums' — selects the subdirectory
+ *                      uploaded category/album cover images are stored under.
+ */
+function lumora_covers_path(string $kind): string
+{
+    return LUMORA_COVERS_PATH . $kind . DIRECTORY_SEPARATOR;
+}
+
+/**
+ * Public URL to a covers/ subdirectory, with trailing slash.
+ *
+ * @param string $kind 'categories' or 'albums'.
+ */
+function lumora_covers_url(string $kind): string
+{
+    return lumora_base_url() . 'covers/' . rawurlencode($kind) . '/';
+}
+
+/**
  * Resolve the theme-preview state for the current request once, caching the
  * result in a static local so lumora_active_theme() and
  * lumora_theme_preview_notice() below always agree on the same answer

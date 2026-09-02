@@ -695,13 +695,23 @@ HTML;
 
     /**
      * Return the cover thumbnail HTML for a category or album card.
+     *
+     * Cover resolution order: an admin-uploaded cover_image (covers/{kind}/,
+     * see ThumbnailService::processCoverUpload()) takes priority, then
+     * thumb_image_id (an existing gallery image picked by ID), then
+     * auto-pick the first image, then a placeholder icon.
      */
     public static function renderItemThumb(array $item, string $type, string $url): string
     {
         $thumb_url = null;
 
+        if (!empty($item['cover_image'])) {
+            $kind      = $type === 'album' ? 'albums' : 'categories';
+            $thumb_url = lumora_covers_url($kind) . rawurlencode(LUMORA_THUMB_PREFIX . $item['cover_image']);
+        }
+
         if ($type === 'album') {
-            if (!empty($item['thumb_image_id'])) {
+            if (!$thumb_url && !empty($item['thumb_image_id'])) {
                 $row = LumoraDB::fetchOne(
                     'SELECT i.filename, a.folder FROM `{PREFIX}images` i
                      JOIN `{PREFIX}albums` a ON a.id = i.album_id
@@ -722,7 +732,7 @@ HTML;
                 if ($row) $thumb_url = image_thumb_url($row);
             }
         } elseif ($type === 'category') {
-            if (!empty($item['thumb_image_id'])) {
+            if (!$thumb_url && !empty($item['thumb_image_id'])) {
                 $row = LumoraDB::fetchOne(
                     'SELECT i.filename, a.folder FROM `{PREFIX}images` i
                      JOIN `{PREFIX}albums` a ON a.id = i.album_id

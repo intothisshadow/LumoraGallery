@@ -149,6 +149,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         lumora_redirect($ret_url);
     }
 
+    // ── set_album_cover ──────────────────────────────────────────────────────
+    // "Use as Album Cover" on the image edit page (LG-054) — an alternative
+    // entry point to the same cover-image feature as the album form's own
+    // Cover Image field, not a separate mechanism: see
+    // GalleryService::setAlbumCoverFromImage().
+    if ($act === 'set_album_cover' && $post_id > 0) {
+        $image = LumoraDB::fetchOne('SELECT id, album_id FROM `{PREFIX}images` WHERE id = ?', [$post_id]);
+        if ($image) {
+            // Setting a cover mutates the ALBUM row, so the gate is album
+            // edit access (same check admin/albums.php's own save handler
+            // relies on) — not image access, which a contributor holding
+            // only 'edit_own_images' (no album-editing permission at all)
+            // could otherwise satisfy without being allowed to touch the
+            // album itself.
+            lumora_require_album_access((int) $image['album_id']);
+            $error = GalleryService::setAlbumCoverFromImage((int) $image['album_id'], $post_id);
+            if ($error !== null) {
+                lum_flash($error, 'danger');
+            } else {
+                lum_flash('Image set as this album\'s cover.');
+            }
+        } else {
+            lum_flash('Image not found.', 'danger');
+        }
+        lumora_redirect($ret_url);
+    }
+
     // ── delete (fallback for non-JS) ──────────────────────────────────────────
     if ($act === 'delete' && $post_id > 0) {
         $image = LumoraDB::fetchOne(
@@ -270,6 +297,24 @@ if ($action === 'edit') {
     $max_mb        = (int) lumora_config('max_upload_size_mb', 0);
     $size_hint     = $max_mb > 0 ? 'Max ' . $max_mb . ' MB. ' : '';
 
+    // "Use as Album Cover" (LG-054) — same album-edit access check the
+    // action handler enforces, so the button is only shown when it would
+    // actually work.
+    $set_cover_html = '';
+    if (AlbumAssignmentService::userCanAccessAlbum($current_user_id, $edit_album_id)) {
+        $set_cover_html = <<<HTML
+<form method="post" action="{$base_h}" class="d-inline">
+  <input type="hidden" name="action"     value="set_album_cover">
+  <input type="hidden" name="id"         value="{$img_id}">
+  <input type="hidden" name="album_id"   value="{$edit_album_id}">
+  <input type="hidden" name="page"       value="{$page}">
+  <input type="hidden" name="search"     value="{$search_h}">
+  <input type="hidden" name="csrf_token" value="{$csrf}">
+  <button type="submit" class="btn btn-sm btn-outline-secondary mt-1">Use as Album Cover</button>
+</form>
+HTML;
+    }
+
     // Plugin-supplied extra fields (e.g. lumora-press-shortcodes).
     $extra_fields_html = HookService::applyFilters('admin_image_edit_extra_fields', '', $edit_image);
 
@@ -286,6 +331,7 @@ if ($action === 'edit') {
       <div class="text-muted small mt-1">{$dims_h} · {$filesize_h}</div>
       <div class="text-muted small">Album: {$album_title_h}</div>
       <div class="text-muted small">Added: {$added_h} · Views: {$hits_h}</div>
+      {$set_cover_html}
     </div>
   </div>
   {$extra_fields_html}

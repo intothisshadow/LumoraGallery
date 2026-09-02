@@ -446,4 +446,118 @@ class ThumbnailService
             'added_at'    => date('Y-m-d H:i:s'),
         ]);
     }
+
+    // ── Category / album cover uploads ────────────────────────────────────────
+
+    /**
+     * Validate and store an uploaded category/album cover image: checks size
+     * and file type the same way regular image uploads are validated, saves
+     * the original under covers/{$kind}/ with a random filename, generates
+     * its thumbnail, and removes the previous cover file (if any) once the
+     * new one is safely in place.
+     *
+     * @param array{name?: string, tmp_name?: string, size?: int, error?: int} $file
+     *        A single $_FILES entry (e.g. $_FILES['cover_image']).
+     * @param string      $kind         'categories' or 'albums' — selects the
+     *                                  covers/ subdirectory.
+     * @param string|null $old_filename Existing cover_image filename to
+     *                                  remove once the new file is stored, or
+     *                                  null when there is no previous cover.
+     * @return array{ok: bool, filename: string|null, error: string|null}
+     *         ok=true with filename set on success; ok=false with filename
+     *         and error both null when no file was submitted
+     *         (UPLOAD_ERR_NO_FILE — not a failure, just nothing to do);
+     *         ok=false with error set on validation/processing failure.
+     */
+    public static function processCoverUpload(array $file, string $kind, ?string $old_filename): array
+    {
+        $error = $file['error'] ?? UPLOAD_ERR_NO_FILE;
+        if ($error === UPLOAD_ERR_NO_FILE) {
+            return ['ok' => false, 'filename' => null, 'error' => null];
+        }
+        if ($error !== UPLOAD_ERR_OK) {
+            return [
+                'ok'       => false,
+                'filename' => null,
+                'error'    => 'File upload error (PHP error code ' . $error . '). Please try again.',
+            ];
+        }
+
+        $tmp     = (string) ($file['tmp_name'] ?? '');
+        $up_name = (string) ($file['name']     ?? '');
+        $up_size = (int)   ($file['size']      ?? 0);
+
+        $max_mb = (int) LumoraConfig::get('max_upload_size_mb', 0);
+        if ($max_mb > 0 && $up_size > $max_mb * 1024 * 1024) {
+            return [
+                'ok'       => false,
+                'filename' => null,
+                'error'    => 'Cover image exceeds the configured maximum size (' . $max_mb . ' MB).',
+            ];
+        }
+
+        if (!self::isAllowedImage($up_name)) {
+            return [
+                'ok'       => false,
+                'filename' => null,
+                'error'    => 'File type not allowed. Permitted extensions: '
+                              . implode(', ', self::getAllowedExtensions()) . '.',
+            ];
+        }
+
+        if (getimagesize($tmp) === false) {
+            return ['ok' => false, 'filename' => null, 'error' => 'Uploaded file is not a valid image.'];
+        }
+
+        $ext      = strtolower(pathinfo($up_name, PATHINFO_EXTENSION));
+        $filename = bin2hex(random_bytes(8)) . '.' . $ext;
+        $dir      = lumora_covers_path($kind);
+
+        if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
+            return [
+                'ok'       => false,
+                'filename' => null,
+                'error'    => 'Could not create the covers directory. Check folder permissions.',
+            ];
+        }
+
+        $dest = $dir . $filename;
+        if (!move_uploaded_file($tmp, $dest)) {
+            return [
+                'ok'       => false,
+                'filename' => null,
+                'error'    => 'Could not save the uploaded file. Check folder permissions.',
+            ];
+        }
+
+        $thumb_w = max(1, (int) LumoraConfig::get('thumb_width',  250));
+        $thumb_h = max(1, (int) LumoraConfig::get('thumb_height', 250));
+        // Thumbnail generation is non-fatal — the original cover is already
+        // stored and usable even if a thumbnail couldn't be generated.
+        self::generateThumb($dest, $dir . LUMORA_THUMB_PREFIX . $filename, $thumb_w, $thumb_h);
+
+        if ($old_filename !== null && $old_filename !== '') {
+            self::deleteCoverImage($kind, $old_filename);
+        }
+
+        return ['ok' => true, 'filename' => $filename, 'error' => null];
+    }
+
+    /**
+     * Delete a stored cover image and its thumbnail from disk. Safe to call
+     * with a filename that no longer exists (e.g. already removed).
+     *
+     * @param string $kind 'categories' or 'albums'.
+     */
+    public static function deleteCoverImage(string $kind, string $filename): void
+    {
+        if ($filename === '') return;
+
+        $dir   = lumora_covers_path($kind);
+        $orig  = $dir . $filename;
+        $thumb = $dir . LUMORA_THUMB_PREFIX . $filename;
+
+        if (is_file($orig))  unlink($orig);
+        if (is_file($thumb)) unlink($thumb);
+    }
 }

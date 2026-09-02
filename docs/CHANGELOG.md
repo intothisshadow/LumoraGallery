@@ -8,6 +8,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Cover Image upload for categories and albums (LG-054).** The New/Edit
+  Category and New/Edit Album admin forms now let you upload a dedicated
+  cover image directly, instead of only picking an existing gallery image
+  by ID. Uploads are validated the same way other image uploads are
+  (allowed extension, dangerous-extension rejection, max upload size,
+  real-image check), stored under `covers/categories/` or `covers/albums/`
+  with their own generated thumbnail, and previewed on the edit form with
+  a one-click "Remove current cover image" checkbox. An uploaded cover
+  always takes priority over an ID-picked `thumb_image_id`, which in turn
+  still falls back to auto-picking the first image when neither is set —
+  existing covers are unaffected. The admin image edit page also gained a
+  **"Use as Album Cover"** button — an alternative entry point to the same
+  cover feature (`GalleryService::setAlbumCoverFromImage()`) that sets that
+  image as its album's cover directly, clearing any uploaded cover image
+  on the album first. Deleting a category or album removes its uploaded
+  cover files from disk. New `cover_image` column on `categories`/`albums`
+  (DB version 14, `Migration0008_AddCoverImageToCategoriesAndAlbums`).
+
 ### Fixed
 
 - **The Lumora Press Shortcodes plugin's admin description and help text
