@@ -57,6 +57,44 @@ Appearance.
 
 ---
 
+## Theme metadata and screenshots
+
+A theme can optionally declare itself via a CSS header comment at the top of its primary
+stylesheet (the first `{THEME_URL}*.css` link found in `template.html`), in the same spirit
+as WordPress theme headers:
+
+```css
+/*
+ * Theme Name: My Theme
+ * Author: Your Name
+ * Design URI: https://example.com
+ */
+```
+
+Recognized fields are `Theme Name`, `Author`, and `Design URI`. When present, they're shown
+on the theme's card and details modal in Admin → Appearance. The header is entirely
+optional — themes without one still work normally, falling back to the folder name.
+
+Screenshot discovery follows the same convention: a file named `preview.*`, `thumbnail.*`,
+or `screenshot.*` (jpg/jpeg/png/webp/avif) in a theme's folder becomes its card thumbnail, in
+that priority order; numbered variants (`screenshot-2.jpg`, `screenshot-3.webp`, …) are
+picked up too and shown together in the details modal's screenshot gallery. A theme with no
+screenshot file gets a neutral placeholder card image instead of a broken image icon.
+
+**Admin-only theme preview.** A logged-in administrator can append `?theme=folder-name` to
+any public gallery URL — the home page, a category page, or an album page — to render that
+theme for the current request only; the site's configured theme is never changed and no
+other visitor is affected. An unknown or invalid folder name falls back to the real active
+theme with an admin-only notice explaining why; a valid preview shows a small admin-only
+banner as a reminder it's temporary. The preview follows you as you keep browsing: every nav
+link, breadcrumb, category/album card, pagination link, and sort control generated while a
+preview is active carries the `theme` parameter forward, so navigating between categories
+and albums stays on the previewed theme for the whole session instead of reverting after one
+click. Every theme card in Admin → Appearance includes a **Preview** button that opens this
+URL in a new tab — the fastest way to see your theme changes take effect while developing it.
+
+---
+
 ## Dark mode architecture
 
 Lumora's dark mode is built entirely on **Bootstrap 5.3's native
