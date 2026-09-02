@@ -10,6 +10,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Delete Disabled Plugins: bulk and single-row actions (LG-053).** The
+  Plugins admin page can now permanently delete a disabled feature
+  plugin's entire folder from disk — a per-row Delete button, plus
+  checkbox-based bulk selection with a "Delete Selected" toolbar button,
+  matching the Images page's own bulk-selection pattern (select-all
+  header checkbox, live selected-count, AJAX endpoint). An enabled plugin
+  can never be deleted from either path; anything already gone or
+  re-enabled by the time a bulk request lands is silently skipped rather
+  than erroring, and the response reports how many were actually deleted
+  vs. skipped. New `PluginService::deletePlugin()` (with a path-safety
+  guard resolving the plugin's real directory before removing it) and
+  `admin/ajax_plugin_delete.php`.
+
 - **Cover Image upload for categories and albums (LG-054).** The New/Edit
   Category and New/Edit Album admin forms now let you upload a dedicated
   cover image directly, instead of only picking an existing gallery image

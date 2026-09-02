@@ -179,6 +179,52 @@ class PluginService
     }
 
     /**
+     * Permanently delete a plugin's entire directory from disk (LG-053).
+     *
+     * Refuses to delete a currently-enabled feature plugin — disable it
+     * first, so its bootstrap/hooks are never left referencing files that
+     * no longer exist mid-request. Non-feature plugin types (e.g. the
+     * Coppermine importer) have no enabled/disabled state of their own and
+     * are never gated by this check.
+     *
+     * Path safety: resolves the plugin's directory and refuses to proceed
+     * unless it's a direct child of LUMORA_PLUGINS_PATH — the same guard
+     * Lumora Press's own PluginInstaller::delete() equivalent applies —
+     * even though $id only ever selects a directory already produced by
+     * discoverAll()'s own glob(), never a raw caller-supplied path.
+     *
+     * @return bool True on success; false if the plugin doesn't exist, is
+     *              still enabled, or its directory fails the path-safety
+     *              check or can't be removed.
+     */
+    public static function deletePlugin(string $id): bool
+    {
+        $plugin = null;
+        foreach (self::discoverAll() as $p) {
+            if ($p['id'] === $id) {
+                $plugin = $p;
+                break;
+            }
+        }
+        if ($plugin === null) {
+            return false;
+        }
+
+        if ($plugin['type'] === 'feature' && self::isEnabled($id)) {
+            return false;
+        }
+
+        $root = realpath(LUMORA_PLUGINS_PATH);
+        $dir  = realpath($plugin['dir']);
+        if ($root === false || $dir === false || dirname($dir) !== rtrim($root, DIRECTORY_SEPARATOR)) {
+            return false;
+        }
+
+        UpdaterService::removeDirectory($dir);
+        return !is_dir($dir);
+    }
+
+    /**
      * Require every enabled, compatible feature plugin's bootstrap file, so
      * it can register its hooks for the current request. Called once from
      * bootstrap.php after config is loaded. A plugin whose bootstrap throws
