@@ -60,7 +60,7 @@ class LumoraPressShortcodesService
     <button type="button" class="btn btn-outline-secondary"
             onclick="this.previousElementSibling.select();document.execCommand('copy');this.textContent='Copied!';setTimeout(()=>{this.textContent='Copy';},1500);">Copy</button>
   </div>
-  <div class="form-text">Paste into a Lumora Press post/page — requires that project's own Lumora Gallery Shortcodes plugin (LPP-015).</div>
+  <div class="form-text">Paste into a Lumora Press post/page — requires that project's own Lumora Gallery Shortcodes plugin.</div>
 </div>
 HTML;
     }

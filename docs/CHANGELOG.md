@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **The Lumora Press Shortcodes plugin's admin description and help text
+  referenced an internal ticket ID (`LPP-015`) directly in user-visible
+  UI copy.** Both `plugin.json`'s `description` (shown on the admin
+  Plugins list) and the `.form-text` help line under the admin
+  shortcode box now describe the companion plugin by name only.
+
+---
+
 ## [1.18.0] — 2026-08-31
 
 ### Added
