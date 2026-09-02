@@ -198,6 +198,37 @@ the image lightbox's info panel respectively, both logged-in-users-only).
 
 ---
 
+## Importer Plugins
+
+The other plugin type (`"type": "importer"`, e.g. `coppermine-importer`) migrates data
+from another gallery system into Lumora. Unlike feature plugins, importers have no
+enable/disable state and run entirely on demand from **Admin → Import**
+(`admin/migrate.php`), which discovers every importer plugin's manifest automatically.
+
+To build a new importer plugin:
+
+1. Create `plugins/{your-importer}/plugin.json` with `"type": "importer"`.
+2. Set `"admin_url"` to your plugin's entry-point PHP file path.
+3. Set `"source"` to a unique identifier string.
+4. Implement your import logic; use `MigrationService::saveMigrationStatus()` and
+   `MigrationService::logEvent()` to record results, so the migration hub can show
+   them.
+
+Importer plugins share two core tables — created by the Lumora installer, not by any
+individual importer plugin: `{PREFIX}migration_status` (one row per source, tracking
+counts and the last-imported timestamp) and `{PREFIX}migration_log` (a per-source event
+log). See `install/schema.sql` for their exact shape.
+
+**Plugin versioning convention** (used by `coppermine-importer` and expected of any new
+importer plugin): a single `LUMORA_{X}_VERSION` constant in the plugin's own
+`version.php` is the source of truth, referenced throughout that plugin's code for
+migration-status records, cache-busting query strings, and compatibility checks against
+its own `LUMORA_{X}_MIN_LUMORA` constant. `plugin.json`'s `"version"` field must be kept
+in sync with it by hand when releasing a new plugin version — nothing enforces this
+automatically.
+
+---
+
 ## Update System Internals
 
 The in-dashboard updater (`UpdaterService`, driven from **Admin → Updates**) runs as a

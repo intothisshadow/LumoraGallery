@@ -1,8 +1,6 @@
 # Classic Fansite — Lumora Gallery Theme
 
-A traditional fansite starter theme for Lumora Gallery, designed for fansites
-dedicated to TV shows, films, games, celebrities, and other fandoms. Inspired by
-the gallery sites of the 2000s–2010s fandom era.
+A traditional fansite starter theme for Lumora Gallery, designed for fansites dedicated to TV shows, films, games, celebrities, and other fandoms. Inspired by the gallery sites of the 2000s–2010s fandom era.
 
 ---
 
@@ -18,10 +16,7 @@ the gallery sites of the 2000s–2010s fandom era.
 
 ## Quick-start customisation
 
-All colours, sizes, and fonts are controlled by CSS custom properties in the `:root`
-block at the top of `style.css`. **Do not edit `style.css` directly** — create a
-file called `custom.css` in this folder and override only the variables you want.
-Then add one line to `template.html` after the existing `style.css` link:
+All colours, sizes, and fonts are controlled by CSS custom properties in the `:root` block at the top of `style.css`. **Do not edit `style.css` directly** — create a file called `custom.css` in this folder and override only the variables you want. Then add one line to `template.html` after the existing `style.css` link:
 
 ```html
 <link rel="stylesheet" href="{THEME_URL}custom.css">
@@ -57,14 +52,7 @@ Then add one line to `template.html` after the existing `style.css` link:
 
 Copy one of these blocks into your `custom.css` file.
 
-**Dark mode note:** each preset below only sets `--fs-accent`/`--fs-accent-light`,
-which cover buttons and other filled backgrounds. Dark mode's link/border colour
-(`--fs-accent-ink`) defaults to a neutral lavender tint chosen purely for guaranteed
-WCAG AA contrast against the shared dark content background — it won't automatically
-pick up a preset's own hue. For full colour-matching in dark mode, add an
-`html[data-bs-theme="dark"]` block overriding `--fs-accent-ink`/`--fs-accent-ink-hover`
-with a lighter tint of your preset's colour, as shown for the Dark Red preset below
-(and already included in this theme's bundled `custom.css`).
+**Dark mode note:** each preset below only sets `--fs-accent`/`--fs-accent-light`, which cover buttons and other filled backgrounds. Dark mode's link/border colour (`--fs-accent-ink`) defaults to a neutral lavender tint chosen purely for guaranteed WCAG AA contrast against the shared dark content background — it won't automatically pick up a preset's own hue. For full colour-matching in dark mode, add an `html[data-bs-theme="dark"]` block overriding `--fs-accent-ink`/`--fs-accent-ink-hover` with a lighter tint of your preset's colour, as shown for the Dark Red preset below (and already included in this theme's bundled `custom.css`).
 
 ### Dark red / fantasy / horror
 
@@ -151,16 +139,11 @@ html[data-bs-theme="dark"] {
 
 ## Adding a banner image
 
-The banner area displays the gallery name over a CSS gradient by default. To replace
-the gradient with a custom image, edit `template.html` directly — it's the sanctioned
-customisation point for markup like this (no config option or admin-supplied file path
-is involved):
+The banner area displays the gallery name over a CSS gradient by default. To replace the gradient with a custom image, edit `template.html` directly — it's the sanctioned customisation point for markup like this (no config option or admin-supplied file path is involved):
 
-1. **Upload your banner** into the theme folder or anywhere inside the gallery
-   (e.g. `themes/classic-fansite/images/banner.jpg`).
+1. **Upload your banner** into the theme folder or anywhere inside the gallery (e.g. `themes/classic-fansite/images/banner.jpg`).
 
-2. **Add an image inside the banner header** in `template.html`, right before
-   `.fs-banner-text`:
+2. **Add an image inside the banner header** in `template.html`, right before `.fs-banner-text`:
 
    ```html
    <header class="fs-banner">
@@ -174,11 +157,7 @@ is involved):
    </header>
    ```
 
-   `.fs-banner-bg` (defined in `style.css`) already positions and sizes an image
-   placed inside it to fill the banner area with `object-fit: cover` and
-   `object-position: center top`, so the top edge stays visible; you don't need
-   any extra CSS for this. Adjust the `src` path to match wherever you uploaded
-   the image.
+   `.fs-banner-bg` (defined in `style.css`) already positions and sizes an image placed inside it to fill the banner area with `object-fit: cover` and `object-position: center top`, so the top edge stays visible; you don't need any extra CSS for this. Adjust the `src` path to match wherever you uploaded the image.
 
 The gallery name stays overlaid on top via a subtle dark scrim for legibility.
 
@@ -205,69 +184,13 @@ If your banner image already contains the gallery name, you can hide the HTML ti
 The easiest way to make a fully custom theme is to copy this folder:
 
 1. **Copy** `themes/classic-fansite/` and rename it (e.g. `themes/my-fandom/`).
-2. **Edit `style.css`** in the copy — or create `custom.css` — and set your
-   colour variables.
+2. **Edit `style.css`** in the copy — or create `custom.css` — and set your colour variables.
 3. **Replace the banner image** (optional).
-4. In **Admin → Config → Theme**, select your new theme name.
+4. In **Admin → Appearance**, activate your new theme.
 
-The template engine discovers any folder inside `themes/` that contains a
-`template.html` file, so no registration step is needed.
+Lumora discovers any folder inside `themes/` that contains a `template.html` file, so no registration step is needed.
 
-### What a theme must contain
-
-| File | Required | Notes |
-|---|---|---|
-| `template.html` | **Yes** | Must include `{CONTENT}` at minimum |
-| `*.css` | No | Linked from `template.html` via `{THEME_URL}` |
-| `theme.php` | No | Loaded before token replacement; can define helper functions |
-| `README.md` | No | Documentation only |
-
-### Theme metadata (optional)
-
-You can identify your theme by adding a CSS header comment to the very top of
-its primary stylesheet — the first `{THEME_URL}*.css` link in `template.html`
-(for this theme, that's `style.css` itself, even if you override values via
-`custom.css`):
-
-```css
-/*
- * Theme Name: My Fandom Theme
- * Author: Your Name
- * Design URI: https://example.com
- */
-```
-
-`Theme Name`, `Author`, and `Design URI` are the recognized fields; all are
-optional and any other lines in the comment are ignored. When set, `Theme Name`
-becomes the label shown in the Active Theme dropdown (instead of the raw folder
-name), and all three fields appear in a reference table in Admin → Configuration
-→ Appearance. Skipping the header entirely is fine — the folder name is used as
-a fallback display name.
-
-### Available template tokens
-
-| Token | Contains |
-|---|---|
-| `{CHARSET}` | Always `utf-8` |
-| `{PAGE_TITLE}` | Page-specific prefix, e.g. `"Season 1 — "` |
-| `{GALLERY_NAME}` | Gallery name from config |
-| `{GALLERY_DESCRIPTION}` | Gallery description from config (may be empty) |
-| `{THEME_URL}` | URL to this theme's directory, with trailing slash |
-| `{BASE_URL}` | Gallery root URL, with trailing slash |
-| `{LUMORA_VERSION}` | Version string, e.g. `"1.0.0"` |
-| `{NAVIGATION}` | Site nav links (Home/Latest/Most Viewed/Random) |
-| `{ADMIN_LINK}` | Admin panel `<a>` link (empty for non-admin visitors) |
-| `{POWERED_BY}` | "Powered by Lumora Gallery" credit (empty when disabled in config) |
-| `{CONTENT}` | Main page HTML |
-
-`{NAVIGATION}` renders as a plain `<ul class="navbar-nav">`/`<li class="nav-item">`/
-`<a class="nav-link">` structure — this theme's `style.css` restyles those
-generic classes (scoped under `.fs-nav-inner`) to look like this theme's own
-`.fs-nav-link` chip design, rather than building the nav links directly with
-`{BASE_URL}`. Using the token (instead of hand-building each link) is what
-lets the "Most Viewed" link automatically carry the current album/category
-forward when browsing one (LG-33) — a hand-built link would always point at
-the gallery-wide most-viewed list.
+For everything beyond that — the full list of required/optional files, every available template token, the theme metadata header, and the dark mode system this theme is built on — see the [Theme Development Guide](../../docs/THEME_DEVELOPMENT.md).
 
 ---
 
