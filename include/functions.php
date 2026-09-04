@@ -3,25 +3,9 @@ declare(strict_types=1);
 /**
  * Lumora Gallery — Core Functions
  *
- * Contains two categories of functions:
- *
- *   1. Utility / helper free functions that have no natural class home:
- *      output escaping, redirects, input coercion, path/URL builders,
- *      formatters, activity logging, and pagination.
- *      These are kept as free functions because they are called from every
- *      context (public pages, admin, AJAX, installer) and carry no state.
- *
- *   2. Legacy forwarding wrappers for every function that has been migrated
- *      to a service class. Each wrapper is a one-liner that delegates to the
- *      appropriate service method, preserving full backward compatibility for
- *      all existing callers. New V2 code should call the service classes
- *      directly: LumoraConfig::, GalleryService::.
- *
- * Service classes (loaded by bootstrap.php before this file):
- *   LumoraConfig   — include/services/LumoraConfig.php
- *   GalleryService — include/services/GalleryService.php
- *
- * All SQL uses {PREFIX} which LumoraDB::query() replaces at runtime.
+ * Utility helpers and legacy forwarding wrappers for service classes. New
+ * V2 code should call the service classes directly (LumoraConfig::,
+ * GalleryService::) rather than these wrappers.
  *
  * @package    LumoraGallery
  * @subpackage Core
@@ -67,18 +51,9 @@ function lumora_set_config(string $key, mixed $value): void
 // ── Session ────────────────────────────────────────────────────────────────────
 
 /**
- * Start the PHP session if one is not already active, applying the same
- * hardened cookie parameters bootstrap.php previously set unconditionally
- * for every request.
- *
- * bootstrap.php only starts a session eagerly for admin-panel requests and
- * requests that already carry a session cookie; a first-time anonymous
- * visitor to a public page gets no session — no Set-Cookie, no PHP session
- * cache-limiter headers — so a page cache (LiteSpeed Cache or otherwise) can
- * actually cache the response. Public code paths that need to write
- * $_SESSION on demand (CSRF token generation, album/image hit-count
- * throttling, remember-me auto-login) call this immediately before doing so.
- * Safe to call unconditionally — a no-op once a session is already active.
+ * Start a session with hardened cookie settings if none is active.
+ * Public pages call this only when session data is actually needed, so an
+ * anonymous visitor's response stays cacheable.
  */
 function lumora_ensure_session(): void
 {
@@ -191,12 +166,9 @@ function lumora_int(mixed $value, int $default = 0, int $min = 0, int $max = PHP
 // ── ZIP archive helpers ───────────────────────────────────────────────────────
 
 /**
- * True when a ZIP entry name is unsafe to extract: a path-traversal
- * sequence, an absolute path, a Windows-style backslash, or a null byte.
- * Shared by every ZIP-extraction entry point in the codebase —
- * UpdaterService's release-package extraction/upload validation and
- * ThemeService's theme-package install/update validation — so the exact
- * same rule guards all of them from a single definition (LG-043).
+ * Check whether a ZIP entry name could escape the extraction directory:
+ * a path-traversal sequence, an absolute path, a Windows-style backslash,
+ * or a null byte.
  */
 function lumora_is_unsafe_zip_entry_name(string $name): bool
 {
@@ -257,15 +229,8 @@ function lumora_covers_url(string $kind): string
 }
 
 /**
- * Resolve the theme-preview state for the current request once, cached in a
- * static local so every caller this request agrees on the same answer.
- *
- * Admin-only, single-request theme preview via a `?theme=` query parameter:
- * when present, the visitor is a logged-in admin, and the named theme exists
- * (has a template.html), it wins for this request only — the configured
- * `theme` setting is never written, so no other visitor or request is
- * affected. Falls back to the real configured theme otherwise (no
- * parameter, non-admin visitor, or unrecognised theme name).
+ * Resolve the admin-only `?theme=` preview for the current request.
+ * The configured theme is never changed.
  *
  * @return array{theme: string, requested: string|null, valid: bool}
  */
@@ -291,23 +256,15 @@ function lumora_theme_preview_state(): array
     return $state;
 }
 
-/**
- * Active theme name for the current request (falls back to 'default').
- *
- * Resolves through lumora_theme_preview_state()'s admin-only `?theme=`
- * preview above, so callers transparently pick up the preview theme's
- * assets for the duration of the request.
- */
+/** Get the active theme for the current request. */
 function lumora_active_theme(): string
 {
     return lumora_theme_preview_state()['theme'];
 }
 
 /**
- * Admin-only notice banner HTML for the current request's theme-preview
- * state, or '' when there's nothing to show (non-admin, or no `?theme=`
- * parameter). Explains either that an invalid `?theme=` value was ignored,
- * or that a valid preview is active and temporary.
+ * Admin-only notice banner for the current theme-preview state, or ''
+ * when there is nothing to show.
  */
 function lumora_theme_preview_notice(): string
 {
@@ -326,11 +283,7 @@ function lumora_theme_preview_notice(): string
 }
 
 /**
- * Append the active theme-preview parameter, if any, to an internal
- * gallery URL — so clicking through the site keeps previewing the same
- * theme instead of reverting on the next click. Every URL-building
- * function that generates an internal gallery link routes its href
- * through this helper. Returns $url unchanged when no preview is active.
+ * Preserve the active theme-preview parameter in internal gallery URLs.
  */
 function lumora_theme_preview_link(string $url): string
 {
@@ -382,13 +335,8 @@ function lumora_list_themes(): array
 }
 
 /**
- * Locate a theme's primary stylesheet: the first theme-relative ({THEME_URL})
- * stylesheet <link> found in its template.html, in document order.
- *
- * This is the file CSS header metadata (Theme Name / Author / Design URI) is
- * read from. For the bundled themes this resolves to lumora.css (default) and
- * fansite.css (classic-fansite and its derivatives) — the base stylesheet
- * linked before any optional custom.css override.
+ * Find the theme's primary stylesheet from its template.html.
+ * Theme metadata is read from this stylesheet's header.
  *
  * @return string|null Absolute filesystem path, or null if none could be found.
  */
@@ -409,13 +357,7 @@ function lumora_theme_primary_stylesheet(string $theme): ?string
 }
 
 /**
- * Read theme metadata from the CSS header comment of a theme's primary
- * stylesheet, WordPress-style (Theme Name / Author / Design URI on their own
- * lines inside the first CSS comment block — see e.g. themes/default/lumora.css
- * for a working example). Only the first comment block in the file is
- * inspected; unrecognised fields are ignored. Falls back to the directory name
- * for `name` when no metadata is present, so every theme always has a usable
- * display name.
+ * Read WordPress-style theme metadata from the primary stylesheet.
  *
  * @return array{name: string, author: string, design_uri: string}
  */
@@ -498,18 +440,11 @@ function lumora_generate_folder(int $id): string
  * Sanitize a user-supplied album folder path.
  *
  * Allowed per-segment characters: letters, digits, hyphens, underscores, dots.
- * Segments are joined with forward slashes to form a relative path.
- * Strips path traversal (. and ..), hidden-directory segments (leading dot),
- * and any characters outside the allowed set.
+ * Strips path traversal (. and ..) and hidden-directory segments (leading dot).
  *
- * Disallowed characters are replaced with a path separator rather than
- * deleted outright — deleting them could silently fuse two adjacent
- * segments together (e.g. a null byte between "albums" and ".." with no
- * slash between them collapsing to "albums..", which contains ".." as a
- * substring but isn't caught by the exact-match '..' segment filter below).
- * Replacing with '/' guarantees every stripped character still produces a
- * segment boundary, so the traversal filter always sees '..' as its own
- * complete segment when one was present.
+ * Invalid characters become path separators rather than being removed,
+ * preventing adjacent segments from being accidentally joined into a new
+ * ".." sequence that the traversal filter wouldn't otherwise catch.
  *
  * @return string Clean relative path, or '' if nothing safe remains.
  */
@@ -601,10 +536,7 @@ function lumora_pagination(int $total, int $per_page, int $current_page, string 
     $total_pages  = max(1, (int) ceil($total / $per_page));
     $current_page = max(1, min($current_page, $total_pages));
 
-    // TODO.md #9: fold the admin-only theme-preview parameter (if active)
-    // into the pattern once here, so every page-number link derived from it
-    // below (prev_url, next_url, and each sprintf($url_pattern, $n) call in
-    // ThemeRenderer::renderPagination()) carries it automatically.
+    // Preserve the active theme preview in all pagination URLs.
     $url_pattern = lumora_theme_preview_link($url_pattern);
 
     return [

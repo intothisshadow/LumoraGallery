@@ -279,15 +279,11 @@ function lumora_has_permission(string $permission): bool
 
 /**
  * Enforce that the logged-in user may access a specific album — either
- * because their role holds 'manage_albums' (full access to every album) or
- * because the album has been explicitly assigned to them via
- * AlbumAssignmentService (contributor role with 'manage_assigned_albums').
- *
- * Redirects to the login page when not authenticated; shows a 403 page when
- * authenticated but lacking access to this specific album. Call this in
- * addition to the page-level lumora_require_any_permission() gate wherever a
- * specific album ID is being read or written, so a contributor cannot bypass
- * their assignment by guessing another album's ID in the URL.
+ * their role holds 'manage_albums', or the album is explicitly assigned to
+ * them via AlbumAssignmentService. Redirects to login if unauthenticated,
+ * shows a 403 otherwise. Call this in addition to the page-level permission
+ * gate wherever a specific album ID is read or written, so a contributor
+ * can't bypass their assignment by guessing another album's ID.
  */
 function lumora_require_album_access(int $albumId): void
 {
@@ -301,21 +297,13 @@ function lumora_require_album_access(int $albumId): void
 }
 
 /**
- * Enforce that the logged-in user may access (view/edit/delete) a specific
- * image — either because their role holds 'manage_images' (full access to
- * every image) or because the image's uploaded_by matches their own user ID
- * and their role holds 'edit_own_images' (the contributor role).
+ * Enforce that the logged-in user may access a specific image — either
+ * their role holds 'manage_images', or they hold 'edit_own_images' and
+ * uploaded it themselves. Mirrors lumora_require_album_access().
  *
- * Redirects to the login page when not authenticated; shows a 403 page when
- * authenticated but lacking access to this specific image. Mirrors
- * lumora_require_album_access(). Call this wherever a specific image ID is
- * being read or written by a page gated on the shared
- * ['manage_images', 'edit_own_images'] pair, so a contributor cannot bypass
- * ownership scoping by guessing another user's image ID in the URL.
- *
- * Bulk AJAX handlers that process many IDs per call perform the equivalent
- * per-ID check inline instead, since a single unauthorised ID in a bulk
- * request should be skipped with a per-item error, not abort the whole call.
+ * Bulk AJAX handlers perform the equivalent per-ID check inline instead of
+ * calling this, so one unauthorised ID in a batch fails alone rather than
+ * aborting the whole request.
  */
 function lumora_require_image_access(int $imageId): void
 {

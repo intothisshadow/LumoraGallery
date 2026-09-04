@@ -47,15 +47,10 @@ class ThemeRenderer
      *                           before first paint (prevents flash-of-wrong-theme)
      *   {COLOR_MODE_TOGGLE}   - toggle button (☀️/🌙/🖥️) for the nav
      *
-     * Admin-only theme preview: lumora_active_theme() resolves an admin's
-     * `?theme=` query parameter for this request only, so every path below
-     * (template file, {THEME_URL}, theme.php override) follows it with no
-     * special-casing here. The notice banner is prepended directly to
-     * $content rather than added as a template token, so it renders under
-     * any theme without requiring every theme to add support for it. Every
-     * URL-building function in this class routes hrefs through
-     * lumora_theme_preview_link() so the `?theme=` parameter survives
-     * navigation for the rest of the browsing session.
+     * Resolves through lumora_active_theme()'s admin-only `?theme=` preview,
+     * so every path below follows it automatically. The preview notice is
+     * prepended directly to $content rather than added as a template token,
+     * so it renders under any theme with no per-theme support needed.
      *
      * @param string $content   The main page HTML.
      * @param array  $extra     Additional token => value pairs to replace.

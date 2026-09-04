@@ -4,37 +4,13 @@ declare(strict_types=1);
  * Lumora Gallery — Core Bootstrap
  *
  * Every entry point (public pages, admin pages, AJAX handlers) must define
- * LUMORA_ENTRY before requiring this file. The installer defines LUMORA_INSTALLER
- * additionally so that the "redirect to /install/" guard is skipped.
+ * LUMORA_ENTRY before requiring this file. The installer also defines
+ * LUMORA_INSTALLER so the "redirect to /install/" guard is skipped.
  *
- * Load order:
- *   1. PHP version check
- *   2. Path constants
- *   3. version.php
- *   4. config.php existence check / redirect to installer
- *   5. config.php  (DB credentials + LUMORA_INSTALLED)
- *   6. db.php      (connects immediately)
- *   7. Service classes: LumoraConfig, GalleryService, ThumbnailService, ThemeRenderer,
- *                       MigrationService, UpdateService, SchemaService,
- *                       AbstractUpdateProvider, GitHubUpdateProvider, UpdaterService,
- *                       BackupService, InstallationService, GroupService, UserService,
- *                       RateLimitService, AlbumAssignmentService, InstallPingService,
- *                       ServerEnvironmentService, CacheHeaderService,
- *                       HookService, PluginService
- *   8. functions.php  (utility helpers + legacy forwarding wrappers)
- *   9. auth.php
- *  10. thumb.php     (legacy forwarding wrappers → ThumbnailService)
- *  11. template.php  (legacy forwarding wrappers → ThemeRenderer)
- *  12. PHP session start — lazy for public pages (see step 12's own comment
- *      below and lumora_ensure_session() in functions.php)
- * 12a. Remember-me auto-login (persistent cookie re-authentication)
- *  13. Gallery config loaded from DB via LumoraConfig::load()
- * 13a. Enabled feature plugins' bootstrap.php required (LG-045) — see
- *      PluginService::loadEnabledPlugins()
- *  14. Timezone applied from config
- *  15. LiteSpeed Cache purge hook registered for admin-panel POST requests
- *      (LG-033) — CacheHeaderService::purgeLiteSpeedCache() itself checks the
- *      config toggle and LiteSpeed detection before sending anything
+ * Load order: PHP version check, path constants, version.php, config.php
+ * (or redirect to the installer), database connection, service classes,
+ * legacy wrapper includes, session start, remember-me auto-login, gallery
+ * config, enabled plugins, timezone, LiteSpeed Cache purge hook.
  *
  * @package    LumoraGallery
  * @subpackage Core
@@ -80,9 +56,7 @@ if (!file_exists($_lumora_config_file)) {
         $proto     = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
         $host      = $_SERVER['HTTP_HOST'] ?? 'localhost';
         $script    = $_SERVER['SCRIPT_NAME'] ?? '/';
-        // Walk up until we find a segment that is not admin/, album.php, etc.
         $base_path = rtrim(dirname($script), '/\\');
-        // If we're in admin/, go one level up.
         if (str_ends_with($base_path, '/admin')) {
             $base_path = dirname($base_path);
         }
@@ -107,10 +81,8 @@ try {
 }
 
 // ── 7. Service classes ───────────────────────────────────────────────────────
-// Loaded before the legacy include files so the forwarding wrappers in steps
-// 8–11 can delegate to these classes immediately on first call.
-// Class definitions are parsed here; no method is invoked until after all
-// includes are loaded, so forward-references to free functions are safe.
+// Loaded before the legacy includes below so their forwarding wrappers can
+// delegate to these classes immediately on first call.
 require_once LUMORA_INCLUDE . 'services/LumoraConfig.php';
 require_once LUMORA_INCLUDE . 'services/GalleryService.php';
 require_once LUMORA_INCLUDE . 'services/ThumbnailService.php';
@@ -141,15 +113,9 @@ require_once LUMORA_INCLUDE . 'thumb.php';
 require_once LUMORA_INCLUDE . 'template.php';
 
 // ── 12. Session (lazy for public pages) ──────────────────────────────────────
-// Admin-panel requests, and any request that already carries a session
-// cookie (an existing login, or an in-progress album/image hit-count
-// throttle), start the session immediately — same as before. A first-time
-// anonymous visitor to a public page gets no session at all: no Set-Cookie,
-// no PHP session cache-limiter headers (Cache-Control: no-store etc.), so a
-// page cache (LiteSpeed Cache or otherwise) can actually cache the response
-// (LG-033 follow-up). Public code that needs to write $_SESSION on demand
-// (album.php, ajax_hit.php, lumora_csrf_token(), lumora_check_remember_cookie())
-// calls lumora_ensure_session() itself right before doing so.
+// Admin requests and any request already carrying a session cookie start the
+// session now; a first-time public visitor gets none, so the response stays
+// cacheable. See lumora_ensure_session() in functions.php.
 $_lum_is_admin_request = str_contains((string) ($_SERVER['SCRIPT_NAME'] ?? ''), '/admin/');
 if ($_lum_is_admin_request || isset($_COOKIE[session_name()])) {
     lumora_ensure_session();
@@ -157,10 +123,8 @@ if ($_lum_is_admin_request || isset($_COOKIE[session_name()])) {
 unset($_lum_is_admin_request);
 
 // ── 12a. Remember-me auto-login ──────────────────────────────────────────────
-// If no active admin session exists, attempt to re-authenticate transparently
-// via a persistent remember-me cookie (30-day split-token scheme).
-// This must run after session_start() and after auth.php is loaded (step 9),
-// but before any page-level lumora_require_admin() call can redirect to login.
+// Must run after the session starts and after auth.php loads, but before any
+// page-level lumora_require_admin() call can redirect to login.
 if (!lumora_is_logged_in()) {
     lumora_check_remember_cookie();
 }
@@ -169,17 +133,14 @@ if (!lumora_is_logged_in()) {
 lumora_load_config();
 
 // ── 13a. Enabled feature plugins ─────────────────────────────────────────────
-// Requires each enabled plugin's bootstrap.php so it can register its hooks
-// (HookService::addAction/addFilter) for this request. Must run after config
-// is loaded (enabled/disabled state lives in {PREFIX}config) and after every
-// core service class above is defined, since a plugin's bootstrap may call
-// into any of them. See PluginService's class docblock.
+// Must run after config loads (enabled state lives in {PREFIX}config) and
+// after every service class above is defined, since a plugin's bootstrap
+// may call into any of them.
 PluginService::loadEnabledPlugins();
 
 // ── 14. Timezone ─────────────────────────────────────────────────────────────
-// Apply the timezone stored in config (default UTC).
-// Validate against the known list before calling date_default_timezone_set()
-// so that unknown identifiers fall back to UTC cleanly without the @ operator.
+// Validated against the known list first so an unrecognised identifier
+// falls back to UTC cleanly instead of failing.
 $_lum_tz = (string) lumora_config('timezone', 'UTC');
 if ($_lum_tz === '' || !in_array($_lum_tz, \DateTimeZone::listIdentifiers(), true)) {
     $_lum_tz = 'UTC';
@@ -188,13 +149,9 @@ date_default_timezone_set($_lum_tz);
 unset($_lum_tz);
 
 // ── 15. LiteSpeed Cache purge on admin content changes ──────────────────────
-// Registered for every admin-panel POST request (uploads, edits, deletes,
-// album/category changes, theme changes, configuration changes all reach
-// admin/*.php via POST) rather than at each individual mutation call site —
-// CacheHeaderService::purgeLiteSpeedCache() is a safe no-op unless the
-// litespeed_cache_purge config toggle is on and the current server is
-// detected as LiteSpeed/OpenLiteSpeed, so this has no effect on Apache,
-// nginx, Caddy, or with the toggle left at its default (off).
+// Registered for every admin POST rather than at each mutation call site;
+// purgeLiteSpeedCache() itself is a no-op unless the config toggle is on and
+// the server is detected as LiteSpeed/OpenLiteSpeed.
 if (
     ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'
     && str_contains((string) ($_SERVER['SCRIPT_NAME'] ?? ''), '/admin/')
