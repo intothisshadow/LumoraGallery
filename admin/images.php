@@ -18,11 +18,9 @@ declare(strict_types=1);
  * GET actions:  list (default), edit
  * POST actions: save, delete
  *
- * JavaScript notes:
- *   All interactive functions (lumSelAll, lumUpdCount, lumBulkDelete, etc.) are
- *   defined in the global scope and invoked via inline onclick/onchange attributes.
- *   This avoids any DOMContentLoaded or getElementById timing dependency — the
- *   functions simply exist in the page and are called directly by the browser.
+ * Interactive functions are defined in the global scope and invoked via
+ * inline onclick/onchange attributes, avoiding any DOMContentLoaded timing
+ * dependency.
  *
  * @package    LumoraGallery
  * @subpackage Admin
@@ -150,7 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // ── set_album_cover ──────────────────────────────────────────────────────
-    // "Use as Album Cover" on the image edit page (LG-054) — an alternative
+    // "Use as Album Cover" on the image edit page — an alternative
     // entry point to the same cover-image feature as the album form's own
     // Cover Image field, not a separate mechanism: see
     // GalleryService::setAlbumCoverFromImage().
@@ -297,7 +295,7 @@ if ($action === 'edit') {
     $max_mb        = (int) lumora_config('max_upload_size_mb', 0);
     $size_hint     = $max_mb > 0 ? 'Max ' . $max_mb . ' MB. ' : '';
 
-    // "Use as Album Cover" (LG-054) — same album-edit access check the
+    // "Use as Album Cover" — same album-edit access check the
     // action handler enforces, so the button is only shown when it would
     // actually work.
     $set_cover_html = '';
@@ -464,7 +462,7 @@ if ($show_content) {
           . 'Contact an administrator or moderator to get access to additional albums.</div>'
         : '';
 
-    // Bulk Rename (LG-26): scoped to a single, non-search album view only —
+    // Bulk Rename: scoped to a single, non-search album view only —
     // the feature renames files within one album's folder, so it is hidden
     // in cross-album search results — and restricted to full 'manage_images'
     // holders even though a contributor with only 'edit_own_images' can reach
@@ -763,7 +761,7 @@ function lumBulkMove() {
 }
 
 /**
- * Bulk Rename (LG-26): hand the current selection off to rename.php via a
+ * Bulk Rename: hand the current selection off to rename.php via a
  * plain POST (built and submitted on the fly) rather than AJAX — the target
  * page is a full multi-step form flow (pattern → preview → apply), not a
  * fire-and-forget action like delete/move.

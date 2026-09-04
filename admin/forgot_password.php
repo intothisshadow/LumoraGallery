@@ -5,24 +5,18 @@ declare(strict_types=1);
  *
  * Generates a single-use, time-limited (1 hour) password-reset URL and, if
  * the admin account has an email address set, sends it via a best-effort
- * PHP mail() call. There is no mail-free fallback here any more — a host
- * with no outbound mail configured has no way to retrieve the link from
- * this page. See reset-password.php in the gallery root for that case: a
- * standalone, uploadable, self-deleting emergency password reset with the
- * same trust model as install/index.php (filesystem/FTP access). See
- * LG-051 — this page previously wrote the link to lumora_recovery.txt, a
- * predictable, unauthenticated, web-reachable path.
+ * PHP mail() call. A host with no outbound mail configured has no way to
+ * retrieve the link from this page — see reset-password.php in the gallery
+ * root for that case: a standalone, uploadable, self-deleting emergency
+ * reset with the same trust model as install/index.php.
  *
- * Requires the {PREFIX}password_reset_tokens table (DB version 7).
- * If the table is absent a clear error is shown instead of crashing.
+ * Requires the {PREFIX}password_reset_tokens table; a clear error is shown
+ * if it's absent instead of crashing.
  *
- * Recovery target: the account looked up is the oldest user belonging to
- * any group that holds both 'user_management' and 'site_configuration'
- * (see UserService::getRecoveryAccounts()) — not literally `role = 'admin'`.
- * Groups are dynamic as of Migration0007, so an administrator's account may
- * have been moved to a custom group with equivalent permissions; matching
- * by permission rather than by the fixed 'admin' slug keeps recovery
- * working in that case. See TODO-security.md #5.
+ * Recovery target: the oldest user belonging to any group holding both
+ * 'user_management' and 'site_configuration' (UserService::getRecoveryAccounts()),
+ * not literally `role = 'admin'`, so an administrator moved to a custom
+ * group with equivalent permissions is still found.
  *
  * @package    LumoraGallery
  * @subpackage Admin

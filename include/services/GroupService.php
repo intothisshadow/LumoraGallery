@@ -3,24 +3,20 @@ declare(strict_types=1);
 /**
  * Lumora Gallery — Group Service
  *
- * Manages permission groups backed by {PREFIX}groups / {PREFIX}group_permissions
- * (Migration0007, DB version 13). Groups replace the formerly fixed
- * admin/moderator/contributor role ENUM: `{PREFIX}users`.`role` now stores a
- * group *slug* rather than an ENUM value, so administrators can create,
- * rename, and delete additional groups with any combination of permissions
- * from ALL_PERMISSIONS, in addition to the three built-in system groups.
+ * Manages permission groups backed by {PREFIX}groups/{PREFIX}group_permissions.
+ * Groups replace the formerly fixed admin/moderator/contributor role ENUM:
+ * `{PREFIX}users`.`role` now stores a group slug, so administrators can
+ * create, rename, and delete groups with any combination of permissions
+ * from ALL_PERMISSIONS.
  *
- * The three system groups (admin, moderator, contributor) are seeded by
- * Migration0007 with the exact permission sets that were previously
- * hardcoded in UserService::ROLE_PERMISSIONS, so existing installs see no
- * behavioural change immediately after upgrading. UserService::roleHasPermission()
- * / getRolePermissions() / roleOptions() / roleBadge() all delegate to this
- * class; UserService::ROLES / ROLE_LABELS / ROLE_PERMISSIONS are kept only as
- * legacy fallback constants for pre-migration installs (see groupExists()).
+ * The three system groups are seeded with the exact permission sets
+ * previously hardcoded in UserService, so existing installs see no
+ * behavioural change after upgrading. UserService's role-related methods
+ * all delegate to this class.
  *
- * All queries are wrapped in try/catch so installations pending Migration0007
- * fail closed to the legacy hardcoded three-role behaviour instead of
- * throwing, consistent with the AlbumAssignmentService pattern.
+ * All queries are wrapped in try/catch so installs pending the groups
+ * migration fail closed to the legacy hardcoded three-role behaviour
+ * instead of throwing.
  *
  * @package    LumoraGallery
  * @subpackage Core

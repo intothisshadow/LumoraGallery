@@ -4,9 +4,8 @@ declare(strict_types=1);
  * Lumora Gallery — File Integrity Check AJAX Handler
  *
  * Processes one chunk of image records and returns which files are missing.
- * Uses keyset pagination (WHERE id > last_id) so performance stays constant
- * even on galleries with 500 000+ images — plain OFFSET becomes progressively
- * slower beyond ~100 000 rows and is not used here.
+ * Uses keyset pagination (WHERE id > last_id) instead of OFFSET, so
+ * performance stays constant even on galleries with 500,000+ images.
  *
  * POST params:
  *   last_id    int     Highest image ID already checked (0 for first call)

@@ -136,8 +136,7 @@ function lumora_redirect(string $url, int $code = 302): never
  * (a same-site absolute path) and not two or more — "//evil.com" or
  * "/\evil.com" also begin with '/' but browsers resolve them as a
  * protocol-relative URL to an external host, which a naive
- * `str_starts_with($redirect, '/')` check does not catch. See
- * TODO-security.md #3.
+ * `str_starts_with($redirect, '/')` check does not catch.
  */
 function lumora_safe_redirect_target(string $redirect, string $default): string
 {
@@ -487,7 +486,7 @@ function image_thumb_path(array $image): string
 }
 
 /**
- * Build a new filename from a Bulk Rename pattern template (LG-26).
+ * Build a new filename from a Bulk Rename pattern template.
  *
  * Supported tokens: {name} — the original filename without its extension;
  * {num} — a sequential number zero-padded to $pad digits. The original file

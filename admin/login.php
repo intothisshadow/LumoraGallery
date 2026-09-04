@@ -14,7 +14,7 @@ declare(strict_types=1);
  * The post-login `redirect` destination is validated by
  * lumora_safe_redirect_target() (functions.php) to reject protocol-relative
  * targets like "//evil.com", which also start with '/' but browsers treat
- * as an off-site redirect. See TODO-security.md #3.
+ * as an off-site redirect.
  *
  * @package    LumoraGallery
  * @subpackage Admin

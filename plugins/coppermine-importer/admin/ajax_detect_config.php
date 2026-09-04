@@ -202,7 +202,7 @@ try {
 
 } catch (\Throwable $e) {
     // Log full exception details server-side (never expose stack traces,
-    // class names, or filesystem paths to the client — see TODO-security.md #10).
+    // class names, or filesystem paths to the client).
     error_log(sprintf(
         'Lumora Coppermine importer (ajax_detect_config.php): %s: %s in %s:%d',
         get_class($e),

@@ -3,18 +3,15 @@ declare(strict_types=1);
 /**
  * Lumora Gallery — Album Assignment Service
  *
- * Manages per-user album assignments backed by {PREFIX}album_assignments
- * (Migration0005). This is the mechanism behind the 'manage_assigned_albums'
- * permission: any account whose group holds that permission — the built-in
- * contributor group by default, or a custom group (see GroupService) — may
- * only view/edit albums an admin or moderator has explicitly assigned to
- * them. Eligibility for assignment is checked by permission, not by the
- * literal 'contributor' role slug, so a custom group with
- * 'manage_assigned_albums' works identically. See TODO-security.md #7.
+ * Manages per-user album assignments backed by {PREFIX}album_assignments.
+ * This is the mechanism behind the 'manage_assigned_albums' permission: any
+ * account whose group holds that permission may only view/edit albums an
+ * admin or moderator has explicitly assigned to them. Eligibility is
+ * checked by permission, not by the literal 'contributor' role slug, so a
+ * custom group with that permission works identically.
  *
- * userCanAccessAlbum() is the single source of truth for album-scoped access
- * checks and is used by lumora_require_album_access() (include/auth.php) as
- * well as by admin/albums.php, admin/batch.php, and admin/ajax_batch.php.
+ * userCanAccessAlbum() is the single source of truth for album-scoped
+ * access checks.
  *
  * All queries against {PREFIX}album_assignments are wrapped in try/catch so
  * that installations pending Migration0005 fail closed (no assignments, no

@@ -2,18 +2,17 @@
 
 declare(strict_types=1);
 /**
- * Lumora Gallery — Admin AJAX: Reorder Albums (drag-and-drop, TODO.md #23)
+ * Lumora Gallery — Admin AJAX: Reorder Albums (drag-and-drop)
  *
  * Persists an album reorder performed by dragging a row within a single
  * category section of admin/albums.php's hierarchy view. Albums are never
  * reparented to a different category via this endpoint — only relative
  * order within the same category changes. Business rules live in
- * GalleryService::reorderAlbums() — this endpoint only handles permission
- * checks, CSRF validation, request parsing, and the JSON response.
+ * GalleryService::reorderAlbums(); this endpoint only handles permissions,
+ * CSRF, request parsing, and the JSON response.
  *
- * Gated on 'manage_albums' only (not 'manage_assigned_albums') — contributors
- * see a flat, unpaginated "assigned albums" list with no category grouping,
- * so there is no drag-and-drop surface for them to reorder in the first place.
+ * Gated on 'manage_albums' only — contributors see a flat, unpaginated
+ * "assigned albums" list with no category grouping to reorder.
  *
  * POST params:
  *   category_id  int    Category bucket being reordered (0 = uncategorized).

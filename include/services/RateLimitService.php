@@ -4,23 +4,17 @@ declare(strict_types=1);
  * Lumora Gallery — Rate Limit Service
  *
  * Shared per-IP failure-lockout store for the admin panel's unauthenticated
- * auth surfaces: admin/login.php and reset-password.php (the emergency,
- * no-login-required password reset in the gallery root — see that file's
- * own docblock). Both call the same store here rather than keeping separate
- * lockouts, the same way Lumora Guestbook shares its login lockout with its
- * own reset-password.php — an IP that trips one surface's failure limit is
- * locked out of the other too.
+ * auth surfaces (admin/login.php and reset-password.php), so an IP that
+ * trips one surface's failure limit is locked out of the other too.
  *
  * Failures are tracked in cache/.login_ratelimit.json, keyed by IP, with
- * timestamps pruned to a sliding window. The entire read-prune-decide[-write]
- * cycle for a request happens inside a single exclusive flock() hold (see
- * withLock()) rather than separate unlocked reads and LOCK_EX-only writes, so
- * two concurrent requests from the same IP can never both read a stale
- * (pre-write) failure count and slip past the lockout together — see
- * TODO-security.md #6. Degrades to an unwritable in-memory map (no lockout,
- * no persistence) if the cache directory or file cannot be opened/locked, so
- * a filesystem hiccup fails open on rate limiting rather than blocking login
- * or reset entirely.
+ * timestamps pruned to a sliding window. The entire read-prune-decide-write
+ * cycle happens inside a single exclusive flock() hold (see withLock())
+ * rather than separate unlocked reads and writes, so two concurrent
+ * requests from the same IP can never both read a stale failure count and
+ * slip past the lockout together. Degrades to an in-memory map (no
+ * persistence) if the cache file can't be opened/locked, so a filesystem
+ * hiccup fails open rather than blocking login entirely.
  *
  * @package    LumoraGallery
  * @subpackage Core

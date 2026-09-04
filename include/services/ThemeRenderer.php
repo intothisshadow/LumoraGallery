@@ -81,7 +81,7 @@ class ThemeRenderer
             $tpl_file   = $theme_path . 'template.html';
         }
 
-        // ── Admin-only theme preview notice (TODO.md #29) ───────────────────────
+        // ── Admin-only theme preview notice ─────────────────────────────────────
         $preview_notice = lumora_theme_preview_notice();
         if ($preview_notice !== '') {
             $content = $preview_notice . $content;
@@ -234,7 +234,7 @@ class ThemeRenderer
 
     /**
      * @param int|null $album_id When set, the "Most Viewed" link is scoped to
-     *                           this album (LG-33) — pass when rendering the
+     *                           this album — pass when rendering the
      *                           nav on an album page.
      * @param int|null $cat_id   When set (and $album_id is not), the "Most
      *                           Viewed" link is scoped to this category —
@@ -258,7 +258,7 @@ HTML;
      * Compute the four primary nav destination URLs (Home / Latest /
      * Most Viewed / Random) used by renderNav(), each already
      * theme-preview-link-wrapped and HTML-escaped. Most Viewed optionally
-     * carries album/category context forward (LG-33). Split out purely to
+     * carries album/category context forward. Split out purely to
      * keep renderNav()'s own markup readable.
      *
      * @return array{home: string, latest: string, most_viewed: string, random: string}

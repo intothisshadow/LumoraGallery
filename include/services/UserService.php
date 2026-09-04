@@ -3,31 +3,17 @@ declare(strict_types=1);
 /**
  * Lumora Gallery — User Service
  *
- * Manages user accounts (CRUD) and delegates the permission framework used
- * by the admin panel and auth layer to GroupService.
+ * Manages user accounts (CRUD) and delegates the permission framework to
+ * GroupService. Roles are dynamic permission groups backed by
+ * {PREFIX}groups/{PREFIX}group_permissions, seeded with three system groups
+ * (admin, moderator, contributor) plus any admin-created custom groups.
  *
- * As of Migration0007 (DB version 13), roles are dynamic permission groups
- * backed by {PREFIX}groups / {PREFIX}group_permissions (see GroupService and
- * admin/groups.php) rather than a fixed ENUM. Three system groups are seeded
- * by the migration and cannot be deleted:
- *   admin       — Full access to all gallery and administrative functions.
- *   moderator   — Content management: albums, images, comments, approved tools.
- *   contributor — Upload and manage own content; no administrative access.
- * Administrators may additionally create custom groups with any combination
- * of permissions from GroupService::ALL_PERMISSIONS.
+ * The ROLES/ROLE_LABELS/ROLE_PERMISSIONS constants below are legacy fallback
+ * data GroupService uses only when the groups tables don't exist yet. New
+ * code should call GroupService directly for anything group-related.
  *
- * The ROLES / ROLE_LABELS / ROLE_PERMISSIONS constants below are kept only as
- * legacy fallback data for installations pending Migration0007 — GroupService
- * uses them when the groups tables don't exist yet, so behaviour is unchanged
- * until an administrator runs the pending database update. New code should
- * call GroupService directly for anything group-related; roleHasPermission(),
- * getRolePermissions(), roleOptions(), and roleBadge() remain here only for
- * backward compatibility with existing callers and now delegate to
- * GroupService.
- *
- * All write methods validate their inputs and return `true` on success or a
- * human-readable error string on failure, so callers can flash the message
- * directly without knowing the reason.
+ * Write methods return `true` on success or a human-readable error string
+ * on failure, so callers can flash the message directly.
  *
  * @package    LumoraGallery
  * @subpackage Core
@@ -198,7 +184,7 @@ class UserService
      * in that case. Oldest account first. Used by admin/forgot_password.php
      * (mails/writes a reset link to the single oldest match) and
      * reset-password.php (the unauthenticated emergency reset, which lists
-     * every match for the admin to choose from). See TODO-security.md #5.
+     * every match for the admin to choose from).
      *
      * @return list<array{id: int, username: string, email: string}>
      */

@@ -25,18 +25,10 @@ declare(strict_types=1);
  * Response JSON shape (abort):
  *   { success: bool, message: string }
  *
- * Security:
- *   - Requires the 'site_configuration' permission (not just 'view_updates')
- *     since every action this endpoint dispatches — run_stage, rollback, and
- *     abort — downloads/extracts archives, replaces application files, and/or
- *     runs database migrations. 'view_updates' only grants visibility into the
- *     read-only status page and update-check endpoint; it must never be
- *     sufficient on its own to actually perform an update, or a custom
- *     permission group intended for read-only monitoring would unexpectedly
- *     be able to execute the full update pipeline. See TODO-security.md #2.
- *   - CSRF token validated.
- *   - Stage and version inputs are validated before being passed to UpdaterService.
- *   - Update lock prevents concurrent update sessions.
+ * Requires 'site_configuration', not just 'view_updates' — every dispatched
+ * action mutates files or the database, so a read-only monitoring role must
+ * never be able to trigger it. CSRF token validated; the update lock
+ * prevents concurrent sessions.
  *
  * @package    LumoraGallery
  * @subpackage Admin

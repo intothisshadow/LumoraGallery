@@ -3,43 +3,15 @@ declare(strict_types=1);
 /**
  * Lumora Gallery — Admin: Album Management
  *
- * Actions: list (default), new, edit, save, delete
+ * Actions: list (default), new, edit, save, delete.
  *
- * Creating an album:
- *   - Generates a zero-padded folder name (e.g. "00001") via lumora_generate_folder()
- *     unless the admin specifies a custom folder name.
- *   - Creates the filesystem directory albums/{folder}/ if it doesn't exist.
+ * The list view has three modes: hierarchy (default — full category tree,
+ * unpaginated), flat/filtered (a search term or category filter is active —
+ * paginated table), and assigned (contributors with 'manage_assigned_albums'
+ * but not 'manage_albums' — read-only, scoped to their own albums).
  *
- * List view — three modes:
- *
- *   Hierarchy mode (default — no search term, no category filter; 'manage_albums'
- *   holders only): All albums are grouped under their category in the full
- *     category tree. Albums belonging to subcategories are nested beneath their
- *     parent category header. Uncategorized albums (category_id = 0) appear at
- *     the top in a dedicated section. The complete album set is loaded in a
- *     single query; no pagination is applied in this mode.
- *
- *   Flat / filtered mode (search term or category filter active; 'manage_albums'
- *   holders only): Reverts to the traditional paginated table. Pagination,
- *     per-page selector, and category filter all work as before. A ✕ Clear
- *     button resets to hierarchy mode.
- *
- *   Assigned mode ('manage_assigned_albums' holders without 'manage_albums' —
- *   i.e. contributors): A flat, unpaginated table of only the albums assigned
- *     to the current user via AlbumAssignmentService. No New Album button, no
- *     category filter, no per-row Delete button; category reassignment is
- *     read-only on the edit form. See TODO.md §18 for the full design.
- *
- *   GET parameters (manage_albums holders only):
- *     q:        partial album title search → triggers flat mode
- *     cat:      category filter (ID) → triggers flat mode
- *     per_page: persisted in $_SESSION['lum_adm_per_page_albums']
- *     page:     1-based, clamped by lumora_pagination()
- *
- * Album create/update/delete business logic (folder auto-generation,
- * thumb_image_id validation, cascading delete, on-disk folder handling)
- * lives in GalleryService::createAlbum()/updateAlbum()/deleteAlbum() — this
- * page only handles permission checks, CSRF validation, request parsing,
+ * Business logic lives in GalleryService::createAlbum()/updateAlbum()/
+ * deleteAlbum(); this page only handles permissions, CSRF, request parsing,
  * flash messages, and redirects.
  *
  * @package    LumoraGallery
@@ -232,7 +204,7 @@ function render_album_row(
     $del_conf   = h('Delete album \'' . $a['title'] . '\'? All DB records will be removed. If the album folder is empty it will also be deleted; otherwise files on disk are kept.');
 
     // Native HTML5 drag-and-drop (the handle below) never fires from touch
-    // input, so mobile gets an Up/Down button fallback instead (LG-047) —
+    // input, so mobile gets an Up/Down button fallback instead —
     // each swaps this row with its immediate sibling within the same
     // category section via the same reorder endpoint the drag handler uses.
     $up_disabled   = $sibling_index === 0                    ? ' disabled' : '';
@@ -464,7 +436,7 @@ PREVIEW;
         }
     }
 
-    // LG-040: on the New Album form, the Folder Path input is paired with a
+    // On the New Album form, the Folder Path input is paired with a
     // visible, clickable list of folders that already exist on disk under
     // albums/ but aren't yet claimed by any album — populated client-side
     // from ajax_list_folders.php so an admin can see and pick one instead of
@@ -874,7 +846,7 @@ if ($hierarchy_mode) {
     persistOrder(categoryId, orderedIds);
   });
 
-  // Mobile fallback (LG-047): Up/Down buttons swap a row with its immediate
+  // Mobile fallback: Up/Down buttons swap a row with its immediate
   // sibling within the same category section \u2014 native drag never fires
   // from touch input.
   table.addEventListener('click', function (e) {

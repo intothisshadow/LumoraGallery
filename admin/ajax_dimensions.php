@@ -4,13 +4,10 @@ declare(strict_types=1);
  * Lumora Gallery — Reload Dimensions & File Size AJAX Handler
  *
  * Re-reads the pixel dimensions and file size of each image from disk and
- * writes the updated values back to the images table.  Useful after manually
- * replacing image files, running an external resize tool, or migrating from
- * another gallery system where the stored metadata may be wrong or missing.
- *
- * Uses keyset pagination (WHERE id > last_id) identical to the integrity
- * scanner so query time stays constant regardless of gallery size.
- * Original files are never modified.
+ * writes the updated values back to the images table. Useful after manually
+ * replacing image files or migrating from another gallery system where the
+ * stored metadata may be wrong. Uses keyset pagination (WHERE id > last_id);
+ * original files are never modified.
  *
  * POST params:
  *   last_id    int     Highest image ID already processed (0 for first call)

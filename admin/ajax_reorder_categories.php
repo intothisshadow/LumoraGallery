@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 /**
- * Lumora Gallery — Admin AJAX: Reorder Categories (drag-and-drop, TODO.md #23)
+ * Lumora Gallery — Admin AJAX: Reorder Categories (drag-and-drop)
  *
  * Persists a category reorder/reparent performed by dragging a row in the
  * admin/categories.php hierarchy tree. Business rules (cycle prevention,

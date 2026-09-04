@@ -12,7 +12,7 @@ declare(strict_types=1);
  *
  * Detection relies entirely on PHP superglobals — no LiteSpeed-specific PHP
  * extension or API is required, so every check degrades to a safe "false"/
- * "Unknown" on Apache, nginx, Caddy, or any other server (LG-033).
+ * "Unknown" on Apache, nginx, Caddy, or any other server.
  *
  * @package    LumoraGallery
  * @subpackage Core

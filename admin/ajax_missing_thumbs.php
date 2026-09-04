@@ -3,23 +3,13 @@ declare(strict_types=1);
 /**
  * Lumora Gallery — Regenerate Missing Thumbnails AJAX Handler
  *
- * Scans images in scope (entire gallery or a single album) and regenerates
- * thumbnails ONLY when the expected thumbnail file is missing or empty.
- * Images that already have a valid, non-empty thumbnail file are skipped
- * without any disk I/O or image-processing work.
+ * Scans images in scope (gallery-wide or a single album) and regenerates a
+ * thumbnail only when the file is missing or 0 bytes, skipping everything
+ * else without disk I/O. Complements ajax_thumbs.php, which unconditionally
+ * overwrites every thumbnail — use this one for routine maintenance.
  *
- * This complements ajax_thumbs.php (which unconditionally overwrites every
- * thumbnail). Use this handler for routine maintenance — it is significantly
- * faster when only a small fraction of thumbnails are absent.
- *
- * A thumbnail is considered valid if:
- *   - The file exists on disk (is_file() === true), AND
- *   - The file is non-empty (filesize() > 0).
- * Files that exist but are 0 bytes are treated as broken and regenerated.
- *
- * Uses keyset pagination (WHERE id > last_id) identical to the other
- * maintenance handlers.  Chunk sizes are kept small (max 25) because
- * thumbnail generation is CPU-intensive.
+ * Uses keyset pagination (WHERE id > last_id); chunk sizes are kept small
+ * (max 25) since thumbnail generation is CPU-intensive.
  *
  * POST params:
  *   last_id    int     Highest image ID already processed (0 for first call)

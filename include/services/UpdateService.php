@@ -4,22 +4,13 @@ declare(strict_types=1);
  * Lumora Gallery — Update Service
  *
  * Checks for new Lumora releases via the configured release provider
- * (see AbstractUpdateProvider::createFromConfig() — GitHubUpdateProvider,
- * backed by the GitHub Releases API, by default). Results are cached in the
- * config table so the provider is never hit on every page load. The cache
- * lifetime follows the `update_check_frequency` config key ('daily' — 24
- * hours, default — or 'weekly' — 7 days; see admin/update.php's Update
- * Settings panel).
+ * (AbstractUpdateProvider::createFromConfig() — GitHubUpdateProvider by
+ * default). Results are cached in the config table; cache lifetime follows
+ * `update_check_frequency` ('daily' = 24h, 'weekly' = 7d).
  *
- * This class previously queried a fixed JSON endpoint hosted on the Lumora
- * website (coding.unloved-heart.net/lumora/update.json). That dependency has
- * been removed entirely — release discovery now goes through the same
- * provider abstraction UpdaterService already used for download URLs and
- * SHA-256 checksums, so there is exactly one source of truth for "what is
- * the latest release" rather than two separate mechanisms that could
- * disagree. The repository queried is configurable via the
- * `update_github_repo` config key (see GitHubUpdateProvider), so forks can
- * point this at their own release source without code changes.
+ * Uses the same provider abstraction UpdaterService uses for downloads and
+ * checksums, so there is one source of truth for "what is the latest
+ * release."
  *
  * Privacy: only a plain GET request is sent to the provider's public API —
  * no gallery content, user data, image data, or analytics information is

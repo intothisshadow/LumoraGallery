@@ -7,9 +7,9 @@ declare(strict_types=1);
  * Also provides config export (JSON download) and import.
  *
  * Theme selection and other display-related settings (default colour mode,
- * category layout, "Powered by" credit) moved to admin/appearance.php
- * (LG-043) — see that file for the theme card grid, install/update/delete
- * from ZIP, and preview links.
+ * category layout, "Powered by" credit) moved to admin/appearance.php —
+ * see that file for the theme card grid, install/update/delete from ZIP,
+ * and preview links.
  *
  * @package    LumoraGallery
  * @subpackage Admin
@@ -50,8 +50,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($act === 'save') {
         // White-list the settings we accept.
         // theme, default_color_mode, category_layout, and show_powered_by
-        // moved to admin/appearance.php (LG-043) — save their own logic
-        // there via the same LumoraConfig::sanitizeValue() calls.
+        // moved to admin/appearance.php — save their own logic there via
+        // the same LumoraConfig::sanitizeValue() calls.
         $allowed = [
             'gallery_name', 'gallery_description', 'base_url',
             'thumb_width', 'thumb_height', 'per_page',
@@ -76,8 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $ping_was_enabled = InstallPingService::isEnabled();
 
         // Every value is normalised through LumoraConfig::sanitizeValue() so the
-        // same enum/range constraints apply here and in the `import` action below
-        // — see TODO-security.md #11.
+        // same enum/range constraints apply here and in the `import` action below.
         foreach ($allowed as $key) {
             if (in_array($key, $bool_keys, true)) {
                 lumora_set_config($key, LumoraConfig::sanitizeValue($key, $_POST[$key] ?? '0'));
@@ -118,8 +117,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // theme, default_color_mode, category_layout, and show_powered_by
-        // moved to admin/appearance.php (LG-043); imported config files
-        // containing those keys simply leave them untouched here now.
+        // moved to admin/appearance.php; imported config files containing
+        // those keys simply leave them untouched here now.
         $safe_keys = [
             'gallery_name', 'gallery_description',
             'thumb_width', 'thumb_height', 'per_page',
@@ -135,7 +134,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Same per-key enum/range validation as the `save` action above —
                 // an imported JSON file can no longer store an out-of-range or
                 // unrecognised value just because it passed the key-name
-                // whitelist check. See TODO-security.md #11.
+                // whitelist check.
                 lumora_set_config($k, LumoraConfig::sanitizeValue($k, $v));
                 $imported++;
             }
@@ -170,7 +169,7 @@ $cfg = [
     'litespeed_cache_purge'  => lumora_config('litespeed_cache_purge',  '0'),
 ];
 
-// Web server detection (LG-033) — informs the LiteSpeed Cache toggle below.
+// Web server detection — informs the LiteSpeed Cache toggle below.
 $server_env = ServerEnvironmentService::detect();
 
 // Detect active image processor.
@@ -181,7 +180,7 @@ $processor_status = extension_loaded('imagick')
         : '✗ None found — thumbnail generation disabled');
 
 // Theme management (activation, install/update/delete from ZIP, preview
-// links) moved to admin/appearance.php (LG-043) — see ThemeService.
+// links) moved to admin/appearance.php — see ThemeService.
 
 // Pre-compute values safe for use in HTML attributes.
 $v_gallery_name    = h($cfg['gallery_name']);
@@ -212,7 +211,7 @@ $v_who_online_dur = h($cfg['who_is_online_duration']);
 
 $processor_h = h($processor_status);
 
-// LiteSpeed Cache purge note (LG-033) — the toggle itself always saves (so
+// LiteSpeed Cache purge note — the toggle itself always saves (so
 // it's ready the moment an admin migrates to a LiteSpeed host) but shows a
 // plain-language status line about whether it's actually doing anything on
 // the current server. See admin/installation.php for the fuller
@@ -522,7 +521,7 @@ $content = <<<HTML
     </div>
   </div>
 
-  <!-- ── Save (LG-34: kept out of any one card so it reads as saving the whole
+  <!-- ── Save (kept out of any one card so it reads as saving the whole
        page, not just the section it happens to sit next to) ────────────── -->
   <div class="lum-adm-card lum-adm-save-bar mb-4">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">

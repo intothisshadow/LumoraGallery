@@ -4,8 +4,8 @@ declare(strict_types=1);
  * Lumora Gallery — Admin AJAX: Delete Plugins
  *
  * Permanently deletes one or more disabled feature plugins' directories
- * from disk (LG-053), backing both the per-row Delete button and the
- * Delete Selected bulk action on admin/plugins.php.
+ * from disk, backing both the per-row Delete button and the Delete
+ * Selected bulk action on admin/plugins.php.
  *
  * POST params: ids[] (string plugin id, up to 100), csrf_token (string)
  * Response:    JSON { deleted: int, errors: string[] }

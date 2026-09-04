@@ -4,16 +4,9 @@ declare(strict_types=1);
  * Lumora Gallery — Regenerate Thumbnails AJAX Handler
  *
  * Regenerates the thumbnail for every image in scope using the current
- * thumb_width, thumb_height, and thumb_quality config values.  Overwrites
- * existing thumbnail files; creates missing ones.  Original image files are
- * never modified.
- *
- * Thumbnail generation is CPU-intensive, so chunk sizes are kept small
- * (max 25 per call).  The caller should set a generous XHR timeout — the
- * default chunk of 20 images may take several seconds on shared hosting.
- *
- * Uses keyset pagination (WHERE id > last_id) identical to the other
- * maintenance handlers.
+ * thumb_width/height/quality config values. Original image files are never
+ * modified. Chunk sizes are kept small (max 25) since generation is
+ * CPU-intensive; uses keyset pagination (WHERE id > last_id).
  *
  * POST params:
  *   last_id    int     Highest image ID already processed (0 for first call)

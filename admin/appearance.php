@@ -6,8 +6,7 @@ declare(strict_types=1);
  * Theme management (card grid: activate, preview, install/update from ZIP,
  * delete) plus the display-related settings that previously lived in
  * admin/config.php's "Appearance" card: theme, default_color_mode,
- * category_layout, show_powered_by (LG-043 — split out of Configuration
- * into its own page, modeled on Lumora Press's Appearance → Themes screen).
+ * category_layout, show_powered_by.
  *
  * @package    LumoraGallery
  * @subpackage Admin

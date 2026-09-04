@@ -280,7 +280,7 @@ class GalleryService
 
     /**
      * Most recently added approved images across a category's own albums
-     * and every descendant sub-category's albums, at any depth (LG-041) —
+     * and every descendant sub-category's albums, at any depth —
      * the category-page equivalent of getLatestImages()'s gallery-wide
      * version. Only public albums are considered, matching every other
      * public image listing's visibility gate.
@@ -496,8 +496,7 @@ class GalleryService
 
     /**
      * Reorder categories within a single parent bucket, and optionally
-     * reparent one category into a different parent (drag-and-drop admin
-     * UI — TODO.md #23).
+     * reparent one category into a different parent (drag-and-drop admin UI).
      *
      * A category can only be moved to a parent that is not itself and not
      * one of its own descendants — moving a category into its own subtree
@@ -897,7 +896,7 @@ class GalleryService
 
     /**
      * Set an existing image as an album's cover via thumb_image_id — the
-     * "Use as Album Cover" action on the admin image edit page (LG-054), an
+     * "Use as Album Cover" action on the admin image edit page, an
      * alternative entry point to the same cover-image feature as the album
      * form's own Cover Image field rather than a separate mechanism.
      *
@@ -987,7 +986,7 @@ class GalleryService
 
     /**
      * Reorder albums within a single category bucket (drag-and-drop admin
-     * UI — TODO.md #23). Albums are never reparented to a different category
+     * UI). Albums are never reparented to a different category
      * via this method — only their relative position within the same
      * category changes; dragging an album into a different category section
      * is out of scope for this feature (use the album edit form's Category
@@ -1300,7 +1299,7 @@ class GalleryService
         ) > 0;
     }
 
-    // ── Bulk Rename (LG-26) ───────────────────────────────────────────────────
+    // ── Bulk Rename ───────────────────────────────────────────────────────────
 
     /**
      * Load specific images within a single album, in pos/id order.
@@ -1534,7 +1533,7 @@ class GalleryService
         ];
     }
 
-    // ── Folder Discovery (LG-040) ─────────────────────────────────────────────
+    // ── Folder Discovery ──────────────────────────────────────────────────────
 
     /**
      * List directories under LUMORA_ALBUMS_PATH that are not yet claimed by
@@ -1590,8 +1589,8 @@ class GalleryService
     private const MAX_AVAILABLE_FOLDERS = 1000;
 
     /**
-     * Hard cap on how many directories listAvailableAlbumFolders() will visit in total
-     * (LG-049 bugfix), independent of MAX_AVAILABLE_FOLDERS — a gallery where almost
+     * Hard cap on how many directories listAvailableAlbumFolders() will visit in
+     * total, independent of MAX_AVAILABLE_FOLDERS — a gallery where almost
      * every folder is already claimed can have $found stay at 0 indefinitely while
      * still walking tens of thousands of directories, so the "found" cap alone never
      * bounds the worst case.
@@ -1607,7 +1606,7 @@ class GalleryService
      * self::MAX_SCANNED_DIRS directories have been visited.
      *
      * Does not recurse into a directory once it's known to directly contain
-     * a file (LG-049 bugfix) — that's a leaf album folder, and re-scanning
+     * a file — that's a leaf album folder, and re-scanning
      * every image file inside it just to confirm it has no subdirectories
      * was the dominant cost on large galleries (an album with thousands of
      * images meant thousands of wasted is_dir() stat calls per claimed

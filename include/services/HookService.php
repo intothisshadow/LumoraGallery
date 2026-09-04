@@ -3,7 +3,7 @@ declare(strict_types=1);
 /**
  * Lumora Gallery — Hook Service
  *
- * Minimal action/filter registry (LG-045) so feature plugins can extend core
+ * Minimal action/filter registry so feature plugins can extend core
  * behaviour — logging a pageview, adding an admin nav item, adding a
  * dashboard widget — without any core file needing to know a specific
  * plugin exists. A plugin's bootstrap.php (loaded by PluginService when the
@@ -20,9 +20,7 @@ declare(strict_types=1);
  * value, which is passed to the next callback in the chain.
  *
  * Both run in ascending priority order (lower runs first), matching the
- * WordPress action/filter convention this design is deliberately modelled
- * on, since it is a well-understood, minimal shape for this kind of
- * registry.
+ * WordPress action/filter convention this is modelled on.
  *
  * @package    LumoraGallery
  * @subpackage Plugins

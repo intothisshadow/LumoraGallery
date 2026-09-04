@@ -13,12 +13,10 @@ declare(strict_types=1);
  * Coppermine include/config.inc.php file from a supplied filesystem path,
  * the same as the main import wizard.
  *
- * Matching strategy (the original importer does not persist Coppermine
- * record IDs into Lumora):
- *   - Albums:     matched by `folder`, resolved the same way importAlbums()
- *                 resolves it (cpg_pictures.filepath, falling back to keyword).
- *   - Categories: matched by full name-path from the root, since categories
- *                 have no folder equivalent.
+ * Matching strategy, since the original importer does not persist Coppermine
+ * record IDs: albums are matched by `folder` (resolved the same way
+ * importAlbums() does); categories are matched by full name-path from the
+ * root, since they have no folder equivalent.
  *
  * Steps:
  *   Step 1 — Credentials form (GET / POST action=connect)

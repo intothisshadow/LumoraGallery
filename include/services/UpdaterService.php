@@ -120,7 +120,7 @@ class UpdaterService
 
     /**
      * Max ZIP entries / total uncompressed bytes accepted from an
-     * administrator-uploaded release package (LG-042) — a provider-fetched
+     * administrator-uploaded release package — a provider-fetched
      * release has no such cap since it comes from a trusted, configured
      * source, but a manual upload is arbitrary admin-supplied input and
      * needs its own sanity limits before anything is extracted.
@@ -492,8 +492,7 @@ class UpdaterService
      * (LUMORA_VERSION) instead of the release-check cache, and the
      * minimum-PHP requirement is likewise read from the archive's own
      * LUMORA_MIN_PHP rather than provider metadata, since a manually
-     * uploaded package may not correspond to any GitHub release at all
-     * (LG-042 — "Upload ZIP" alongside the GitHub-based updater).
+     * uploaded package may not correspond to any GitHub release at all.
      *
      * Once accepted, the uploaded file is moved to the exact same
      * archivePath($version) a downloaded release would occupy —
@@ -692,8 +691,8 @@ class UpdaterService
 
         // Resume: if a non-empty archive already exists, skip re-download.
         // Checked before the download_url requirement below because a
-        // manually uploaded package (LG-042 — acquireLockFromUpload())
-        // deliberately has no download_url at all: the archive is already
+        // manually uploaded package (acquireLockFromUpload()) deliberately
+        // has no download_url at all: the archive is already
         // staged at this exact path, so this is the normal, expected path
         // for that flow, not a resume-after-interruption edge case.
         if (file_exists($archivePath) && filesize($archivePath) > 0) {
@@ -1314,8 +1313,8 @@ class UpdaterService
             // Auto-remove a reappeared reset-password.php on a successful
             // upgrade, the same way install/ is handled just above — release
             // files get copied back over the live install on every update, so
-            // an admin who deleted this emergency-reset script (LG-051)
-            // would otherwise see it silently return.
+            // an admin who deleted this emergency-reset script would
+            // otherwise see it silently return.
             $resetScript = LUMORA_ROOT . 'reset-password.php';
             if (is_file($resetScript)) {
                 if (!is_writable($resetScript)) {

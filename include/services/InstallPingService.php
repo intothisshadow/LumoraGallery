@@ -3,30 +3,17 @@ declare(strict_types=1);
 /**
  * Lumora Gallery — Install Ping Service
  *
- * Opt-in, off-by-default anonymous install counter (TODO.md #27). When
- * enabled, sends a minimal, non-identifying ping — install UUID, Lumora
- * version, PHP version, and nothing else — to a dedicated Lumora-hosted
- * endpoint that is completely separate from UpdateService's release-check
- * source (the GitHub Releases API, via AbstractUpdateProvider), so
- * enabling/disabling one never silently affects the other.
+ * Opt-in, off-by-default anonymous install counter. When enabled, sends a
+ * minimal ping (install UUID, Lumora version, PHP version — nothing else)
+ * to a Lumora-hosted endpoint separate from UpdateService's release-check
+ * source, so enabling/disabling one never affects the other. The UUID has
+ * no relation to any other stored value, so a ping can't be correlated
+ * back to a specific site.
  *
- * Privacy: no domain, site name, admin email, gallery contents, or visitor
- * data is ever sent. The install UUID is a randomly generated identifier
- * with no relation to any other value stored by Lumora; there is no way to
- * correlate it back to a specific site from the ping payload alone.
- *
- * Ping cadence: fires once as soon as the feature is enabled (see
- * admin/config.php), then at most roughly monthly thereafter. It never
- * fires on a routine page load beyond a cheap config/timestamp comparison —
- * maybeSendPing() is called from every admin page load (see
- * admin/includes/admin_helpers.php's lum_admin_page()), but the network
- * request itself is skipped unless the feature is enabled AND the interval
- * has actually elapsed.
- *
- * Failure handling: every failure mode (disabled, DB error, network error,
- * malformed response) is swallowed silently. This feature must never
- * produce a user-facing error or block any admin action — see class-level
- * requirement in TODO.md #27.
+ * maybeSendPing() runs on every admin page load but is a cheap no-op
+ * unless the feature is enabled and the roughly-monthly interval has
+ * elapsed. Every failure mode is swallowed silently — this must never
+ * produce a user-facing error or block any admin action.
  *
  * @package    LumoraGallery
  * @subpackage Installer
@@ -135,10 +122,8 @@ class InstallPingService
      * interval has elapsed.
      *
      * Reuses the same stream-context / error-suppression pattern
-     * AbstractUpdateProvider::httpGet() uses (and UpdateService::fetch()
-     * previously used directly, before TODO.md #12 moved it behind that
-     * shared provider abstraction) so both endpoints behave identically
-     * under network failure and remain mockable via the same
+     * AbstractUpdateProvider::httpGet() uses, so both endpoints behave
+     * identically under network failure and remain mockable via the same
      * MockHttpTransport test helper.
      */
     public static function sendPing(): void

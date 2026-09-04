@@ -15,10 +15,7 @@ declare(strict_types=1);
  *   e.g. Migration0001_CreateMigrationsTable.php
  *
  * Each file must contain a class of the same name that extends AbstractMigration
- * (include/migrations/AbstractMigration.php) and implements up() and down().
- *
- * Item 12 (Dashboard Update System) calls SchemaService::runPendingMigrations()
- * as one step of its orchestration — this is the stable public contract.
+ * and implements up() and down().
  *
  * @package    LumoraGallery
  * @subpackage Database

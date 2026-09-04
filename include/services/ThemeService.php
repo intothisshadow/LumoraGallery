@@ -3,20 +3,15 @@ declare(strict_types=1);
 /**
  * Lumora Gallery — Theme Service
  *
- * Everything the Appearance admin page (admin/appearance.php) needs beyond
- * plain theme listing/activation, which already lived in
- * lumora_list_themes() / lumora_get_theme_meta() (include/functions.php):
- * screenshot discovery for the theme card grid, and install/update/delete
- * from an uploaded ZIP (LG-043).
+ * Beyond plain theme listing/activation (lumora_list_themes()/
+ * lumora_get_theme_meta() in include/functions.php): screenshot discovery
+ * for the theme card grid, and install/update/delete from an uploaded ZIP.
  *
- * Lumora themes are identified by a template.html file (not style.css, as
- * WordPress-style projects use) — see lumora_theme_primary_stylesheet() and
- * lumora_get_theme_meta() in include/functions.php for how the CSS header
- * metadata (Theme Name / Author / Design URI) is actually read once a
- * theme is on disk. This class mirrors that same "read the header comment
- * out of the primary stylesheet" logic against ZIP entry contents, so a
- * theme's declared name can drive its install folder before anything is
- * extracted.
+ * Lumora themes are identified by a template.html file, not style.css as in
+ * WordPress-style projects. This class mirrors functions.php's "read the
+ * header comment out of the primary stylesheet" logic against ZIP entry
+ * contents, so a theme's declared name can drive its install folder before
+ * anything is extracted.
  *
  * @package    LumoraGallery
  * @subpackage Themes
@@ -134,8 +129,7 @@ class ThemeService
 
     /**
      * Validate an uploaded ZIP and replace an already-installed theme's
-     * files with it in place (LG-043's one deliberate divergence from
-     * LumoraPress's install-only ThemeInstaller). Never reachable for
+     * files with it in place. Never reachable for
      * anything under `custom themes/` — that directory lives entirely
      * outside themes/ and $folder is always validated against
      * lumora_list_themes() first, so only folders already inside themes/
@@ -282,8 +276,7 @@ class ThemeService
             // Update-in-place: swap the old folder out and the new one in
             // via two fast local rename() calls, so the window where
             // $destination doesn't exist at all is as small as the
-            // filesystem allows — this is the "atomic enough" guarantee
-            // LG-043 asks for; true atomicity would need a symlink
+            // filesystem allows — true atomicity would need a symlink
             // indirection layer this simpler feature doesn't have.
             $displaced = $destination . '.replaced-' . bin2hex(random_bytes(4));
             if (!@rename($destination, $displaced)) {

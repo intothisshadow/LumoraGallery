@@ -5,9 +5,8 @@ declare(strict_types=1);
  *
  * Returns directories under albums/ that exist on disk but aren't yet
  * claimed by any album row, so admin/albums.php?action=new can offer them
- * as selectable options for the Folder Path field (LG-040) instead of
- * requiring an admin to hand-type the exact path of a folder that may
- * already have been uploaded via FTP.
+ * as selectable options instead of requiring an admin to hand-type the
+ * exact path of a folder already uploaded via FTP.
  *
  * POST params:
  *   csrf_token string

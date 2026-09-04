@@ -54,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    // ── Static asset cache headers (LG-033) ─────────────────────────────────────
+    // ── Static asset cache headers ─────────────────────────────────────
     if ($act === 'write_cache_headers') {
         $result = CacheHeaderService::writeRules();
         lum_flash(
@@ -73,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         lumora_redirect($self);
     }
 
-    // ── LiteSpeed page caching, opt-in (LG-033 follow-up) ───────────────────────
+    // ── LiteSpeed page caching, opt-in ───────────────────────
     if ($act === 'write_page_cache') {
         $ttl = (int) LumoraConfig::sanitizeValue('litespeed_page_cache_ttl', $_POST['page_cache_ttl'] ?? '0');
         if ($ttl <= 0) {
@@ -191,7 +191,7 @@ $https_badge = $env['https']
     ? '<span class="badge bg-success ms-2">HTTPS active</span>'
     : '<span class="badge bg-secondary ms-2">HTTP only</span>';
 
-// ── Web server & capability detection (LG-033) ──────────────────────────────
+// ── Web server & capability detection ──────────────────────────────
 $v_server_name = h($server_env['name']);
 $v_server_raw  = h($server_env['raw']);
 $litespeed_badge = $server_env['is_litespeed']
@@ -386,7 +386,7 @@ $content = <<<HTML
 
 {$diffs_html}
 
-<!-- ── Static Asset Cache Headers (LG-033) ────────────────────────────────── -->
+<!-- ── Static Asset Cache Headers ────────────────────────────────── -->
 <div class="lum-adm-card mb-4">
   <h5 class="mb-1">🚀 Static Asset Cache Headers{$cache_hdrs_badge}</h5>
   <p class="text-muted small mb-3">
@@ -427,7 +427,7 @@ $content = <<<HTML
   </p>
 </div>
 
-<!-- ── LiteSpeed Page Caching, opt-in (LG-033 follow-up) ──────────────────── -->
+<!-- ── LiteSpeed Page Caching, opt-in ──────────────────── -->
 <div class="lum-adm-card mb-4">
   <h5 class="mb-1">⚡ LiteSpeed Page Caching (Advanced){$page_cache_badge}</h5>
   <p class="text-muted small mb-3">

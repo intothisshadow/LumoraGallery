@@ -3,20 +3,15 @@ declare(strict_types=1);
 /**
  * Lumora Gallery — Admin: Plugins
  *
- * Lists every discovered "feature" plugin (LG-045) — self-contained add-ons
- * under plugins/*&#47;plugin.json that hook into core via HookService rather
- * than patching it — and lets an admin enable, disable, or (once disabled)
- * permanently delete each one (LG-053). Deletion is AJAX-only, backed by
- * ajax_plugin_delete.php and PluginService::deletePlugin() — both the
- * per-row Delete button and the Delete Selected bulk action below post to
- * the same endpoint, matching admin/images.php's own bulk-selection idiom
- * (header "select all" checkbox, per-row checkboxes, a
- * disabled-until-something's-checked toolbar button).
+ * Lists every discovered "feature" plugin — self-contained add-ons under
+ * plugins/*&#47;plugin.json that hook into core via HookService — and lets
+ * an admin enable, disable, or (once disabled) permanently delete each one.
+ * Deletion is AJAX-only via ajax_plugin_delete.php and
+ * PluginService::deletePlugin().
  *
- * The older "importer" plugin type (Coppermine, etc.) is unaffected by this
- * page: those are still discovered and run on-demand from admin/migrate.php
- * exactly as before, since they don't hook into every page load and have no
- * enable/disable state of their own.
+ * The older "importer" plugin type (Coppermine, etc.) is unaffected: those
+ * are still discovered and run on-demand from admin/migrate.php, since they
+ * don't hook into every page load and have no enable/disable state.
  *
  * @package    LumoraGallery
  * @subpackage Admin

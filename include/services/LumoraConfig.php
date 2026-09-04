@@ -74,10 +74,7 @@ class LumoraConfig
      *
      * Centralising this here (rather than duplicating the per-key rules in
      * every caller) ensures a value can never bypass validation through one
-     * entry point but not another — see TODO-security.md #11, where
-     * admin/config.php's `import` action previously stored values with only
-     * a key-name whitelist check, skipping the enum/range validation the
-     * `save` action applied.
+     * entry point but not another.
      *
      * Unknown keys fall through to a plain trim(), matching the previous
      * per-page `default` match arm.

@@ -172,11 +172,9 @@ function lum_admin_pagination(array $pag): string
  */
 function lum_admin_page(string $title, string $content, string $active = ''): never
 {
-    // Opt-in anonymous install ping (TODO.md #27) — a cheap no-op on every
-    // call unless the feature is enabled AND the ~monthly interval has
-    // elapsed; see InstallPingService's class docblock. Wrapped defensively
-    // even though the service already fails silently internally, so a
-    // future change there can never turn into a broken admin panel.
+    // Opt-in anonymous install ping — a cheap no-op unless enabled and the
+    // ~monthly interval has elapsed. Wrapped defensively even though the
+    // service already fails silently internally.
     try {
         InstallPingService::maybeSendPing();
     } catch (\Throwable) {
@@ -255,9 +253,10 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
         ? ' <span class="badge bg-danger" style="font-size:.6rem;vertical-align:middle;line-height:1">!</span>'
         : '';
 
-    // Sidebar nav grouped into sections (LG-32): Gallery for day-to-day content
-    // management, Settings for gallery configuration, Maintenance for admin/system
-    // tasks, and Users for account/permission management. Dashboard stays top-level.
+    // Sidebar nav grouped into sections: Gallery for day-to-day content
+    // management, Settings for gallery configuration, Maintenance for
+    // admin/system tasks, and Users for account/permission management.
+    // Dashboard stays top-level.
     $nav_sections = [
         ['label' => null, 'items' => [
             'dashboard' => ['icon' => '📊', 'label' => 'Dashboard', 'url' => 'dashboard.php', 'permission' => null],
@@ -304,12 +303,11 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
         return false;
     };
 
-    // Collapsible sidebar sections (LG-32 addendum) — Gallery stays always
-    // expanded (primary day-to-day workflow); Dashboard has no section
-    // header at all. Expand/collapse state persists per-browser via
-    // localStorage (see the inline script right after the nav markup
-    // below); a section containing the current page always renders
-    // expanded regardless of its stored state, via data-nav-force-open.
+    // Collapsible sidebar sections — Gallery stays always expanded
+    // (primary day-to-day workflow); Dashboard has no section header at
+    // all. Expand/collapse state persists per-browser via localStorage; a
+    // section containing the current page always renders expanded
+    // regardless of its stored state, via data-nav-force-open.
     $collapsible_labels = ['Settings', 'Maintenance', 'Users'];
 
     $nav_html        = '';
@@ -367,13 +365,12 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
         }
     }
 
-    // Expand/Collapse All (LG-048) — one toggle at the top of the nav (before
-    // Dashboard/Gallery) and a second, identical one at the bottom (after
-    // Users), so it's reachable without scrolling a long sidebar either way.
-    // Both share the same class/data attribute rather than unique IDs, so
-    // the script below can address and keep them in sync together. Skipped
-    // entirely when the current user's permissions leave zero collapsible
-    // sections visible (e.g. a Contributor) — nothing for it to do.
+    // Expand/Collapse All — one toggle at the top of the nav and a second,
+    // identical one at the bottom, so it's reachable without scrolling a
+    // long sidebar either way. Both share the same class/data attribute
+    // rather than unique IDs, so the script below can keep them in sync.
+    // Skipped when the current user's permissions leave zero collapsible
+    // sections visible.
     if ($has_collapsible) {
         $expand_toggle_html = '<li class="lum-admin-nav-expand-all">'
             . '<button type="button" class="lum-admin-nav-expand-toggle" data-nav-expand-all aria-expanded="true">'
@@ -464,8 +461,8 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
 
       // slug -> { collapsed, apply(isCollapsed) } — built while wiring each
       // section's own toggle, then reused by the Expand/Collapse All
-      // buttons (LG-048) below so they can drive every section's state
-      // without duplicating the apply()/persist logic.
+      // buttons below so they can drive every section's state without
+      // duplicating the apply()/persist logic.
       var sections = {};
 
       function persist() {
@@ -499,9 +496,9 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
         });
       });
 
-      // Expand/Collapse All (LG-048) — two buttons (top + bottom of the nav)
-      // sharing the same class/attribute, always kept in sync with each
-      // other and with the individual section toggles above.
+      // Expand/Collapse All — two buttons (top + bottom of the nav) sharing
+      // the same class/attribute, always kept in sync with each other and
+      // with the individual section toggles above.
       var expandAllButtons = document.querySelectorAll('[data-nav-expand-all]');
 
       function allCollapsed() {

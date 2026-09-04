@@ -5,20 +5,14 @@ declare(strict_types=1);
  *
  * Actions: list (default), new, edit, save, delete
  *
- * List view displays ALL categories as a parent/child hierarchy tree.
- * The full tree is always shown (no pagination); categories are ordered by
- * pos then name within each level. Edit and Delete buttons are present on
- * every row and continue to function exactly as before.
+ * List view shows all categories as a parent/child hierarchy tree
+ * (unpaginated), ordered by pos then name within each level. $all_cats is
+ * fetched once via getAllCategoriesWithCounts() and serves both the tree
+ * view and the new/edit parent dropdown.
  *
- * $all_cats is fetched once unconditionally via getAllCategoriesWithCounts()
- * and serves double duty: (1) the new/edit parent dropdown, (2) the tree
- * view with album and subcategory counts alongside each category name.
- *
- * Category create/update/delete business logic (thumb_image_id validation,
- * self-parent prevention, cascading reparent-on-delete) lives in
- * GalleryService::createCategory()/updateCategory()/deleteCategory() — this
- * page only handles permission checks, CSRF validation, request parsing,
- * flash messages, and redirects.
+ * Business logic lives in GalleryService::createCategory()/updateCategory()/
+ * deleteCategory(); this page only handles permissions, CSRF, request
+ * parsing, flash messages, and redirects.
  *
  * @package    LumoraGallery
  * @subpackage Admin
@@ -194,7 +188,7 @@ function render_category_tree_rows(
             : '';
 
         // Native HTML5 drag-and-drop (the handle below) never fires from touch
-        // input, so mobile gets an Up/Down button fallback instead (LG-047) —
+        // input, so mobile gets an Up/Down button fallback instead —
         // each swaps this row with its immediate sibling within the same
         // parent via the same reorder endpoint the drag handler already uses.
         // Reparenting (drag "into" another category) stays desktop/drag-only.
@@ -487,7 +481,7 @@ $drag_script = <<<HTML
     persistOrder(movedId, newParentId, siblingIds);
   });
 
-  // Mobile fallback (LG-047): Up/Down buttons swap a row with its immediate
+  // Mobile fallback: Up/Down buttons swap a row with its immediate
   // sibling within the same parent \u2014 drag-and-drop's "reorder" half, without
   // reparenting, since native drag never fires from touch input.
   table.addEventListener('click', function (e) {

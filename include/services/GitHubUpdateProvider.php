@@ -12,16 +12,13 @@ declare(strict_types=1);
  *                     non-draft entry, whether marked prerelease or not)
  *
  * The active channel is selected via the `update_channel` config key
- * ('stable' default, or 'prerelease' — see admin/update.php's Update Settings
- * panel). The repository is configurable via the `update_github_repo` config
- * key (default: intothisshadow/LumoraGallery) so forks and self-hosted mirrors
- * can point to their own release source without code changes.
+ * ('stable' default, or 'prerelease'). The repository is configurable via
+ * `update_github_repo` so forks and self-hosted mirrors can point to their
+ * own release source without code changes.
  *
- * An optional GitHub personal access token can be supplied via the
- * `update_github_token` config key to raise the unauthenticated API rate
- * limit (60/hour) to the authenticated limit; it is sent as a Bearer token
- * on every API request this class makes. Never required for public repos
- * under normal usage.
+ * An optional `update_github_token` raises the unauthenticated API rate
+ * limit (60/hour) to the authenticated limit; sent as a Bearer token on
+ * every request. Never required for public repos under normal usage.
  *
  * SHA-256 checksum: if the release contains an asset whose name ends with
  * `.sha256` or equals `sha256sums.txt`, its content is fetched and parsed to

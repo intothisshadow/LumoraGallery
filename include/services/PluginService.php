@@ -3,12 +3,11 @@ declare(strict_types=1);
 /**
  * Lumora Gallery — Plugin Service
  *
- * Discovers and manages "feature" plugins (LG-045) — self-contained add-ons
- * under plugins/*&#47;plugin.json that extend Lumora through HookService
- * rather than by patching core files. This is distinct from the older
- * "importer" plugin type (see MigrationService::discoverImporters()), which
- * is discovered separately and only ever runs on-demand from
- * admin/migrate.php; a feature plugin instead registers hooks that fire on
+ * Discovers and manages "feature" plugins — self-contained add-ons under
+ * plugins/*&#47;plugin.json that extend Lumora through HookService rather
+ * than by patching core files. Distinct from the older "importer" plugin
+ * type (MigrationService::discoverImporters()), which runs on-demand only
+ * from admin/migrate.php; a feature plugin registers hooks that fire on
  * every relevant page load once enabled.
  *
  * A feature plugin's manifest may declare, relative to its own folder:
@@ -179,7 +178,7 @@ class PluginService
     }
 
     /**
-     * Permanently delete a plugin's entire directory from disk (LG-053).
+     * Permanently delete a plugin's entire directory from disk.
      *
      * Refuses to delete a currently-enabled feature plugin — disable it
      * first, so its bootstrap/hooks are never left referencing files that

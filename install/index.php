@@ -14,8 +14,7 @@ declare(strict_types=1);
  * A `?force=1` reinstall over an existing installation requires a session
  * already authenticated with the 'site_configuration' permission against the
  * site's *current* database — it is not reachable by an anonymous visitor
- * just by knowing the URL, even if install/ has not yet been deleted. See
- * TODO-security.md #4.
+ * just by knowing the URL, even if install/ has not yet been deleted.
  *
  * @package    LumoraGallery
  * @subpackage Installer
@@ -368,8 +367,7 @@ if (!isset($_GET['force']) && file_exists(LUMORA_ROOT . 'config.php')) {
 // installer (LUMORA_INSTALLER only skips that when config.php is absent) —
 // so lumora_has_permission() reflects a real, already-authenticated session
 // against the site's *existing* database here. Require 'site_configuration'
-// before letting a forced reinstall proceed past this point. See
-// TODO-security.md #4.
+// before letting a forced reinstall proceed past this point.
 if (
     isset($_GET['force'])
     && file_exists(LUMORA_ROOT . 'config.php')

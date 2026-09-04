@@ -33,8 +33,7 @@ declare(strict_types=1);
  *     account has an email address set (admin/forgot_password.php). Hosts
  *     without outbound mail configured have no way to retrieve it from that
  *     page — reset-password.php in the gallery root is the mail-free
- *     fallback instead (LG-051; superseded the old lumora_recovery.txt
- *     file, a predictable, unauthenticated, web-reachable path).
+ *     fallback instead.
  *   - DB operations on {PREFIX}password_reset_tokens are wrapped in
  *     catch(\Throwable) so that pre-v7 installations (table absent) are
  *     unaffected — lumora_create_reset_token() is the only function that

@@ -52,8 +52,7 @@ final class CoppermineImporter
         // validation. $prefix is admin-supplied (via the import wizard, gated
         // on 'site_configuration'), and while it's the same privilege level
         // needed to reach this code at all, an unsanitised prefix is still an
-        // unnecessary injection surface in every query built below. See
-        // TODO-security.md #9.
+        // unnecessary injection surface in every query built below.
         $clean_prefix = preg_replace('/[^a-zA-Z0-9_]/', '', $prefix) ?? '';
         $this->cpg_prefix = rtrim($clean_prefix, '_') . '_';
     }

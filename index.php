@@ -6,11 +6,11 @@ declare(strict_types=1);
  * Routes:
  *   /              → gallery home: recently updated albums + categories + latest additions + stats + who is online
  *   /?cat=N        → browse a category (sub-categories + albums + latest
- *                    additions from the whole subtree, LG-041)
+ *                    additions from the whole subtree)
  *   /?view=latest      → most recently added images
  *   /?view=most_viewed → all-time most viewed images (gallery-wide)
- *   /?view=most_viewed&album=N → most viewed images within album N (LG-33)
- *   /?view=most_viewed&cat=N   → most viewed images within category N (LG-33)
+ *   /?view=most_viewed&album=N → most viewed images within album N
+ *   /?view=most_viewed&cat=N   → most viewed images within category N
  *   /?view=random      → random selection
  *
  * @package    LumoraGallery
@@ -35,7 +35,7 @@ $view     = in_array($_GET['view'] ?? '', ['latest', 'most_viewed', 'random'], t
 $per_page = max(12, (int) lumora_config('per_page', 48));
 $page    = lumora_int($_GET['page'] ?? 1, 1, 1);
 
-// Nav context override (LG-33): set when the current page is scoped to a
+// Nav context override: set when the current page is scoped to a
 // single album or category, so {NAVIGATION}'s "Most Viewed" link can carry
 // that context forward instead of always pointing at the gallery-wide view.
 $nav_album_id = null;
@@ -58,8 +58,8 @@ if ($view !== '') {
         'random'      => 'Random Images',
     ];
 
-    // Most Viewed respects the current album/category context, if any
-    // (LG-33) — album takes precedence when both are present.
+    // Most Viewed respects the current album/category context, if any —
+    // album takes precedence when both are present.
     if ($view === 'most_viewed') {
         $view_titles['most_viewed'] = match (true) {
             $album_id > 0 => 'Most Viewed in This Album',
@@ -122,10 +122,10 @@ if ($view !== '') {
                 . lumora_render_categories($subcats);
         }
 
-        // Latest Additions (LG-041) — recent images from this category's own
-        // albums and every descendant sub-category's albums, at any depth.
-        // Shares latest_images_count (LG-31) with the home page's own
-        // Latest Additions section, so an admin only has to tune one setting.
+        // Latest Additions — recent images from this category's own albums
+        // and every descendant sub-category's albums, at any depth. Shares
+        // latest_images_count with the home page's own Latest Additions
+        // section, so an admin only has to tune one setting.
         $latest_images_count = max(0, (int) lumora_config('latest_images_count', '8'));
         $latest_in_cat = $latest_images_count > 0
             ? GalleryService::getLatestImagesInCategorySubtree($cat_id, $latest_images_count)

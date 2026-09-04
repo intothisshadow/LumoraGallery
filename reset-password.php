@@ -4,37 +4,25 @@ declare(strict_types=1);
  * Lumora Gallery — Emergency Admin Password Reset
  *
  * Open this file directly in a browser — no login required — when an admin
- * password is lost and there's no working way to reach it through the
- * normal "Forgot password?" flow (admin/forgot_password.php), e.g. outbound
- * mail isn't configured on this host.
+ * password is lost and the normal "Forgot password?" flow can't be reached
+ * (e.g. outbound mail isn't configured on this host).
  *
  * Trust model: identical to install/index.php. Reaching this file at all
- * already means whoever is doing so has filesystem access next to
- * config.php (FTP/file manager) — that IS the authentication here, the same
- * way running the installer is. There is no separate identity check to
- * perform beyond picking which existing account to reset.
+ * already means filesystem access next to config.php (FTP/file manager) —
+ * that IS the authentication here; there is no separate identity check.
  *
- * Recovery target list: every account in a group holding both
- * 'user_management' and 'site_configuration' — see
- * UserService::getRecoveryAccounts() — not literally `role = 'admin'`,
- * since groups are dynamic (Migration0007) and an admin account may have
- * been moved to a custom group with equivalent permissions.
+ * Recovery targets are every account in a group holding both
+ * 'user_management' and 'site_configuration' (UserService::getRecoveryAccounts()),
+ * not literally `role = 'admin'`, since groups are dynamic and an admin
+ * account may have been moved to a custom group with equivalent permissions.
  *
- * Rate limiting is shared with admin/login.php via RateLimitService — this
- * page is an equally sensitive unauthenticated admin-auth surface, so an IP
- * that trips one lockout is locked out of the other too.
+ * Rate limiting is shared with admin/login.php via RateLimitService, since
+ * this is an equally sensitive unauthenticated admin-auth surface.
  *
- * Deletes itself after a successful reset, the same way install/index.php
- * deletes install/ after a successful install, so it doesn't sit on the
- * server afterward as a standing, unauthenticated way to overwrite an admin
- * password. If self-deletion fails (file ownership doesn't match the PHP
- * process user), a warning is shown and the admin panel keeps nagging until
- * it's removed — see admin_reset_script_warning() in
- * admin/includes/admin_helpers.php and admin/delete_reset_script.php.
- *
- * Replaces the old lumora_recovery.txt mechanism (a live, single-use reset
- * token written to a predictable, unauthenticated, web-reachable path in
- * the gallery root) — see LG-051 and TODO-security.md.
+ * Deletes itself after a successful reset so it doesn't remain a standing,
+ * unauthenticated way to overwrite an admin password. If self-deletion
+ * fails, a warning nags the admin panel until it's removed — see
+ * admin/delete_reset_script.php.
  *
  * @package    LumoraGallery
  * @subpackage Admin

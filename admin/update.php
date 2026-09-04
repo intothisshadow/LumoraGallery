@@ -3,46 +3,11 @@ declare(strict_types=1);
 /**
  * Lumora Gallery — Admin: Updates
  *
- * Displays current version status and allows administrators to apply the
- * latest available Lumora release entirely from within the dashboard:
- *
- *   1. Update check — fetches metadata from the configured release provider
- *      (GitHub Releases API by default) and caches the result (24 hours for
- *      the 'daily' check-frequency setting, 7 days for 'weekly').
- *
- *   2. Standalone download & verify — an independent "Re-download release"
- *      action that downloads and SHA-256-verifies the release archive without
- *      committing to a full install, so an administrator can confirm a
- *      release is intact ahead of time. See UpdaterService::downloadStandalone().
- *
- *   3. One-click updater — multi-step workflow:
- *         Pre-flight → Download → Verify → Backup → Maintenance →
- *         Extract → Validate → Replace files → Migrate DB → Cleanup
- *      Each step is a separate AJAX call so the browser can report granular
- *      progress.  Failed stages offer a Rollback option that restores the
- *      database and config.php from the automatic "update backup" taken
- *      during Stage 4 (see item 5 below for the distinct, on-demand "full
- *      backup").
- *
- *   4. Database migrations — independent of the file updater; applies any
- *      pending SchemaService migrations via ajax_run_migrations.php.
- *
- *   5. Full backups — separate from the automatic "update backup" taken in
- *      Stage 4 above: manual, on-demand ZIP snapshots of the whole codebase +
- *      a database dump (see BackupService), with a create/restore/delete UI.
- *      Up to 3 are retained. Rendered as the "Full Backups" card.
- *
- *   6. System status — a live read of hosting-environment requirements
- *      (PHP version, extensions, permissions, disk space) shown as a
- *      pass/fail table (see UpdaterService::getSystemStatusChecks()).
- *
- *   7. Update settings — release channel (stable/prerelease), automatic
- *      check toggle + frequency, and an optional GitHub token, all plain
- *      POST-and-redirect actions handled at the top of this file (the same
- *      pattern as admin/config.php).
- *
- *   8. Update history — last 10 update attempts (installs, rollbacks, and
- *      backup restores) stored in the config table.
+ * Version status and the in-dashboard update workflow: update check,
+ * standalone download/verify, the multi-stage one-click updater (with
+ * rollback), database migrations, full backups, system status, update
+ * settings, and update history. See UpdaterService and BackupService for
+ * the underlying implementation.
  *
  * @package    LumoraGallery
  * @subpackage Admin
@@ -58,22 +23,15 @@ require_once dirname(__DIR__) . '/include/bootstrap.php';
 require_once __DIR__ . '/includes/admin_helpers.php';
 lumora_require_permission('view_updates');
 
-// Actions that replace application files, run database migrations, manage
-// backups, or change update settings (Install Update, Run Database Update,
-// Back up now, Restore, Delete, Save settings, Re-download release,
-// rollback/abort) require the stricter 'site_configuration' permission —
-// 'view_updates' alone only grants visibility into version/status
-// information. See ajax_update_perform.php and TODO-security.md #2 for the
-// matching server-side enforcement on the multi-stage updater; the POST
-// handler below enforces the same rule for every action added on this page.
+// Any action that mutates state (installs, migrations, backups, settings)
+// requires 'site_configuration'; 'view_updates' alone only grants read
+// visibility. ajax_update_perform.php enforces the same rule server-side.
 $can_perform_updates = lumora_has_permission('site_configuration');
 $self_url            = lumora_base_url() . 'admin/update.php';
 
 // ── POST actions: settings, backups, standalone download ──────────────────────
-// Plain POST-and-redirect handlers, matching the established pattern used by
-// admin/config.php's export/import actions — no AJAX/JS required for these
-// one-shot actions. The multi-stage "Update Now" workflow below remains
-// AJAX-driven (ajax_update_perform.php) since it needs granular progress.
+// Plain POST-and-redirect handlers; the multi-stage "Update Now" workflow
+// below stays AJAX-driven since it needs granular progress reporting.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     lumora_csrf_validate();
 
@@ -144,11 +102,9 @@ $updater_running = UpdaterService::isUpdateRunning();
 $updater_lock    = $updater_running ? UpdaterService::getLockInfo() : null;
 $update_history  = UpdaterService::getUpdateHistory();
 
-// Stuck-session notice (lock held but no update running from this browser) —
-// computed unconditionally (LG-042) since it must surface regardless of
-// whether a GitHub release is currently offered: a stuck session can now
-// come from either the GitHub "Update Now" flow or the "Install from
-// Uploaded ZIP" flow below, and both share the same lock/progress pipeline.
+// Stuck-session notice — computed unconditionally since the lock/progress
+// pipeline is shared between the GitHub "Update Now" and "Install from
+// Uploaded ZIP" flows.
 $stuck_notice = '';
 if ($updater_running && $updater_lock !== null) {
     $stuck_ver  = h($updater_lock['version'] ?? 'unknown');
@@ -161,10 +117,7 @@ if ($updater_running && $updater_lock !== null) {
 }
 
 // Stage list HTML for the shared progress panel — rendered in PHP so CSS
-// works without JS running first. Also computed unconditionally (LG-042):
-// both the GitHub "Update Now" flow and the "Install from Uploaded ZIP"
-// flow drive the exact same UpdaterService stage pipeline through the same
-// #lum-upd-progress panel.
+// works without JS running first.
 $stage_rows = '';
 foreach (UpdaterService::STAGE_SEQUENCE as $s) {
     $label       = UpdaterService::STAGE_LABELS[$s] ?? $s;
@@ -468,7 +421,7 @@ HTML;
 HTML;
 }
 
-// ── Build "Install from Uploaded ZIP" card (LG-042) ────────────────────────────
+// ── Build "Install from Uploaded ZIP" card ────────────────────────────
 // Always available to site_configuration holders, independent of whether the
 // GitHub-based check found a newer release — lets an admin install a specific
 // build, or update on a host that can't reach GitHub. Feeds into the exact
@@ -738,7 +691,7 @@ $content = <<<HTML
 
 {$stuck_notice}
 
-<!-- ── Release source tabs (LG-042) ─────────────────────────────────────────── -->
+<!-- ── Release source tabs ─────────────────────────────────────────── -->
 <div class="lum-upd-source-tabs" role="tablist">
   <button type="button" class="lum-upd-source-tab is-active" id="lum-source-tab-github" data-lum-source-tab="github" role="tab" aria-selected="true">GitHub</button>
   <button type="button" class="lum-upd-source-tab" id="lum-source-tab-manual" data-lum-source-tab="manual" role="tab" aria-selected="false">Manual Update</button>
@@ -847,7 +800,7 @@ document.addEventListener('DOMContentLoaded', function () {
     return resp.json();
   }
 
-  // ── Release source tabs (LG-042) ────────────────────────────────────────────
+  // ── Release source tabs ────────────────────────────────────────────
 
   const \$sourceTabs = document.querySelectorAll('[data-lum-source-tab]');
   \$sourceTabs.forEach(function (\$tab) {
@@ -987,7 +940,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // ── "Install from Uploaded ZIP" workflow (LG-042) ──────────────────────────
+  // ── "Install from Uploaded ZIP" workflow ──────────────────────────
   // Feeds into the exact same runUpdateStage()/progress panel as the
   // GitHub "Update Now" flow above — the only difference is how the
   // session is bootstrapped (a multipart upload instead of a click that

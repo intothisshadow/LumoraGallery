@@ -3,16 +3,11 @@ declare(strict_types=1);
 /**
  * Lumora Gallery — AJAX: Accept an Uploaded Update ZIP
  *
- * LG-042 — an alternative to the GitHub-based updater: an administrator
- * uploads a Lumora Gallery release ZIP directly (useful when this server
- * can't reach GitHub over outbound HTTPS, or to install a build that isn't
- * published as a GitHub release). Validates the upload and, on success,
- * initializes an update session for it exactly as the "Update Now" button
- * does for a provider-fetched release — see
- * UpdaterService::acquireLockFromUpload() for the validation and staging
- * logic. The client then drives the returned version through the exact
- * same run_stage AJAX flow (ajax_update_perform.php) already used for a
- * GitHub-sourced update.
+ * Alternative to the GitHub-based updater for servers that can't reach
+ * GitHub, or to install a build that isn't a published release. Validates
+ * the upload and stages an update session identically to a provider-fetched
+ * release — see UpdaterService::acquireLockFromUpload(). The client then
+ * drives it through the same run_stage AJAX flow (ajax_update_perform.php).
  *
  * POST parameters:
  *   csrf_token       string  (always required)
@@ -28,15 +23,7 @@ declare(strict_types=1);
  *     details:  string[]
  *   }
  *
- * Security:
- *   - Requires the 'site_configuration' permission — same as
- *     ajax_update_perform.php, since this endpoint stages a full update
- *     session (see that file's docblock and TODO-security.md #2).
- *   - CSRF token validated.
- *   - The upload is validated (ZIP structure, unsafe-path rejection, entry
- *     count and uncompressed-size caps, PHP/disk/writability checks)
- *     before anything is moved into place or a lock is acquired — see
- *     UpdaterService::acquireLockFromUpload().
+ * Requires the 'site_configuration' permission and a valid CSRF token.
  *
  * @package    LumoraGallery
  * @subpackage Admin

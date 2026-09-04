@@ -1,19 +1,15 @@
 <?php
 declare(strict_types=1);
 /**
- * Lumora Gallery — Admin: Bulk Rename Images (LG-26)
+ * Lumora Gallery — Admin: Bulk Rename Images
  *
  * Renames a selected set of images within a single album using an
- * admin-defined naming pattern (prefix / suffix / sequential numbering /
- * custom template), previewing the result before anything on disk or in
- * the database changes.
+ * admin-defined naming pattern, previewing the result before anything on
+ * disk or in the database changes.
  *
- * Reached only via a POST from the Image Manager's "Rename Selected" button
- * (admin/images.php), which supplies album_id + ids[]. A three-step flow,
- * all POST (there is no GET entry point):
- *   1. action=form    (default on first load) — show the pattern form.
- *   2. action=preview — compute and display the proposed filenames.
- *   3. action=apply   — perform the rename on disk and in the database.
+ * All POST, no GET entry point: action=form (default) shows the pattern
+ * form, action=preview computes proposed filenames, action=apply performs
+ * the rename.
  *
  * The rename plan (which filename each image becomes) is always recomputed
  * server-side from album_id + ids[] + the pattern fields on every step —

@@ -3,36 +3,18 @@ declare(strict_types=1);
 /**
  * Lumora Gallery — Admin: Group Management
  *
- * Allows administrators to:
- *   - View every permission group (the three built-in system groups plus any
- *     custom groups) with its permission set and current user count
- *   - Grant or revoke individual permissions per group
- *   - Create new custom groups
- *   - Rename any group (including system groups)
- *   - Delete custom groups (with safeguards — see below)
+ * View, create, rename, and delete permission groups, and grant/revoke
+ * individual permissions per group. Permission changes take effect
+ * immediately since GroupService caches nothing across requests.
  *
- * Permission changes take effect immediately: GroupService caches permissions
- * per-request only, and every permission check reads live from
- * {PREFIX}group_permissions on the next request for any user in the group.
+ * Safeguards: the three system groups (admin, moderator, contributor) can
+ * never be deleted; the 'admin' group can never lose 'user_management' or
+ * 'site_configuration' (GroupService::updateGroupPermissions() silently
+ * re-adds them, so an admin can never lock themselves out); a group with
+ * assigned users can't be deleted until they're reassigned.
  *
- * Safeguards:
- *   - The three system groups (admin, moderator, contributor) can never be
- *     deleted.
- *   - The 'admin' system group can never lose 'user_management' or
- *     'site_configuration' — GroupService::updateGroupPermissions() silently
- *     re-adds them if a submitted form omits either one, so administrators
- *     can never lock themselves out of Users/Groups or Configuration.
- *   - A group with one or more user accounts still assigned to it cannot be
- *     deleted — reassign those accounts to a different group first (via
- *     Admin → Users).
- *
- * Security:
- *   - All POST actions require a valid CSRF token.
- *   - Gated on the 'user_management' permission, same as admin/users.php.
- *   - Requires Migration0007 (DB version 13) for the {PREFIX}groups /
- *     {PREFIX}group_permissions tables; a warning with a migration link is
- *     shown if pending (GroupService falls back to the legacy hardcoded
- *     three-role behaviour in the meantime, so nothing breaks either way).
+ * Requires Migration0007 for the groups tables — GroupService falls back
+ * to the legacy hardcoded three-role behaviour until it's applied.
  *
  * @package    LumoraGallery
  * @subpackage Admin
