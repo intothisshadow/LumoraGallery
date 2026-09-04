@@ -1286,11 +1286,8 @@ class GalleryService
      * Return true when the image identified by $imageId has uploaded_by = $userId.
      *
      * The single source of truth for the contributor role's 'edit_own_images'
-     * permission, used by lumora_require_image_access() in auth.php and by the
-     * per-ID checks in the bulk image AJAX handlers (ajax_image_delete.php,
-     * ajax_image_move.php, ajax_image_rethumb.php). Returns false for an image
-     * with uploaded_by = 0 (no recorded owner) — such images remain accessible
-     * only to users holding 'manage_images'.
+     * permission. Returns false for an image with uploaded_by = 0 (no recorded
+     * owner) — such images remain accessible only to users holding 'manage_images'.
      */
     public static function imageBelongsToUser(int $imageId, int $userId): bool
     {

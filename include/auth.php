@@ -286,9 +286,8 @@ function lumora_has_permission(string $permission): bool
  * Redirects to the login page when not authenticated; shows a 403 page when
  * authenticated but lacking access to this specific album. Call this in
  * addition to the page-level lumora_require_any_permission() gate wherever a
- * specific album ID is being read or written (admin/albums.php's edit/save
- * handlers, admin/batch.php, admin/ajax_batch.php) so a contributor cannot
- * bypass their assignment by guessing another album's ID in the URL.
+ * specific album ID is being read or written, so a contributor cannot bypass
+ * their assignment by guessing another album's ID in the URL.
  */
 function lumora_require_album_access(int $albumId): void
 {
@@ -310,15 +309,13 @@ function lumora_require_album_access(int $albumId): void
  * Redirects to the login page when not authenticated; shows a 403 page when
  * authenticated but lacking access to this specific image. Mirrors
  * lumora_require_album_access(). Call this wherever a specific image ID is
- * being read or written by a page whose top-of-file gate is the shared
- * ['manage_images', 'edit_own_images'] pair (admin/images.php's edit/save/
- * delete handlers) so a contributor cannot bypass ownership scoping by
- * guessing another user's image ID in the URL.
+ * being read or written by a page gated on the shared
+ * ['manage_images', 'edit_own_images'] pair, so a contributor cannot bypass
+ * ownership scoping by guessing another user's image ID in the URL.
  *
- * AJAX handlers that process many IDs per call (ajax_image_delete.php,
- * ajax_image_move.php) perform the equivalent per-ID check inline instead of
- * calling this function, since a single unauthorised ID in a bulk request
- * should be skipped with a per-item error, not abort the whole call.
+ * Bulk AJAX handlers that process many IDs per call perform the equivalent
+ * per-ID check inline instead, since a single unauthorised ID in a bulk
+ * request should be skipped with a per-item error, not abort the whole call.
  */
 function lumora_require_image_access(int $imageId): void
 {

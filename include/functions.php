@@ -257,22 +257,15 @@ function lumora_covers_url(string $kind): string
 }
 
 /**
- * Resolve the theme-preview state for the current request once, caching the
- * result in a static local so lumora_active_theme() and
- * lumora_theme_preview_notice() below always agree on the same answer
- * without recomputing it or drifting apart if called multiple times.
+ * Resolve the theme-preview state for the current request once, cached in a
+ * static local so every caller this request agrees on the same answer.
  *
- * Admin-only, single-request theme preview via a `?theme=` query parameter
- * (TODO.md #29): when present, the current visitor is a logged-in admin,
- * and the named theme actually exists (has a template.html), it wins for
- * this request only. The configured `theme` setting in the database is
- * never read from here for writing and is never touched, so no other
- * visitor or future request is ever affected — the preview is entirely
- * request-scoped statelessness, not a session or cookie override.
- *
- * Falls back to the real configured theme in every other case: no
- * parameter, a non-admin visitor (silently ignored — see requirement in
- * TODO.md #29), or an unrecognised/nonexistent theme name.
+ * Admin-only, single-request theme preview via a `?theme=` query parameter:
+ * when present, the visitor is a logged-in admin, and the named theme exists
+ * (has a template.html), it wins for this request only — the configured
+ * `theme` setting is never written, so no other visitor or request is
+ * affected. Falls back to the real configured theme otherwise (no
+ * parameter, non-admin visitor, or unrecognised theme name).
  *
  * @return array{theme: string, requested: string|null, valid: bool}
  */
@@ -301,11 +294,9 @@ function lumora_theme_preview_state(): array
 /**
  * Active theme name for the current request (falls back to 'default').
  *
- * See lumora_theme_preview_state() above for the admin-only `?theme=`
- * preview this resolves through — every existing caller (lumora_theme_url(),
- * lumora_theme_path(), ThemeRenderer::renderPage()) is unaffected by name or
- * signature and automatically picks up the preview theme's assets for the
- * duration of the request.
+ * Resolves through lumora_theme_preview_state()'s admin-only `?theme=`
+ * preview above, so callers transparently pick up the preview theme's
+ * assets for the duration of the request.
  */
 function lumora_active_theme(): string
 {
@@ -314,18 +305,9 @@ function lumora_active_theme(): string
 
 /**
  * Admin-only notice banner HTML for the current request's theme-preview
- * state (TODO.md #29), or '' when there's nothing to show — including for
- * every non-admin visitor and every normal request with no `?theme=`
- * parameter at all, so ordinary page loads are completely unaffected.
- *
- * Two cases:
- *   - An invalid/nonexistent `?theme=` value was supplied (silently ignored
- *     by lumora_active_theme() above, per TODO.md #29's fallback
- *     requirement) — tells the admin why they're seeing the real active
- *     theme instead of their requested preview.
- *   - A valid `?theme=` preview is currently active — reminds the admin
- *     this view is temporary, visible only to them, and that no setting
- *     has actually been changed.
+ * state, or '' when there's nothing to show (non-admin, or no `?theme=`
+ * parameter). Explains either that an invalid `?theme=` value was ignored,
+ * or that a valid preview is active and temporary.
  */
 function lumora_theme_preview_notice(): string
 {
@@ -344,24 +326,11 @@ function lumora_theme_preview_notice(): string
 }
 
 /**
- * Append the current admin-only theme-preview parameter (TODO.md #9), if one
- * is active for this request, to an internal category/album/navigation URL —
- * so clicking through the gallery (nav links, breadcrumbs, category/album
- * cards, pagination, sort controls) keeps previewing the same theme for the
- * rest of the browsing session instead of silently reverting to the real
- * active theme on the very next click.
- *
- * Every URL-building function that generates an internal gallery link routes
- * its href through this helper: ThemeRenderer::renderNav(),
- * ::renderBreadcrumb(), ::renderCatgrid(), ::renderCatlist(),
- * ::renderSortControls(), and lumora_pagination() (which threads it through
- * prev_url/next_url/url_pattern for every page-number link built from it).
- *
- * A no-op — returns $url completely unchanged — whenever no valid `?theme=`
- * preview is active for the current request (the overwhelming majority of
- * requests), so ordinary page loads pay no extra cost and see no behaviour
- * change. Relies on lumora_theme_preview_state() for the admin-only gate and
- * theme-existence validation already enforced there.
+ * Append the active theme-preview parameter, if any, to an internal
+ * gallery URL — so clicking through the site keeps previewing the same
+ * theme instead of reverting on the next click. Every URL-building
+ * function that generates an internal gallery link routes its href
+ * through this helper. Returns $url unchanged when no preview is active.
  */
 function lumora_theme_preview_link(string $url): string
 {

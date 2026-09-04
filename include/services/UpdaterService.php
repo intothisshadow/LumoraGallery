@@ -2028,24 +2028,16 @@ class UpdaterService
     /**
      * Removes files that were part of a previous Replace stage's manifest
      * but aren't part of this run's file listing — the only way a file can
-     * actually go stale under this updater's incremental copy-over-without-
-     * deleting model. Deliberately compares against $preserve (this run's
-     * configured preserve list, e.g. respecting a currently-enabled
-     * "preserve themes" toggle even if an earlier run had it disabled) AND
-     * the hardcoded ALWAYS_PROTECTED list, so albums/config.php/cache can
-     * never be removed regardless of manifest history or how $preserve was
-     * computed elsewhere.
+     * go stale under this updater's copy-over-without-deleting model.
+     * Compares against both $preserve (this run's preserve list) and the
+     * hardcoded ALWAYS_PROTECTED list, so albums/config.php/cache can never
+     * be removed regardless of manifest history. A missing/never-written
+     * manifest reads back as [], so the first run after this feature ships
+     * is always a safe no-op.
      *
-     * A missing/never-written manifest reads back as [], so the very first
-     * run after this exists is always a safe no-op: nothing is removed,
-     * tracking simply begins from that point on.
-     *
-     * $destRoot is an explicit parameter (rather than hardcoding LUMORA_ROOT
-     * internally) purely so this method — unlike stageReplace() as a whole —
-     * can be exercised directly against a throwaway fixture directory in
-     * tests, the same reasoning copyDirectory() already takes an explicit
-     * $dst rather than assuming LUMORA_ROOT. Production always calls this
-     * with $destRoot === LUMORA_ROOT (see stageReplace()).
+     * $destRoot is an explicit parameter (rather than hardcoding LUMORA_ROOT)
+     * so this method can be exercised against a throwaway fixture directory
+     * in tests; production always calls it with $destRoot === LUMORA_ROOT.
      *
      * @param list<string> $previousManifest
      * @param list<string> $preserve

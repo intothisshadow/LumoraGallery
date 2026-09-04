@@ -126,14 +126,12 @@ function lum_admin_pagination(array $pag): string
 
     $html = '<nav aria-label="Page navigation"><ul class="pagination pagination-sm mb-0 flex-wrap">';
 
-    // Previous button.
     if ($pag['has_prev']) {
         $html .= '<li class="page-item"><a class="page-link" href="' . h((string) $pag['prev_url']) . '">‹ Prev</a></li>';
     } else {
         $html .= '<li class="page-item disabled"><span class="page-link">‹ Prev</span></li>';
     }
 
-    // Numbered page links with ellipsis gaps.
     $prev_p = null;
     foreach ($pages as $p) {
         if ($prev_p !== null && $p > $prev_p + 1) {
@@ -148,7 +146,6 @@ function lum_admin_pagination(array $pag): string
         $prev_p = $p;
     }
 
-    // Next button.
     if ($pag['has_next']) {
         $html .= '<li class="page-item"><a class="page-link" href="' . h((string) $pag['next_url']) . '">Next ›</a></li>';
     } else {

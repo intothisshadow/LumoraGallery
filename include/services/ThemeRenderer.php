@@ -47,26 +47,15 @@ class ThemeRenderer
      *                           before first paint (prevents flash-of-wrong-theme)
      *   {COLOR_MODE_TOGGLE}   - toggle button (☀️/🌙/🖥️) for the nav
      *
-     * Admin-only theme preview (TODO.md #29): lumora_active_theme() resolves
-     * an admin's `?theme=` query parameter for this request only (see
-     * lumora_theme_preview_state() in functions.php) — every path below
-     * (template file, {THEME_URL}, theme.php override) automatically follows
-     * whichever theme that resolves to, with no changes needed here. A small
-     * admin-only notice banner (lumora_theme_preview_notice()) is prepended
-     * directly to $content so it renders regardless of which theme's
-     * template.html is active, without requiring a new template token that
-     * every bundled and custom theme would otherwise need to add.
-     *
-     * Category/album preview persistence (TODO.md #9): the preview above
-     * covers index.php (home + category pages) and album.php automatically
-     * since both already render through this one method — no page-type-
-     * specific resolution logic was needed. The remaining piece is that
-     * clicking any internal gallery link (nav, breadcrumb, category/album
-     * card, pagination, sort control) must not silently drop the `?theme=`
-     * parameter on the next page load; every URL-building function in this
-     * class routes its generated hrefs through lumora_theme_preview_link()
-     * (functions.php) to carry the preview forward for the rest of the
-     * browsing session.
+     * Admin-only theme preview: lumora_active_theme() resolves an admin's
+     * `?theme=` query parameter for this request only, so every path below
+     * (template file, {THEME_URL}, theme.php override) follows it with no
+     * special-casing here. The notice banner is prepended directly to
+     * $content rather than added as a template token, so it renders under
+     * any theme without requiring every theme to add support for it. Every
+     * URL-building function in this class routes hrefs through
+     * lumora_theme_preview_link() so the `?theme=` parameter survives
+     * navigation for the rest of the browsing session.
      *
      * @param string $content   The main page HTML.
      * @param array  $extra     Additional token => value pairs to replace.
