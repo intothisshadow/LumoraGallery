@@ -4,6 +4,20 @@ Long-term archive of completed work, migrated from TODO.md on release.
 
 ---
 
+## v1.18.2 — Released 2026-09-09
+
+### Added
+
+- **LG-056 — Full Backups: Download button.** The Full Backups panel on the
+  Updates admin page now has a Download button alongside Restore and
+  Delete for each retained backup, streaming the ZIP snapshot (codebase +
+  database dump) directly to the browser. New `BackupService::backupFilePath()`
+  and a `backup_download` POST action in `admin/update.php`, gated by the
+  same Site Configuration permission as the other backup actions. The
+  gzip-the-raw-dump idea cross-referenced from Lumora Press's LP-152 doesn't
+  apply here since `database.sql` is already embedded inside the same
+  `ZipArchive` as the rest of the snapshot.
+
 ## v1.18.1 — Released 2026-09-02
 
 ### Added
