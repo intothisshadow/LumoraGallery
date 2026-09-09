@@ -72,6 +72,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             lumora_redirect($self_url);
             break;
 
+        case 'backup_download':
+            $dl_path = BackupService::backupFilePath((string) ($_POST['filename'] ?? ''));
+            if ($dl_path === null) {
+                lum_flash('Backup not found.', 'danger');
+                lumora_redirect($self_url);
+            }
+            header('Content-Type: application/zip');
+            header('Content-Disposition: attachment; filename="' . basename($dl_path) . '"');
+            header('Content-Length: ' . filesize($dl_path));
+            readfile($dl_path);
+            exit;
+
         case 'backup_delete':
             $r = BackupService::deleteBackup((string) ($_POST['filename'] ?? ''));
             lum_flash($r['message'], $r['success'] ? 'success' : 'danger');
@@ -520,8 +532,16 @@ foreach ($backups as $b) {
     $b_ver_h     = h($b['version']);
     $b_fn_h      = h($b['filename']);
 
+    $download_btn = $can_perform_updates
+        ? '<form method="post" action="' . $self_url . '" class="d-inline">'
+          . '<input type="hidden" name="action" value="backup_download">'
+          . '<input type="hidden" name="csrf_token" value="' . $csrf_h . '">'
+          . '<input type="hidden" name="filename" value="' . $b_fn_h . '">'
+          . '<button type="submit" class="btn btn-sm btn-outline-secondary">Download</button>'
+          . '</form>'
+        : '';
     $restore_btn = $can_perform_updates
-        ? '<form method="post" action="' . $self_url . '" class="d-inline" onsubmit="return confirm(\'Restore this backup? Current application files and database will be overwritten (albums/ and cache/ are left untouched).\');">'
+        ? '<form method="post" action="' . $self_url . '" class="d-inline ms-1" onsubmit="return confirm(\'Restore this backup? Current application files and database will be overwritten (albums/ and cache/ are left untouched).\');">'
           . '<input type="hidden" name="action" value="backup_restore">'
           . '<input type="hidden" name="csrf_token" value="' . $csrf_h . '">'
           . '<input type="hidden" name="filename" value="' . $b_fn_h . '">'
@@ -539,7 +559,7 @@ foreach ($backups as $b) {
 
     $backup_rows .= '<tr><td>' . $b_ver_h . '</td><td class="small">' . $b_created_h . '</td>'
         . '<td class="small">' . $b_size_h . '</td>'
-        . '<td class="text-nowrap">' . $restore_btn . $delete_btn . '</td></tr>';
+        . '<td class="text-nowrap">' . $download_btn . $restore_btn . $delete_btn . '</td></tr>';
 }
 $backups_table = $backup_rows !== ''
     ? '<table class="table table-sm mb-0"><thead><tr><th>Version</th><th>Created</th><th>Size</th><th></th></tr></thead><tbody>' . $backup_rows . '</tbody></table>'

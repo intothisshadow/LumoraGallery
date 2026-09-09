@@ -48,7 +48,7 @@ Lumora/
 │   ├── migrate.php             Migration hub — discovers and launches importer plugins
 │   ├── plugins.php             Feature plugin manager — enable/disable/delete plugins discovered under plugins/
 │   ├── tools.php               Admin tools (File Integrity Check, Reload Dimensions, Regenerate Thumbnails, Regenerate Missing Thumbnails)
-│   ├── update.php              Updates page — consolidated status/source metadata grid, interactive Latest Release card (checksum bar, Markdown release notes, re-download), Full Backups panel (create/restore/delete ZIP snapshots), System Status checks, Update Settings (channel/frequency/token), in-dashboard updater (10-stage AJAX workflow with automatic update backup + rollback) sourced from either a GitHub release or an administrator-uploaded ZIP, schema migrations, update history
+│   ├── update.php              Updates page — consolidated status/source metadata grid, interactive Latest Release card (checksum bar, Markdown release notes, re-download), Full Backups panel (create/download/restore/delete ZIP snapshots), System Status checks, Update Settings (channel/frequency/token), in-dashboard updater (10-stage AJAX workflow with automatic update backup + rollback) sourced from either a GitHub release or an administrator-uploaded ZIP, schema migrations, update history
 │   ├── forgot_password.php  Password recovery — emails a reset link (no mail-free fallback; see reset-password.php)
 │   ├── reset_password.php   Password reset — validates token, sets new password
 │   ├── delete_reset_script.php  One-click authenticated delete for a still-present reset-password.php
@@ -72,7 +72,7 @@ Lumora/
 │   │   ├── AbstractUpdateProvider.php  Provider interface — fetchMetadata(), buildArchiveUrl(), factory
 │   │   ├── GitHubUpdateProvider.php    GitHub Releases API provider — metadata, SHA-256, curated ZIP asset URL (falls back to raw archive URL)
 │   │   ├── UpdaterService.php  Update orchestrator — 10-stage workflow, lock file, backup, rollback, standalone download+verify, system status checks; accepts a release from either a GitHub-fetched archive or an administrator-uploaded ZIP (acquireLockFromUpload())
-│   │   ├── BackupService.php   Full-installation ZIP backups (code + config + DB dump, excluding albums/cache) — create/restore/delete, up to 3 retained
+│   │   ├── BackupService.php   Full-installation ZIP backups (code + config + DB dump, excluding albums/cache) — create/download/restore/delete, up to 3 retained
 │   │   ├── InstallationService.php  Installation settings detection, migration helpers, health checks, audit logging
 │   │   ├── ServerEnvironmentService.php  Web server detection (LiteSpeed/OpenLiteSpeed/Apache/nginx/Caddy) and HTTP/2, HTTP/3, Brotli, active-LSCache capability flags
 │   │   ├── CacheHeaderService.php  Managed .htaccess cache-control block for static assets (Apache/LiteSpeed-compatible) and opt-in LiteSpeed Cache purge-header integration

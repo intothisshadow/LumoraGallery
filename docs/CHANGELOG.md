@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Full Backups: Download button (LG-056).** The Full Backups panel on the
+  Updates admin page now has a Download button alongside Restore and
+  Delete for each retained backup, streaming the ZIP snapshot (codebase +
+  database dump) directly to the browser. New `BackupService::backupFilePath()`
+  and a `backup_download` POST action in `admin/update.php`, gated by the
+  same Site Configuration permission as the other backup actions.
+
 ## [1.18.1] — 2026-09-02
 
 ### Added

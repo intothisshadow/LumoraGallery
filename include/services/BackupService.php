@@ -248,6 +248,19 @@ class BackupService
         }
     }
 
+    // ── Download ──────────────────────────────────────────────────────────────
+
+    /**
+     * Resolve a backup's absolute filesystem path for download, or null if no
+     * such backup exists. basename() strips any directory traversal from the
+     * caller-supplied filename before it ever touches the filesystem.
+     */
+    public static function backupFilePath(string $filename): ?string
+    {
+        $path = self::backupsDir() . basename($filename);
+        return file_exists($path) ? $path : null;
+    }
+
     // ── Delete ────────────────────────────────────────────────────────────────
 
     /**
