@@ -120,12 +120,11 @@ A dedicated cover image uploaded for a category or album (see [Administration](#
 ### Themes
 Themes live in `themes/{name}/` and require only `template.html`. The active theme, and everything below, is managed from **Admin → Appearance**; multiple themes can be installed simultaneously and switched anytime.
 
-Both bundled themes (and every custom theme) fully support light/dark mode, following the visitor's own OS preference by default. Logged-in staff get their colour-mode preference synced to their account so it follows them across devices; a **Default Colour Mode** setting sets the site-wide fallback for first-time visitors.
+The bundled theme (and every custom theme) fully supports light/dark mode, following the visitor's own OS preference by default. Logged-in staff get their colour-mode preference synced to their account so it follows them across devices; a **Default Colour Mode** setting sets the site-wide fallback for first-time visitors.
 
-Two themes are included:
+One theme is included:
 
 - **`default`** — Bootstrap 5 responsive layout with a dark navbar. Clean and neutral; a good starting point for any site.
-- **`classic-fansite`** — Traditional fixed-width fansite layout (2000s–2010s fandom era) with a full-bleed banner image area, sticky navigation bar, and a centred content panel. Ships with five ready-made fandom colour presets and full customisation instructions in `themes/classic-fansite/README.md`.
 
 Themes can be installed or updated directly from a `.zip` upload in Admin → Appearance — no FTP needed — and every theme card has a **Preview** button: a logged-in administrator can preview any installed theme against the live gallery for their own session only, without changing what any other visitor sees, which is handy for trying out a theme (or a tweak to one) before switching everyone over to it.
 

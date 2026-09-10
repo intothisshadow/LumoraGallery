@@ -128,14 +128,9 @@ Lumora/
 │       ├── bootstrap.php       Registers this plugin's hooks — runs on every request while enabled
 │       └── README.md           Plugin documentation
 ├── themes/                     Theme folders
-│   ├── default/
-│   │   ├── template.html       Bootstrap 5 base template
-│   │   └── style.css           Gallery styles
-│   └── classic-fansite/
-│       ├── template.html       Classic fansite layout (banner, sticky nav, centred panel)
-│       ├── style.css           Fully variable-driven styles with fandom colour presets
-│       ├── custom.css          Optional per-site CSS overrides (loaded after style.css)
-│       └── README.md           Customisation guide + theme creation walkthrough
+│   └── default/
+│       ├── template.html       Bootstrap 5 base template
+│       └── style.css           Gallery styles
 ├── ajax_hit.php                Public image view counter endpoint (fire-and-forget POST)
 ├── album.php                   Public album view (pagination, sort, lightbox)
 ├── index.php                   Public home, category browse, special views

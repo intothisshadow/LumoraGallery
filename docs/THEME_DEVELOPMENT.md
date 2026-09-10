@@ -1,11 +1,10 @@
 # Lumora Gallery — Theme Development Guide
 
 This guide covers everything needed to build a Lumora theme, with a focus on
-the built-in dark mode system. It complements
-[`themes/classic-fansite/README.md`](../themes/classic-fansite/README.md),
-which walks through deriving a new fandom theme from that starter step by
-step — read this guide first for the underlying mechanics, then use the
-Classic Fansite README as a hands-on tutorial.
+the built-in dark mode system. The bundled `default` theme
+(`themes/default/`) is the reference implementation referred to throughout —
+read this guide for the underlying mechanics, then look at its
+`template.html`/`style.css` for a complete working example.
 
 ---
 
@@ -33,7 +32,7 @@ file — no registration step is required. The active theme is chosen in
 | `{THEME_URL}` | URL to this theme's directory, with trailing slash |
 | `{BASE_URL}` | Gallery root URL, with trailing slash |
 | `{LUMORA_VERSION}` | Version string, e.g. `"1.9.2"` |
-| `{NAVIGATION}` | Site nav links (Home/Latest/Most Viewed/Random) — renders as `<ul class="navbar-nav"><li class="nav-item"><a class="nav-link">`; restyle those generic classes in your theme's CSS rather than hand-building the links, so the "Most Viewed" link keeps carrying the current album/category forward (LG-33) — see classic-fansite's `style.css` for an example of restyling them to a custom look |
+| `{NAVIGATION}` | Site nav links (Home/Latest/Most Viewed/Random) — renders as `<ul class="navbar-nav"><li class="nav-item"><a class="nav-link">`; restyle those generic classes in your theme's CSS rather than hand-building the links, so the "Most Viewed" link keeps carrying the current album/category forward (LG-33) — see `default`'s `style.css` for an example of restyling them to a custom look |
 | `{ADMIN_LINK}` | Admin panel `<a>` link (empty for non-admin visitors) |
 | `{POWERED_BY}` | "Powered by Lumora Gallery" credit (empty when disabled in config) |
 | `{CONTENT}` | Main page HTML |
@@ -156,15 +155,11 @@ value inside your `html[data-bs-theme="dark"]` block.
 
 ### Inherit the standard variables where possible
 
-The two bundled themes use two different naming conventions, both of which
-are legitimate patterns to copy from:
-
-- **`default` theme** — generic `--lum-*` tokens (`--lum-bg`, `--lum-surface`,
-  `--lum-border`, `--lum-text`, `--lum-muted`, `--lum-head-text`, `--lum-accent`,
-  plus semantic tint tokens like `--lum-card-tint-blue`). Good starting point
-  for a clean, neutral theme.
-- **`classic-fansite` theme** — `--fs-*` tokens documented in full in
-  `themes/classic-fansite/README.md`, including fandom colour presets.
+The bundled `default` theme uses generic `--lum-*` tokens (`--lum-bg`,
+`--lum-surface`, `--lum-border`, `--lum-text`, `--lum-muted`,
+`--lum-head-text`, `--lum-accent`, plus semantic tint tokens like
+`--lum-card-tint-blue`) — a good starting point to copy from for a clean,
+neutral theme.
 
 New themes should pick **one** prefix and use it consistently rather than
 hard-coding hex colours inside component rules. Hard-coded colours are the
@@ -181,12 +176,11 @@ modes: `.lum-thumbgrid` / `.lum-thumb-item` / `.lum-thumb-caption` (thumbnail
 grid), `.lum-catgrid` / `.lum-catcard` / `.lum-catlist` (album & category
 grids/lists), `.lum-section-title`, `.lum-stat-box`, `.lum-album-desc` /
 `.lum-cat-desc`, `.lum-sort-bar`, `.lum-pagination`, `.breadcrumb`,
-`.lum-who-is-online`, `.lum-empty`. See `themes/default/style.css` and
-`themes/classic-fansite/style.css` for the full reference implementation —
-both are organised under named section banners (Layout, Typography,
-Navigation, Albums & Categories, Image Pages, Forms, Buttons, Tables,
-Messages, Utility Components, Media, Loading indicator, Print styles,
-Responsive) that a new theme can mirror.
+`.lum-who-is-online`, `.lum-empty`. See `themes/default/style.css` for the
+full reference implementation — it is organised under named section banners
+(Layout, Typography, Navigation, Albums & Categories, Image Pages, Forms,
+Buttons, Tables, Messages, Utility Components, Media, Loading indicator,
+Print styles, Responsive) that a new theme can mirror.
 
 ---
 
@@ -201,9 +195,9 @@ Run through this list before shipping a theme, in both light and dark mode:
   the text colour drawn on top of them, not just against the page background.
 - **Icons** — any inline SVG icon should use `fill="currentColor"` (never a
   hard-coded hex fill) so it automatically follows the surrounding text
-  colour in both modes. Both bundled themes' icons (the online-visitors icon,
-  the category/album placeholder icon, and the PhotoSwipe download-button
-  icon) already follow this pattern.
+  colour in both modes. The bundled `default` theme's icons (the
+  online-visitors icon, the category/album placeholder icon, and the
+  PhotoSwipe download-button icon) already follow this pattern.
 - **Forms and buttons** — verify `.form-control`, `.form-select`,
   `.form-check-input`, and both `.btn-primary` / `.btn-outline-primary` read
   clearly against your dark background token, including the focus ring
@@ -268,12 +262,11 @@ html[data-bs-theme="dark"] .my-logo-dark  { display: block; }
 
 ### Print styles
 
-Both bundled themes ship a `@media print` block that hides navigation,
-footer, sort bar, pagination, the admin link, and the colour-mode toggle so
-a printed page shows only gallery content. New themes should do the same —
-copy the block from `themes/default/style.css` or
-`themes/classic-fansite/style.css` and adjust the selector list to match
-your own chrome elements.
+The bundled `default` theme ships a `@media print` block that hides
+navigation, footer, sort bar, pagination, the admin link, and the
+colour-mode toggle so a printed page shows only gallery content. New themes
+should do the same — copy the block from `themes/default/style.css` and
+adjust the selector list to match your own chrome elements.
 
 ---
 

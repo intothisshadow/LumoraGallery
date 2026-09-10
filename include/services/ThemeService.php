@@ -37,7 +37,7 @@ class ThemeService
     private const SCREENSHOT_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'avif'];
 
     /** Bundled themes that ship with the app and must never be deleted. */
-    private const PROTECTED_THEMES = ['default', 'classic-fansite'];
+    private const PROTECTED_THEMES = ['default'];
 
     private const MAX_ZIP_ENTRIES           = 2000;
     private const MAX_ZIP_UNCOMPRESSED_SIZE = 50 * 1024 * 1024;

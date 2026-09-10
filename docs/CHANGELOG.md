@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Removed
+
+- **`classic-fansite` bundled theme (LG-057).** The theme is no longer shipped: `themes/classic-fansite/` has been deleted, and `ThemeService::PROTECTED_THEMES` no longer lists it, leaving `default` as the only bundled (non-deletable) theme. Documentation (`README.md`, `docs/ARCHITECTURE.md`, `docs/THEME_DEVELOPMENT.md`) now references `default` as the sole bundled theme and reference implementation. Custom themes are unaffected.
+
 ## [1.18.2] — 2026-09-09
 
 ### Added
