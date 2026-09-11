@@ -4,6 +4,13 @@ Long-term archive of completed work, migrated from TODO.md on release.
 
 ---
 
+## v1.18.4 — Released 2026-09-11
+
+### Added
+
+- **LG-059 — Multi-Album Shortcode tool for the Lumora Press Shortcodes plugin.** A new **Admin → Multi-Album Shortcode** page (`plugins/lumora-press-shortcodes/admin/multi-album.php`) lets an admin check off any number of albums and get back one combined `[lumora_gallery_album album_id="1,2,3"]` shortcode, instead of typing album IDs by hand — `LumoraPressShortcodesService::buildMultiAlbumShortcode()` builds it. This only works because the companion Lumora Press project's own `[lumora_gallery_album]` shortcode renderer (`GalleryShortcode`/`GalleryQueryService` in that project) was extended in the same session to accept a comma-separated `album_id` list and combine those albums' images into one rendered block — see that project's `LPP-019` for the renderer-side half.
+- **LG-060 — Embed Markdown for the frontend lightbox's staff info panel.** The PhotoSwipe lightbox's existing admin/staff-only info panel (`ThemeRenderer::renderLightboxJs()`) — which already showed a direct image URL and an Embed HTML snippet — now also shows an **Embed Markdown** field (`[![alt](thumbnail URL)](full-size URL)`) with its own **Copy Markdown** button, matching the existing Embed HTML field/button pair.
+
 ## v1.18.3 — Released 2026-09-11
 
 ### Fixed
