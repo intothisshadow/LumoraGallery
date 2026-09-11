@@ -888,6 +888,10 @@ HTML;
       return '<a href="' + fullUrl + '"><img class="alignnone size-full" src="' + thumbUrl + '"' + dims + ' /></a>';
     }
 
+    function lumBuildMarkdownSnippet(fullUrl, thumbUrl, altText) {
+      return '[![' + (altText || '') + '](' + thumbUrl + ')](' + fullUrl + ')';
+    }
+
     function lumFallbackCopy(text, cb) {
       var ta = document.createElement('textarea');
       ta.value = text;
@@ -898,6 +902,22 @@ HTML;
       try { document.execCommand('copy'); } catch (e) {}
       document.body.removeChild(ta);
       cb();
+    }
+
+    function lumCopyFieldValue(panel, fieldSelector) {
+      var feedback = panel.querySelector('.lum-lightbox-info-feedback');
+      var value    = panel.querySelector(fieldSelector).value;
+      var done = function () {
+        feedback.textContent = 'Copied!';
+        setTimeout(function () { feedback.textContent = ''; }, 2000);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(value).then(done).catch(function () {
+          lumFallbackCopy(value, done);
+        });
+      } else {
+        lumFallbackCopy(value, done);
+      }
     }
 
     function lumEnsureInfoPanel(pswp) {
@@ -912,30 +932,23 @@ HTML;
           '<input type="text" class="lum-lightbox-info-url" readonly>' +
           '<span class="lum-lightbox-info-label">Embed HTML</span>' +
           '<textarea class="lum-lightbox-info-html" readonly rows="2"></textarea>' +
+          '<span class="lum-lightbox-info-label">Embed Markdown</span>' +
+          '<textarea class="lum-lightbox-info-markdown" readonly rows="2"></textarea>' +
           '<span class="lum-lightbox-info-label lum-lightbox-info-shortcode-label" hidden>Shortcode</span>' +
           '<input type="text" class="lum-lightbox-info-url lum-lightbox-info-shortcode" readonly hidden>' +
           '<div class="lum-lightbox-info-actions">' +
             '<button type="button" class="lum-lightbox-info-copy">Copy HTML</button>' +
+            '<button type="button" class="lum-lightbox-info-copy-md">Copy Markdown</button>' +
             '<span class="lum-lightbox-info-feedback" aria-live="polite"></span>' +
           '</div>' +
         '</div>';
       pswp.element.appendChild(panel);
 
-      var copyBtn   = panel.querySelector('.lum-lightbox-info-copy');
-      var feedback  = panel.querySelector('.lum-lightbox-info-feedback');
-      copyBtn.addEventListener('click', function () {
-        var htmlVal = panel.querySelector('.lum-lightbox-info-html').value;
-        var done = function () {
-          feedback.textContent = 'Copied!';
-          setTimeout(function () { feedback.textContent = ''; }, 2000);
-        };
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(htmlVal).then(done).catch(function () {
-            lumFallbackCopy(htmlVal, done);
-          });
-        } else {
-          lumFallbackCopy(htmlVal, done);
-        }
+      panel.querySelector('.lum-lightbox-info-copy').addEventListener('click', function () {
+        lumCopyFieldValue(panel, '.lum-lightbox-info-html');
+      });
+      panel.querySelector('.lum-lightbox-info-copy-md').addEventListener('click', function () {
+        lumCopyFieldValue(panel, '.lum-lightbox-info-markdown');
       });
 
       return panel;
@@ -950,6 +963,9 @@ HTML;
 
       var htmlField = panel.querySelector('.lum-lightbox-info-html');
       htmlField.value = lumBuildSnippet(data.src, data.thumbUrl, 0, 0);
+
+      var mdField = panel.querySelector('.lum-lightbox-info-markdown');
+      mdField.value = lumBuildMarkdownSnippet(data.src, data.thumbUrl, data.alt);
 
       var scLabel = panel.querySelector('.lum-lightbox-info-shortcode-label');
       var scField = panel.querySelector('.lum-lightbox-info-shortcode');

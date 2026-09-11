@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Embed Markdown in the frontend lightbox's staff info panel (LG-060).** The admin/staff-only info panel in the PhotoSwipe lightbox — which already offered a direct image URL and an Embed HTML snippet — now also offers an **Embed Markdown** field (`[![alt](thumbnail URL)](full-size URL)`) with its own **Copy Markdown** button, alongside the existing Embed HTML field and Copy HTML button.
+
 ## [1.18.3] — 2026-09-11
 
 ### Added

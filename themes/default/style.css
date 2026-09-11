@@ -996,7 +996,8 @@ html.lum-theme-transition *::after {
 }
 
 .lum-lightbox-info-url,
-.lum-lightbox-info-html {
+.lum-lightbox-info-html,
+.lum-lightbox-info-markdown {
   display:       block;
   width:         100%;
   background:    rgba(255, 255, 255, .08);
@@ -1009,18 +1010,21 @@ html.lum-theme-transition *::after {
   resize:        none;
 }
 
-.lum-lightbox-info-html {
+.lum-lightbox-info-html,
+.lum-lightbox-info-markdown {
   min-height: 3.2em;
 }
 
 .lum-lightbox-info-actions {
   display:     flex;
   align-items: center;
+  flex-wrap:   wrap;
   gap:         .5rem;
   margin-top:  .5rem;
 }
 
-.lum-lightbox-info-copy {
+.lum-lightbox-info-copy,
+.lum-lightbox-info-copy-md {
   background:    #2d7dfa;
   color:         #fff;
   border:        none;
@@ -1030,7 +1034,8 @@ html.lum-theme-transition *::after {
   cursor:        pointer;
 }
 
-.lum-lightbox-info-copy:hover {
+.lum-lightbox-info-copy:hover,
+.lum-lightbox-info-copy-md:hover {
   background: #1c6ce8;
 }
 
