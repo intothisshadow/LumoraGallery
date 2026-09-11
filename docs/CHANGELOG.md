@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Folder discovery missed subfolders in a directory with a stray file (LG-058).** `admin/albums.php?action=new`'s "Folders already on disk" scan stopped descending into any directory that directly contained a file, treating it as a leaf album folder — but a directory can hold both a loose file (e.g. an unrelated upload) and real subfolders. `GalleryService::scanAlbumFoldersRecursive()` now skips recursion only for directories already claimed by an existing album, and always walks into unclaimed ones.
+
 ### Removed
 
 - **`classic-fansite` bundled theme (LG-057).** The theme is no longer shipped: `themes/classic-fansite/` has been deleted, and `ThemeService::PROTECTED_THEMES` no longer lists it, leaving `default` as the only bundled (non-deletable) theme. Documentation (`README.md`, `docs/ARCHITECTURE.md`, `docs/THEME_DEVELOPMENT.md`) now references `default` as the sole bundled theme and reference implementation. Custom themes are unaffected.

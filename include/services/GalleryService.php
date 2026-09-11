@@ -1605,15 +1605,21 @@ class GalleryService
      * self::MAX_AVAILABLE_FOLDERS candidates have been collected or
      * self::MAX_SCANNED_DIRS directories have been visited.
      *
-     * Does not recurse into a directory once it's known to directly contain
-     * a file — that's a leaf album folder, and re-scanning
-     * every image file inside it just to confirm it has no subdirectories
-     * was the dominant cost on large galleries (an album with thousands of
-     * images meant thousands of wasted is_dir() stat calls per claimed
-     * album), enough to exceed max_execution_time and abort the request
-     * with no valid JSON response — which is why the "No unclaimed folders
-     * found" notice silently never appeared on big galleries: the fetch()
-     * failed before the frontend ever got a response to read.
+     * Does not recurse into a directory that's already claimed by an
+     * existing album (present in $used) — re-scanning every image file
+     * inside an established leaf album just to confirm it has no
+     * subdirectories was the dominant cost on large galleries (an album
+     * with thousands of images meant thousands of wasted is_dir() stat
+     * calls per claimed album), enough to exceed max_execution_time and
+     * abort the request with no valid JSON response — which is why the
+     * "No unclaimed folders found" notice silently never appeared on big
+     * galleries: the fetch() failed before the frontend ever got a
+     * response to read. Unclaimed directories are always recursed into
+     * even when they directly contain a file themselves — a directory can
+     * hold both a stray file and real subfolders (e.g. a loose upload
+     * sitting alongside genuine episode subfolders), and skipping
+     * recursion based on file presence alone hid those subfolders from
+     * discovery.
      *
      * @param array<string, int> $used        Folder paths already in {PREFIX}albums, as a lookup set.
      * @param list<string>       $found       Accumulator, passed by reference.
@@ -1658,16 +1664,17 @@ class GalleryService
             $relative = str_replace(DIRECTORY_SEPARATOR, '/', $relative);
             $clean    = lumora_sanitize_folder($relative);
 
-            $has_direct_file = self::dirHasDirectFile($real);
-            if ($clean !== '' && $clean === $relative && !isset($used[$clean]) && $has_direct_file) {
+            // Already claimed by an existing album — nothing new to find
+            // inside it, and not worth offering as a candidate either.
+            if ($clean !== '' && isset($used[$clean])) {
+                continue;
+            }
+
+            if ($clean !== '' && $clean === $relative && self::dirHasDirectFile($real)) {
                 $found[] = $clean;
             }
 
-            // A directory that already holds files directly is a leaf album
-            // folder — don't walk into it (see docblock above).
-            if (!$has_direct_file) {
-                self::scanAlbumFoldersRecursive($albums_root, $real, $used, $found, $dirs_walked);
-            }
+            self::scanAlbumFoldersRecursive($albums_root, $real, $used, $found, $dirs_walked);
         }
     }
 
