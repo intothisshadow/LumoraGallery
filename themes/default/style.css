@@ -279,6 +279,28 @@ html.lum-theme-transition *::after {
   padding: .5rem .75rem;
 }
 
+/* Sort links render as Bootstrap's generic .btn-outline-secondary, which  */
+/* otherwise stays its default grey and never picks up the theme's own    */
+/* accent colour. */
+.lum-sort-bar .btn-outline-secondary {
+  background: transparent;
+  border-color: var(--lum-border);
+  color: var(--lum-text);
+}
+
+.lum-sort-bar .btn-outline-secondary:hover,
+.lum-sort-bar .btn-outline-secondary:focus {
+  background: transparent;
+  border-color: var(--lum-accent-ink);
+  color: var(--lum-accent-ink-hover);
+}
+
+.lum-sort-bar .btn-outline-secondary.active {
+  background: var(--lum-accent);
+  border-color: var(--lum-accent);
+  color: #fff;
+}
+
 /* ── Pagination ───────────────────────────────────────────── */
 .lum-pagination .pagination {
   margin-bottom: .4rem;

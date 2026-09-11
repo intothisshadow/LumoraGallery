@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Sort bar buttons had no accent styling in the `default` theme.** The album-view sort links (`ThemeRenderer::renderSortControls()`) render as Bootstrap's generic `.btn-outline-secondary`, which the theme never overrode — leaving them Bootstrap's default grey instead of the theme's own accent colour, including for the active/selected sort option. `themes/default/style.css` now styles `.lum-sort-bar .btn-outline-secondary` (and its hover/active states) with the theme's own tokens.
+
 ## [1.18.4] — 2026-09-11
 
 ### Added
