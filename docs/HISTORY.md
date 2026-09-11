@@ -4,6 +4,16 @@ Long-term archive of completed work, migrated from TODO.md on release.
 
 ---
 
+## v1.18.3 — Released 2026-09-11
+
+### Fixed
+
+- **LG-058 — Folder discovery missed subfolders in a directory with a stray file.** `admin/albums.php?action=new`'s "Folders already on disk" scan stopped descending into any directory that directly contained a file, treating it as a leaf album folder — but a directory can hold both a loose file (e.g. an unrelated upload) and real subfolders. `GalleryService::scanAlbumFoldersRecursive()` now skips recursion only for directories already claimed by an existing album, and always walks into unclaimed ones.
+
+### Removed
+
+- **LG-057 — `classic-fansite` bundled theme.** The theme is no longer shipped: `themes/classic-fansite/` has been deleted, and `ThemeService::PROTECTED_THEMES` no longer lists it, leaving `default` as the only bundled (non-deletable) theme. Documentation (`README.md`, `docs/ARCHITECTURE.md`, `docs/THEME_DEVELOPMENT.md`) now references `default` as the sole bundled theme and reference implementation. Custom themes are unaffected.
+
 ## v1.18.2 — Released 2026-09-09
 
 ### Added
