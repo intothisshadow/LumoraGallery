@@ -8,9 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- PHP 8.5 added to the supported version range (previously 8.2–8.4); the full test suite runs clean with no deprecation warnings on all four versions.
+
 ### Fixed
 
 - **Sort bar buttons had no accent styling in the `default` theme.** The album-view sort links (`ThemeRenderer::renderSortControls()`) render as Bootstrap's generic `.btn-outline-secondary`, which the theme never overrode — leaving them Bootstrap's default grey instead of the theme's own accent colour, including for the active/selected sort option. `themes/default/style.css` now styles `.lum-sort-bar .btn-outline-secondary` (and its hover/active states) with the theme's own tokens.
+- Thumbnail generation triggered a `Function imagedestroy() is deprecated` warning on PHP 8.5 — the call has had no effect since PHP 8.0 made GD images garbage-collected objects, so it was removed rather than suppressed.
 
 ## [1.18.4] — 2026-09-11
 

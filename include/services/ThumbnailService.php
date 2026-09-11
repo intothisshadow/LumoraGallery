@@ -188,9 +188,6 @@ class ThumbnailService
             default        => false,
         };
 
-        imagedestroy($src);
-        imagedestroy($dst);
-
         return $ok && file_exists($dest);
     }
 
