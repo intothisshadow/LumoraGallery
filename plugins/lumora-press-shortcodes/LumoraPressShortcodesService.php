@@ -42,6 +42,25 @@ class LumoraPressShortcodesService
     }
 
     /**
+     * A single shortcode combining images from every given album — the
+     * companion Lumora Press plugin's own `[lumora_gallery_album]` renderer
+     * accepts a comma-separated `album_id` list for exactly this. Backs the
+     * Multi-Album Shortcode admin tool (see admin/multi-album.php), where an
+     * admin checks off several albums instead of typing IDs by hand.
+     *
+     * @param array<int, int|string> $album_ids
+     */
+    public static function buildMultiAlbumShortcode(array $album_ids): string
+    {
+        $ids = array_values(array_unique(array_filter(
+            array_map('intval', $album_ids),
+            static fn (int $id): bool => $id > 0,
+        )));
+
+        return '[lumora_gallery_album album_id="' . implode(',', $ids) . '"]';
+    }
+
+    /**
      * A labelled, read-only, click-to-copy field for the admin edit forms
      * (Bootstrap admin styling — see the surrounding admin/albums.php and
      * admin/images.php forms this is injected into).

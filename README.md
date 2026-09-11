@@ -145,7 +145,7 @@ Lumora supports optional plugins that extend the gallery without modifying any c
 Two feature plugins are included:
 
 - **Visitor Stats** (`plugins/lumora-visitor-stats/`) — a Jetpack-style traffic overview: a daily pageview trend chart, top images/albums/referrers, and a compact Dashboard widget. Filters out common bot traffic and stores only a hashed IP (never the raw address), pruned automatically after 90 days. See `plugins/lumora-visitor-stats/README.md`.
-- **Lumora Press Shortcodes** (`plugins/lumora-press-shortcodes/`) — shows a ready-to-copy shortcode on each album's and image's admin/public page, for pasting into a companion [Lumora Press](https://coding.unloved-heart.net/scripts/lumorapress) site. Generates text only, with no live connection to a Lumora Press install. See `plugins/lumora-press-shortcodes/README.md`.
+- **Lumora Press Shortcodes** (`plugins/lumora-press-shortcodes/`) — shows a ready-to-copy shortcode on each album's and image's admin/public page, plus a Multi-Album Shortcode admin tool for combining several albums into one shortcode, for pasting into a companion [Lumora Press](https://coding.unloved-heart.net/scripts/lumorapress) site. Generates text only, with no live connection to a Lumora Press install. See `plugins/lumora-press-shortcodes/README.md`.
 
 The Coppermine Importer described [above](#migrating-from-coppermine) is a separate, on-demand "importer" plugin type, unaffected by the enable/disable model above.
 

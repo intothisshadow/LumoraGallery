@@ -10,6 +10,7 @@ Only ever matters to a site that also runs Lumora Press — with this plugin dis
 
 - **Admin → Albums → Edit**: a "Lumora Press Shortcode" field with `[lumora_gallery_album album_id="…"]`, ready to copy.
 - **Admin → Images → Edit**: the equivalent single-image shortcode, `[lumora_gallery_album image_id="…"]`.
+- **Admin → Multi-Album Shortcode**: a dedicated tool (its own sidebar item once enabled) for combining images from more than one album — check off any number of albums and it builds one `[lumora_gallery_album album_id="1,2,3"]` shortcode covering all of them, ready to copy. The companion Lumora Press plugin's own shortcode renderer resolves that comma-separated list into a single combined gallery.
 - **Public album page**: the same album shortcode, shown only to logged-in users (never to an anonymous visitor) — same gate as the existing "Direct image URL" lightbox panel.
 - **Public image lightbox**: the same image shortcode, added as an extra field in that same "Direct image URL" info panel, logged-in users only.
 

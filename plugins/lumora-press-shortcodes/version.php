@@ -15,4 +15,4 @@ declare(strict_types=1);
  */
 
 /** Plugin version. Update only when releasing a new plugin version — must match plugin.json. */
-define('LUMORA_PRESS_SHORTCODES_VERSION', '1.0.0');
+define('LUMORA_PRESS_SHORTCODES_VERSION', '1.1.0');

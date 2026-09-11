@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.18.3] — 2026-09-11
 
+### Added
+
+- **Multi-Album Shortcode tool for the Lumora Press Shortcodes plugin (LG-059).** A new **Admin → Multi-Album Shortcode** page lets an admin check off any number of albums and get back one combined `[lumora_gallery_album album_id="1,2,3"]` shortcode, instead of typing album IDs by hand — pairs with a matching change on the Lumora Press side that now resolves a comma-separated `album_id` list into a single combined gallery.
+
 ### Fixed
 
 - **Folder discovery missed subfolders in a directory with a stray file (LG-058).** `admin/albums.php?action=new`'s "Folders already on disk" scan stopped descending into any directory that directly contained a file, treating it as a leaf album folder — but a directory can hold both a loose file (e.g. an unrelated upload) and real subfolders. `GalleryService::scanAlbumFoldersRecursive()` now skips recursion only for directories already claimed by an existing album, and always walks into unclaimed ones.

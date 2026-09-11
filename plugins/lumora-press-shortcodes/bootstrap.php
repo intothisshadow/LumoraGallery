@@ -46,3 +46,24 @@ HookService::addFilter('public_album_info_html', static function (string $html, 
 HookService::addFilter('public_image_shortcode', static function (string $value, array $image): string {
     return LumoraPressShortcodesService::buildImageShortcode($image);
 });
+
+// ── Admin sidebar nav item: Multi-Album Shortcode tool ──────────────────────
+HookService::addFilter('admin_nav_sections', static function (array $sections): array {
+    $item = [
+        'icon'       => '🧩',
+        'label'      => 'Multi-Album Shortcode',
+        'href'       => h(lumora_base_url() . 'plugins/lumora-press-shortcodes/admin/multi-album.php'),
+        'permission' => null,
+    ];
+
+    foreach ($sections as &$section) {
+        if ($section['label'] === null) {
+            $section['items']['lumora_press_shortcodes_multi_album'] = $item;
+            return $sections;
+        }
+    }
+    unset($section);
+
+    array_unshift($sections, ['label' => null, 'items' => ['lumora_press_shortcodes_multi_album' => $item]]);
+    return $sections;
+});
