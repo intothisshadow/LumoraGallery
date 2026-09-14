@@ -931,6 +931,38 @@ class GalleryService
     }
 
     /**
+     * Set an existing image as a category's cover via thumb_image_id — the
+     * "Use as Category Cover" action on the admin image edit page, mirroring
+     * setAlbumCoverFromImage() for categories instead of albums.
+     *
+     * Any uploaded cover_image on the category is cleared (and its files
+     * removed from disk via ThumbnailService::deleteCoverImage()) first, for
+     * the same reason setAlbumCoverFromImage() does: it would otherwise keep
+     * outranking thumb_image_id in ThemeRenderer's cover resolution order.
+     *
+     * @return string|null An error message if the category doesn't exist, null
+     *                      on success.
+     */
+    public static function setCategoryCoverFromImage(int $categoryId, int $imageId): ?string
+    {
+        $category = self::getCategory($categoryId);
+        if (!$category) {
+            return 'Category not found.';
+        }
+
+        if (!empty($category['cover_image'])) {
+            ThumbnailService::deleteCoverImage('categories', (string) $category['cover_image']);
+        }
+
+        LumoraDB::update('categories', [
+            'thumb_image_id' => $imageId,
+            'cover_image'    => null,
+        ], 'id = ?', [$categoryId]);
+
+        return null;
+    }
+
+    /**
      * Delete an album: its image rows, the album row itself, any contributor
      * album assignments (AlbumAssignmentService), and — only when the
      * backing folder exists on disk and is empty — the folder itself. A

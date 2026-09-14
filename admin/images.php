@@ -174,6 +174,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         lumora_redirect($ret_url);
     }
 
+    // ── set_category_cover ───────────────────────────────────────────────────
+    // "Use as Category Cover" on the image edit page — mirrors
+    // set_album_cover above but targets the image's own album's category via
+    // GalleryService::setCategoryCoverFromImage().
+    if ($act === 'set_category_cover' && $post_id > 0) {
+        $image = LumoraDB::fetchOne(
+            'SELECT i.id, a.category_id
+             FROM `{PREFIX}images` i
+             JOIN `{PREFIX}albums` a ON a.id = i.album_id
+             WHERE i.id = ?',
+            [$post_id]
+        );
+        if ($image && (int) $image['category_id'] > 0) {
+            // Category management is gated on 'manage_albums' with no
+            // per-category assignment concept (see admin/categories.php's
+            // own top-of-file permission check) — unlike album covers there
+            // is no narrower per-category access check to defer to.
+            lumora_require_permission('manage_albums');
+            $error = GalleryService::setCategoryCoverFromImage((int) $image['category_id'], $post_id);
+            if ($error !== null) {
+                lum_flash($error, 'danger');
+            } else {
+                lum_flash('Image set as this category\'s cover.');
+            }
+        } else {
+            lum_flash('Image not found.', 'danger');
+        }
+        lumora_redirect($ret_url);
+    }
+
     // ── delete (fallback for non-JS) ──────────────────────────────────────────
     if ($act === 'delete' && $post_id > 0) {
         $image = LumoraDB::fetchOne(
@@ -260,7 +290,7 @@ if ($action === 'edit') {
         lumora_redirect($base . ($album_id > 0 ? '?album=' . $album_id : ''));
     }
     $edit_image = LumoraDB::fetchOne(
-        'SELECT i.*, a.folder, a.title AS album_title, a.id AS album_id_val
+        'SELECT i.*, a.folder, a.title AS album_title, a.id AS album_id_val, a.category_id
          FROM `{PREFIX}images` i
          JOIN `{PREFIX}albums` a ON a.id = i.album_id
          WHERE i.id = ?',
@@ -313,6 +343,25 @@ if ($action === 'edit') {
 HTML;
     }
 
+    // "Use as Category Cover" — same 'manage_albums' gate the action handler
+    // enforces (matching admin/categories.php's own gate), plus the album
+    // must actually belong to a category.
+    $edit_category_id  = (int) $edit_image['category_id'];
+    $set_cat_cover_html = '';
+    if ($can_manage_albums && $edit_category_id > 0) {
+        $set_cat_cover_html = <<<HTML
+<form method="post" action="{$base_h}" class="d-inline">
+  <input type="hidden" name="action"     value="set_category_cover">
+  <input type="hidden" name="id"         value="{$img_id}">
+  <input type="hidden" name="album_id"   value="{$edit_album_id}">
+  <input type="hidden" name="page"       value="{$page}">
+  <input type="hidden" name="search"     value="{$search_h}">
+  <input type="hidden" name="csrf_token" value="{$csrf}">
+  <button type="submit" class="btn btn-sm btn-outline-secondary mt-1">Use as Category Cover</button>
+</form>
+HTML;
+    }
+
     // Plugin-supplied extra fields (e.g. lumora-press-shortcodes).
     $extra_fields_html = HookService::applyFilters('admin_image_edit_extra_fields', '', $edit_image);
 
@@ -330,6 +379,7 @@ HTML;
       <div class="text-muted small">Album: {$album_title_h}</div>
       <div class="text-muted small">Added: {$added_h} · Views: {$hits_h}</div>
       {$set_cover_html}
+      {$set_cat_cover_html}
     </div>
   </div>
   {$extra_fields_html}

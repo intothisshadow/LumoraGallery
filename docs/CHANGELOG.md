@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - **New Album Page suggests a title from the picked disk folder (LG-061).** Clicking a folder in **Folders already on disk** now also fills the Title field (when still empty) with a title guessed from the folder's last path segment — `PromosAndPosters` or `promos_and_posters` both suggest `Promos And Posters`.
+- **"Use as Category Cover" button on the Edit Image page (LG-062).** Alongside the existing **Use as Album Cover** button, an admin/moderator can now also set an image as the cover of the category its album belongs to — `GalleryService::setCategoryCoverFromImage()` mirrors the existing album-cover mechanism.
 
 ### Changed
 
