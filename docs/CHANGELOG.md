@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **New Album Page suggests a title from the picked disk folder (LG-061).** Clicking a folder in **Folders already on disk** now also fills the Title field (when still empty) with a title guessed from the folder's last path segment — `PromosAndPosters` or `promos_and_posters` both suggest `Promos And Posters`.
 - **"Use as Category Cover" button on the Edit Image page (LG-062).** Alongside the existing **Use as Album Cover** button, an admin/moderator can now also set an image as the cover of the category its album belongs to — `GalleryService::setCategoryCoverFromImage()` mirrors the existing album-cover mechanism.
+- **Display Name, separate from the login Username (LG-063).** Staff accounts now have a public-facing **Display Name**, distinct from the login **Username** — preventive/foundational hardening so a future "who uploaded/posted this" feature never has to expose half of a working login credential to visitors. The Admin → Users create/edit forms and Account Management both require a Display Name that differs from the account's Username (except for the lowest-privilege role); Username itself remains fully admin-editable as before.
 
 ### Changed
 

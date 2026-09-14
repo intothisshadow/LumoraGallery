@@ -35,6 +35,15 @@ class UserService
     /** Canonical list of valid role slugs (order is display priority). */
     const ROLES = ['admin', 'moderator', 'contributor'];
 
+    /**
+     * The built-in role slug exempt from the "Display Name cannot match
+     * Username" guard (see usernameMatchesDisplayName()). Custom groups are
+     * never exempt, even if functionally similar to contributor, since
+     * groups are dynamic and there is no reliable way to compare their
+     * privilege level to this one.
+     */
+    const LOWEST_PRIVILEGE_ROLE = 'contributor';
+
     /** Human-readable label for each role. */
     const ROLE_LABELS = [
         'admin'       => 'Administrator',
@@ -146,6 +155,36 @@ class UserService
     }
 
     /**
+     * Validate a Display Name string — the public-facing identity shown
+     * wherever a staff account is credited to a visitor, distinct from the
+     * private login Username.
+     *
+     * @return true|string  true on success, error message on failure.
+     */
+    public static function validateDisplayName(string $displayName): true|string
+    {
+        if ($displayName === '') {
+            return 'Display Name cannot be empty.';
+        }
+        if (mb_strlen($displayName) > 100) {
+            return 'Display Name must be 100 characters or fewer.';
+        }
+        return true;
+    }
+
+    /**
+     * Return true when $displayName is identical (case-insensitive) to
+     * $username. Used to stop an account from silently defeating the
+     * Username/Display Name separation at creation or edit time — a
+     * Display Name identical to the login Username still exposes that
+     * credential to anywhere the Display Name is shown publicly.
+     */
+    public static function usernameMatchesDisplayName(string $username, string $displayName): bool
+    {
+        return mb_strtolower($username) === mb_strtolower($displayName);
+    }
+
+    /**
      * Return true when $username is already taken by a different user.
      */
     public static function usernameExists(string $username, int $exclude_id = 0): bool
@@ -222,8 +261,8 @@ class UserService
      * Fetch a paginated list of users, sorted by role priority then username.
      * Requires Migration0003 (is_active column must exist).
      *
-     * @return list<array{id: int, username: string, email: string, role: string,
-     *                     is_active: int, last_login: string|null, created_at: string}>
+     * @return list<array{id: int, username: string, display_name: string, email: string,
+     *                     role: string, is_active: int, last_login: string|null, created_at: string}>
      */
     public static function getPaginatedUsers(int $page, int $per_page): array
     {
@@ -236,7 +275,7 @@ class UserService
         // system roles instead of before, since ORDER BY otherwise sorts
         // unmatched rows first.
         return LumoraDB::fetchAll(
-            "SELECT id, username, email, role, is_active, last_login, created_at
+            "SELECT id, username, display_name, email, role, is_active, last_login, created_at
                FROM `{PREFIX}users`
               ORDER BY (FIELD(role, 'admin', 'moderator', 'contributor') = 0),
                        FIELD(role, 'admin', 'moderator', 'contributor'), username ASC
@@ -249,13 +288,13 @@ class UserService
      * Fetch a single user row by ID.
      * Returns null when not found.
      *
-     * @return array{id: int, username: string, email: string, role: string,
+     * @return array{id: int, username: string, display_name: string, email: string, role: string,
      *               is_active: int, last_login: string|null, created_at: string}|null
      */
     public static function getUser(int $id): ?array
     {
         $row = LumoraDB::fetchOne(
-            'SELECT id, username, email, role, is_active, last_login, created_at
+            'SELECT id, username, display_name, email, role, is_active, last_login, created_at
                FROM `{PREFIX}users`
               WHERE id = ?',
             [$id]
@@ -274,9 +313,13 @@ class UserService
         string $username,
         string $password,
         string $email,
-        string $role
+        string $role,
+        string $displayName
     ): int|string {
         $v = self::validateUsername($username);
+        if ($v !== true) return $v;
+
+        $v = self::validateDisplayName($displayName);
         if ($v !== true) return $v;
 
         $v = self::validatePassword($password);
@@ -290,6 +333,12 @@ class UserService
             return 'Invalid role selected.';
         }
 
+        if ($role !== self::LOWEST_PRIVILEGE_ROLE
+            && self::usernameMatchesDisplayName($username, $displayName)
+        ) {
+            return 'Display Name cannot be the same as Username for this role.';
+        }
+
         if (self::usernameExists($username)) {
             return 'That username is already taken.';
         }
@@ -300,6 +349,7 @@ class UserService
 
         $id = LumoraDB::insert('users', [
             'username'      => $username,
+            'display_name'  => $displayName,
             'password_hash' => password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]),
             'email'         => $email,
             'role'          => $role,
@@ -310,15 +360,16 @@ class UserService
     }
 
     /**
-     * Update a user's profile (username, email, and/or role).
+     * Update a user's profile (username, display name, email, and/or role).
      * Password changes must be made via resetPassword().
      *
-     * @param array{username?: string, email?: string, role?: string} $data
+     * @param array{username?: string, display_name?: string, email?: string, role?: string} $data
      * @return true|string  true on success, error message on failure.
      */
     public static function updateUser(int $id, array $data): true|string
     {
-        if (!self::getUser($id)) {
+        $user = self::getUser($id);
+        if (!$user) {
             return 'User not found.';
         }
 
@@ -330,6 +381,13 @@ class UserService
             if ($v !== true) return $v;
             if (self::usernameExists($username, $id)) return 'That username is already taken.';
             $updates['username'] = $username;
+        }
+
+        if (isset($data['display_name'])) {
+            $displayName = trim($data['display_name']);
+            $v = self::validateDisplayName($displayName);
+            if ($v !== true) return $v;
+            $updates['display_name'] = $displayName;
         }
 
         if (array_key_exists('email', $data)) {
@@ -348,6 +406,18 @@ class UserService
                 return 'Invalid role selected.';
             }
             $updates['role'] = $data['role'];
+        }
+
+        // Re-check the guard against the effective post-update values, since
+        // username/display_name/role can each be changed independently (or
+        // not at all) in a single call.
+        $effectiveRole        = $updates['role']         ?? $user['role'];
+        $effectiveUsername    = $updates['username']     ?? $user['username'];
+        $effectiveDisplayName = $updates['display_name'] ?? $user['display_name'];
+        if ($effectiveRole !== self::LOWEST_PRIVILEGE_ROLE
+            && self::usernameMatchesDisplayName($effectiveUsername, $effectiveDisplayName)
+        ) {
+            return 'Display Name cannot be the same as Username for this role.';
         }
 
         if (!empty($updates)) {

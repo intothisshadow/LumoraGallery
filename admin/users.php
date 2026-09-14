@@ -6,7 +6,7 @@ declare(strict_types=1);
  * Allows administrators to:
  *   - List all staff accounts (paginated, 10/25/50 per page)
  *   - Create new accounts (admin, moderator, contributor)
- *   - Edit username, email, and role
+ *   - Edit username, display name, email, and role
  *   - Reset any account's password (no current-password check required)
  *   - Enable or disable accounts
  *   - Delete accounts
@@ -16,7 +16,13 @@ declare(strict_types=1);
  *   - Self-deletion and self-deactivation are blocked server-side (UserService).
  *   - The last active administrator account cannot be deleted or deactivated.
  *   - Requires Migration0003 (DB version 9) for the is_active column and
- *     updated role ENUM; a warning with a migration link is shown if pending.
+ *     updated role ENUM, and Migration0009 (DB version 15) for the
+ *     display_name column; a warning with a migration link is shown if
+ *     either is pending.
+ *   - Display Name is kept distinct from the login Username for every role
+ *     except UserService::LOWEST_PRIVILEGE_ROLE — see UserService::
+ *     usernameMatchesDisplayName(). Username itself remains admin-editable;
+ *     only the public-facing identity is required to differ from it.
  *
  * @package    LumoraGallery
  * @subpackage Admin
@@ -37,6 +43,7 @@ $current_user_id = (int) ($current_user['user_id'] ?? 0);
 $base            = lumora_base_url() . 'admin/users.php';
 $base_h          = h($base);
 $csrf_h          = h(lumora_csrf_token());
+$lowest_role_js  = json_encode(UserService::LOWEST_PRIVILEGE_ROLE, JSON_THROW_ON_ERROR);
 
 // ── POST: handle all write actions ───────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -46,18 +53,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     switch ($action) {
 
         case 'create':
-            $username = trim($_POST['username'] ?? '');
-            $password = $_POST['password'] ?? '';
-            $confirm  = $_POST['confirm_password'] ?? '';
-            $email    = trim($_POST['email'] ?? '');
-            $role     = trim($_POST['role'] ?? '');
+            $username     = trim($_POST['username'] ?? '');
+            $display_name = trim($_POST['display_name'] ?? '');
+            $password     = $_POST['password'] ?? '';
+            $confirm      = $_POST['confirm_password'] ?? '';
+            $email        = trim($_POST['email'] ?? '');
+            $role         = trim($_POST['role'] ?? '');
 
             if ($password !== $confirm) {
                 lum_flash('Passwords do not match.', 'danger');
                 lumora_redirect($base . '?action=new');
             }
 
-            $result = UserService::createUser($username, $password, $email, $role);
+            $result = UserService::createUser($username, $password, $email, $role, $display_name);
             if (is_int($result)) {
                 lum_flash('User "' . h($username) . '" created successfully.');
                 lumora_redirect($base);
@@ -67,10 +75,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             break;
 
         case 'update':
-            $uid      = lumora_int($_POST['user_id'] ?? 0, 0, 1);
-            $username = trim($_POST['username'] ?? '');
-            $email    = trim($_POST['email'] ?? '');
-            $role     = trim($_POST['role'] ?? '');
+            $uid          = lumora_int($_POST['user_id'] ?? 0, 0, 1);
+            $username     = trim($_POST['username'] ?? '');
+            $display_name = trim($_POST['display_name'] ?? '');
+            $email        = trim($_POST['email'] ?? '');
+            $role         = trim($_POST['role'] ?? '');
 
             if ($uid <= 0) {
                 lum_flash('Invalid user.', 'danger');
@@ -78,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             // Prevent the current admin from changing their own role via this form.
-            $data = ['username' => $username, 'email' => $email];
+            $data = ['username' => $username, 'display_name' => $display_name, 'email' => $email];
             if ($uid !== $current_user_id) {
                 $data['role'] = $role;
             }
@@ -166,12 +175,16 @@ $edit_id     = lumora_int($_GET['id'] ?? 0, 0, 1);
 // ── Migration guard ───────────────────────────────────────────────────────────
 // Migration0003 adds is_active and updates the role ENUM; must be applied
 // before the Users page can function. Show a friendly prompt if it hasn't run.
-if (in_array('Migration0003_UpdateUsersTableForRoles', SchemaService::getPendingMigrations(), true)) {
+$pending_migrations = SchemaService::getPendingMigrations();
+if (in_array('Migration0003_UpdateUsersTableForRoles', $pending_migrations, true)
+    || in_array('Migration0009_AddDisplayNameToUsers', $pending_migrations, true)
+) {
     $upd_h   = h(lumora_base_url() . 'admin/update.php');
     $content = '<div class="alert alert-warning">'
              . '<strong>⚠ Database update required</strong><br>'
-             . 'The User Management feature requires a schema update (Migration 0003) '
-             . 'that has not yet been applied. Please run pending migrations first.'
+             . 'The User Management feature requires a schema update (Migration 0003 '
+             . 'and/or Migration 0009) that has not yet been applied. Please run pending '
+             . 'migrations first.'
              . '<div class="mt-2">'
              . '<a href="' . $upd_h . '" class="btn btn-warning btn-sm">🗄 Run Database Update</a>'
              . '</div></div>';
@@ -220,7 +233,14 @@ if ($view_action === 'new') {
                  required pattern="[a-zA-Z0-9_.\-]{2,50}"
                  title="Letters, digits, underscores, hyphens, dots (2–50 characters)"
                  autocomplete="off">
-          <div class="form-text">Letters, digits, <code>_</code> <code>-</code> <code>.</code> — 2–50 characters.</div>
+          <div class="form-text">Login credential only. Letters, digits, <code>_</code> <code>-</code> <code>.</code> — 2–50 characters.</div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold" for="lum-dn">Display Name</label>
+          <input type="text" id="lum-dn" name="display_name" class="form-control"
+                 required maxlength="100" autocomplete="off">
+          <div class="form-text" id="lum-dn-msg">Public-facing identity shown anywhere this account is credited. Must differ from Username for this role.</div>
         </div>
 
         <div class="mb-3">
@@ -304,6 +324,25 @@ if ($view_action === 'new') {
   function updateDesc() { desc.textContent = ROLE_DESC[sel.value] || ''; }
   sel.addEventListener('change', updateDesc);
   updateDesc();
+
+  var LOWEST_PRIVILEGE_ROLE = {$lowest_role_js};
+  var un  = document.getElementById('lum-un');
+  var dn  = document.getElementById('lum-dn');
+  var dnMsg = document.getElementById('lum-dn-msg');
+  function checkDisplayName() {
+    var matches = un.value !== '' && dn.value !== ''
+      && un.value.toLowerCase() === dn.value.toLowerCase();
+    if (matches && sel.value !== LOWEST_PRIVILEGE_ROLE) {
+      dn.setCustomValidity('Display Name cannot be the same as Username for this role.');
+      dnMsg.className = 'form-text text-danger';
+    } else {
+      dn.setCustomValidity('');
+      dnMsg.className = 'form-text';
+    }
+  }
+  un.addEventListener('input', checkDisplayName);
+  dn.addEventListener('input', checkDisplayName);
+  sel.addEventListener('change', checkDisplayName);
 }());
 </script>
 HTML;
@@ -325,6 +364,7 @@ if ($view_action === 'edit' && $edit_id > 0) {
     $is_self   = ($edit_id === $current_user_id);
     $u_id      = (int) $u['id'];
     $u_name_h  = h($u['username']);
+    $u_dname_h = h($u['display_name'] ?? '');
     $u_email_h = h($u['email'] ?? '');
     $u_active  = (int) $u['is_active'];
     $u_login_h = ($u['last_login'] ?? '') !== ''
@@ -390,6 +430,15 @@ if ($view_action === 'edit' && $edit_id > 0) {
           <input type="text" id="lum-edit-un" name="username"
                  value="{$u_name_h}" class="form-control"
                  required pattern="[a-zA-Z0-9_.\-]{2,50}" autocomplete="off">
+          <div class="form-text">Login credential only.</div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold" for="lum-edit-dn">Display Name</label>
+          <input type="text" id="lum-edit-dn" name="display_name"
+                 value="{$u_dname_h}" class="form-control"
+                 required maxlength="100" autocomplete="off">
+          <div class="form-text" id="lum-edit-dn-msg">Public-facing identity shown anywhere this account is credited. Must differ from Username for this role.</div>
         </div>
 
         <div class="mb-3">
@@ -502,6 +551,26 @@ if ($view_action === 'edit' && $edit_id > 0) {
   }
   np.addEventListener('input', checkPw);
   cp.addEventListener('input', checkPw);
+
+  var LOWEST_PRIVILEGE_ROLE = {$lowest_role_js};
+  var un    = document.getElementById('lum-edit-un');
+  var dn    = document.getElementById('lum-edit-dn');
+  var dnMsg = document.getElementById('lum-edit-dn-msg');
+  var role  = document.getElementById('lum-edit-role');
+  function checkDisplayName() {
+    var matches = un.value !== '' && dn.value !== ''
+      && un.value.toLowerCase() === dn.value.toLowerCase();
+    if (matches && (!role || role.value !== LOWEST_PRIVILEGE_ROLE)) {
+      dn.setCustomValidity('Display Name cannot be the same as Username for this role.');
+      dnMsg.className = 'form-text text-danger';
+    } else {
+      dn.setCustomValidity('');
+      dnMsg.className = 'form-text';
+    }
+  }
+  un.addEventListener('input', checkDisplayName);
+  dn.addEventListener('input', checkDisplayName);
+  if (role) { role.addEventListener('change', checkDisplayName); }
 
   document.querySelectorAll('form[data-confirm]').forEach(function (f) {
     f.addEventListener('submit', function (e) {

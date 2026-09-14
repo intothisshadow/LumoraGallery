@@ -544,6 +544,7 @@ function lumora_create_admin(string $username, string $password, string $email =
 {
     return (int) LumoraDB::insert('users', [
         'username'      => $username,
+        'display_name'  => $username,
         'password_hash' => password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]),
         'email'         => $email,
         'role'          => 'admin',

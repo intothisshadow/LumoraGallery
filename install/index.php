@@ -677,11 +677,11 @@ HTML;
 
     try {
         $stmt = $pdo->prepare(
-            "INSERT INTO `{$prefix}users` (username, password_hash, email, role)
-             VALUES (?, ?, ?, 'admin')
-             ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), email = VALUES(email), role = 'admin'"
+            "INSERT INTO `{$prefix}users` (username, display_name, password_hash, email, role)
+             VALUES (?, ?, ?, ?, 'admin')
+             ON DUPLICATE KEY UPDATE display_name = VALUES(display_name), password_hash = VALUES(password_hash), email = VALUES(email), role = 'admin'"
         );
-        $stmt->execute([$admin_user, $hash, $admin_email]);
+        $stmt->execute([$admin_user, $admin_user, $hash, $admin_email]);
     } catch (PDOException $e) {
         $msg  = ins_h('Failed to create admin user: ' . $e->getMessage());
         $href = ins_h($_SERVER['PHP_SELF'] . '?force=1');

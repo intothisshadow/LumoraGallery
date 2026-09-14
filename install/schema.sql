@@ -1,5 +1,5 @@
 -- Lumora Gallery — Database Schema
--- Version: 13
+-- Version: 15
 -- Requires: MySQL 5.7+ / MariaDB 10.3+
 -- Charset: utf8mb4 / utf8mb4_unicode_ci
 --
@@ -7,7 +7,7 @@
 --
 -- Tables:
 --   {PREFIX}config                  — gallery-wide key/value settings
---   {PREFIX}users                   — staff accounts; role stores a group slug (DB version 13)
+--   {PREFIX}users                   — staff accounts; role stores a group slug, display_name separate from login username (DB version 15)
 --   {PREFIX}categories              — nested category tree (parent_id = 0 for root)
 --   {PREFIX}albums                  — albums; each maps to a sub-folder of albums/
 --   {PREFIX}images                  — individual images with dimensions, view counter, and uploader (DB version 12)
@@ -21,6 +21,33 @@
 --   {PREFIX}album_assignments      — per-user album assignments for the contributor role (DB version 11)
 --   {PREFIX}groups                  — permission groups, replacing the former fixed users.role ENUM (DB version 13)
 --   {PREFIX}group_permissions       — per-group permission grants (DB version 13)
+--
+-- Migration from DB version 14:
+--   Run Migration0009_AddDisplayNameToUsers via Admin → Updates → Run Database Update,
+--   or apply the following statements manually (replace `lum_` with your actual prefix):
+--
+--     ALTER TABLE `lum_users`
+--       ADD COLUMN `display_name` varchar(100) NOT NULL DEFAULT ''
+--         COMMENT 'Public-facing identity, distinct from the login username'
+--       AFTER `username`;
+--
+--     -- Backfill: every existing account's display_name starts as its username.
+--     UPDATE `lum_users` SET `display_name` = `username` WHERE `display_name` = '';
+--
+-- Migration from DB version 13:
+--   Run Migration0008_AddCoverImageToCategoriesAndAlbums via Admin → Updates →
+--   Run Database Update, or apply the following statements manually (replace
+--   `lum_` with your actual prefix):
+--
+--     ALTER TABLE `lum_categories`
+--       ADD COLUMN `cover_image` varchar(255) NULL DEFAULT NULL
+--         COMMENT 'Bare filename of an uploaded cover image under covers/categories/, NULL = none'
+--       AFTER `thumb_image_id`;
+--
+--     ALTER TABLE `lum_albums`
+--       ADD COLUMN `cover_image` varchar(255) NULL DEFAULT NULL
+--         COMMENT 'Bare filename of an uploaded cover image under covers/albums/, NULL = none'
+--       AFTER `thumb_image_id`;
 --
 -- Migration from DB version 12:
 --   Run Migration0007_CreateGroupsTables via Admin → Updates → Run Database Update,
@@ -186,19 +213,27 @@ CREATE TABLE IF NOT EXISTS `{PREFIX}config` (
   COMMENT='Gallery configuration key/value store';
 
 -- ──────────────────────────────────────────────────────────────────────────────
--- users  (updated DB version 13: role is now a group slug, not a fixed ENUM)
+-- users  (updated DB version 15: display_name separates public-facing identity
+-- from the login username)
 -- ──────────────────────────────────────────────────────────────────────────────
--- role:      references `{PREFIX}groups`.`slug` (no FK constraint, matching the
---            rest of the schema). Seeded system groups: 'admin' = full access,
---            'moderator' = content management, 'contributor' = upload/own-content
---            only. Administrators may create additional custom groups from
---            Admin → Groups with any combination of permissions.
--- is_active: 1 = enabled (default), 0 = disabled. Disabled accounts cannot log
---            in. The last active administrator cannot be deactivated or deleted.
+-- role:         references `{PREFIX}groups`.`slug` (no FK constraint, matching
+--               the rest of the schema). Seeded system groups: 'admin' = full
+--               access, 'moderator' = content management, 'contributor' =
+--               upload/own-content only. Administrators may create additional
+--               custom groups from Admin → Groups with any combination of
+--               permissions.
+-- display_name: public-facing identity shown wherever a staff account is
+--               credited to a visitor (e.g. an uploader credit). Never
+--               guaranteed unique, unlike username. Must never be read from
+--               `username` for anything public-facing — see UserService.
+-- is_active:    1 = enabled (default), 0 = disabled. Disabled accounts cannot
+--               log in. The last active administrator cannot be deactivated
+--               or deleted.
 -- ──────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS `{PREFIX}users` (
   `id`            int UNSIGNED     NOT NULL AUTO_INCREMENT,
   `username`      varchar(50)      NOT NULL,
+  `display_name`  varchar(100)     NOT NULL DEFAULT '',
   `password_hash` varchar(255)     NOT NULL,
   `email`         varchar(255)     NOT NULL DEFAULT '',
   `role`          varchar(50)      NOT NULL DEFAULT 'contributor',
@@ -210,7 +245,7 @@ CREATE TABLE IF NOT EXISTS `{PREFIX}users` (
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci
-  COMMENT='Staff accounts; role references a group slug (DB version 13)';
+  COMMENT='Staff accounts; role references a group slug, display_name is the public-facing identity (DB version 15)';
 
 -- ──────────────────────────────────────────────────────────────────────────────
 -- categories

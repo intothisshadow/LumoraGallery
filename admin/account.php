@@ -4,8 +4,13 @@ declare(strict_types=1);
  * Lumora Gallery — Admin: Account Management
  *
  * Allows the logged-in admin to:
- *   - Update their username and email address.
+ *   - Update their username, display name, and email address.
  *   - Change their password (requires current password verification).
+ *
+ * Display Name is kept distinct from the login Username for every role
+ * except UserService::LOWEST_PRIVILEGE_ROLE, the same guard admin/users.php
+ * enforces when an admin edits another account — see
+ * UserService::updateUser()/usernameMatchesDisplayName().
  *
  * Security note: a 500 ms constant-time delay is enforced on any failed
  * current-password verification to make automated brute-forcing slower.
@@ -27,12 +32,26 @@ require_once dirname(__DIR__) . '/include/bootstrap.php';
 require_once __DIR__ . '/includes/admin_helpers.php';
 lumora_require_login();
 
+// ── Migration guard ───────────────────────────────────────────────────────────
+// Migration0009 adds display_name; this page's queries reference it directly.
+if (in_array('Migration0009_AddDisplayNameToUsers', SchemaService::getPendingMigrations(), true)) {
+    $upd_h   = h(lumora_base_url() . 'admin/update.php');
+    $content = '<div class="alert alert-warning">'
+             . '<strong>⚠ Database update required</strong><br>'
+             . 'Account Management requires a schema update (Migration 0009) '
+             . 'that has not yet been applied. Please run pending migrations first.'
+             . '<div class="mt-2">'
+             . '<a href="' . $upd_h . '" class="btn btn-warning btn-sm">🗄 Run Database Update</a>'
+             . '</div></div>';
+    lum_admin_page('Account', $content, 'account');
+}
+
 // ── Resolve current user from DB ──────────────────────────────────────────────
 $session_data = lumora_current_user();
 $user_id      = (int) ($session_data['user_id'] ?? 0);
 
 $user = LumoraDB::fetchOne(
-    'SELECT id, username, email, role, last_login, created_at FROM `{PREFIX}users` WHERE id = ?',
+    'SELECT id, username, display_name, email, role, last_login, created_at FROM `{PREFIX}users` WHERE id = ?',
     [$user_id]
 );
 
@@ -50,48 +69,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     lumora_csrf_validate();
     $action = trim($_POST['action'] ?? '');
 
-    // ── Update profile (username + email) ─────────────────────────────────────
+    // ── Update profile (username + display name + email) ──────────────────────
     if ($action === 'profile') {
-        $new_username = trim($_POST['username'] ?? '');
-        $new_email    = trim($_POST['email']    ?? '');
-        $errors       = [];
+        $new_username     = trim($_POST['username'] ?? '');
+        $new_display_name = trim($_POST['display_name'] ?? '');
+        $new_email        = trim($_POST['email']    ?? '');
 
-        if ($new_username === '') {
-            $errors[] = 'Username cannot be empty.';
-        } elseif (!preg_match('/^[a-zA-Z0-9_.\\-]{2,50}$/', $new_username)) {
-            $errors[] = 'Username may only contain letters, digits, underscores, hyphens, '
-                      . 'and dots, and must be 2–50 characters.';
-        }
+        $result = UserService::updateUser($user_id, [
+            'username'     => $new_username,
+            'display_name' => $new_display_name,
+            'email'        => $new_email,
+        ]);
 
-        if ($new_email !== '' && !filter_var($new_email, FILTER_VALIDATE_EMAIL)) {
-            $errors[] = 'Invalid email address format.';
-        }
-
-        // Username uniqueness check (exclude the current user's own row).
-        if (empty($errors) && $new_username !== $user['username']) {
-            $taken = LumoraDB::fetchOne(
-                'SELECT id FROM `{PREFIX}users` WHERE username = ? AND id != ?',
-                [$new_username, $user_id]
-            );
-            if ($taken) {
-                $errors[] = 'That username is already taken.';
-            }
-        }
-
-        if (empty($errors)) {
-            LumoraDB::update(
-                'users',
-                ['username' => $new_username, 'email' => $new_email],
-                'id = ?',
-                [$user_id]
-            );
+        if ($result === true) {
             // Keep session username in sync.
             $_SESSION[LUMORA_SESSION_KEY]['username'] = $new_username;
             lum_flash('Account details updated successfully.');
         } else {
-            foreach ($errors as $err) {
-                lum_flash($err, 'danger');
-            }
+            lum_flash((string) $result, 'danger');
         }
 
         lumora_redirect($base);
@@ -142,13 +137,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Re-read from DB so the form always shows the current persisted values,
 // not possibly stale POST data.
 $user = LumoraDB::fetchOne(
-    'SELECT id, username, email, role, last_login, created_at FROM `{PREFIX}users` WHERE id = ?',
+    'SELECT id, username, display_name, email, role, last_login, created_at FROM `{PREFIX}users` WHERE id = ?',
     [$user_id]
 ) ?? $user;
 
 $csrf          = h(lumora_csrf_token());
 $username_h    = h($user['username']);
+$display_name_h = h($user['display_name'] ?? '');
 $email_h       = h($user['email'] ?? '');
+$lowest_role_js = json_encode(UserService::LOWEST_PRIVILEGE_ROLE, JSON_THROW_ON_ERROR);
+$own_role_js    = json_encode((string) ($user['role'] ?? ''), JSON_THROW_ON_ERROR);
 $role_h        = h(ucfirst((string) ($user['role'] ?? 'admin')));
 $last_login_h  = ($user['last_login'] ?? '') !== '' ? h($user['last_login']) : '<em class="text-muted">never</em>';
 $created_at_h  = h($user['created_at']);
@@ -160,7 +158,7 @@ $content = <<<HTML
   <div class="col-lg-6">
     <div class="lum-adm-card h-100">
       <h5 class="mb-1">Profile Details</h5>
-      <p class="text-muted small mb-3">Update your username or email address.</p>
+      <p class="text-muted small mb-3">Update your username, display name, or email address.</p>
 
       <form method="post" action="{$base_h}">
         <input type="hidden" name="action"     value="profile">
@@ -174,8 +172,16 @@ $content = <<<HTML
                  title="Letters, digits, underscores, hyphens, and dots (2–50 characters)"
                  autocomplete="username">
           <div class="form-text">
-            Letters, digits, <code>_</code> <code>-</code> <code>.</code> — 2 to 50 characters.
+            Login credential only. Letters, digits, <code>_</code> <code>-</code> <code>.</code> — 2 to 50 characters.
           </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold" for="lum-display-name">Display Name</label>
+          <input type="text" id="lum-display-name" name="display_name"
+                 value="{$display_name_h}" class="form-control"
+                 required maxlength="100" autocomplete="off">
+          <div class="form-text" id="lum-dn-msg">Public-facing identity shown anywhere this account is credited. Must differ from Username for this role.</div>
         </div>
 
         <div class="mb-4">
@@ -268,6 +274,25 @@ $content = <<<HTML
 
   np.addEventListener('input', checkMatch);
   cp.addEventListener('input', checkMatch);
+
+  var LOWEST_PRIVILEGE_ROLE = {$lowest_role_js};
+  var OWN_ROLE = {$own_role_js};
+  var un  = document.getElementById('lum-username');
+  var dn  = document.getElementById('lum-display-name');
+  var dnMsg = document.getElementById('lum-dn-msg');
+  function checkDisplayName() {
+    var matches = un.value !== '' && dn.value !== ''
+      && un.value.toLowerCase() === dn.value.toLowerCase();
+    if (matches && OWN_ROLE !== LOWEST_PRIVILEGE_ROLE) {
+      dn.setCustomValidity('Display Name cannot be the same as Username for this role.');
+      dnMsg.className = 'form-text text-danger';
+    } else {
+      dn.setCustomValidity('');
+      dnMsg.className = 'form-text';
+    }
+  }
+  un.addEventListener('input', checkDisplayName);
+  dn.addEventListener('input', checkDisplayName);
 }());
 </script>
 HTML;
