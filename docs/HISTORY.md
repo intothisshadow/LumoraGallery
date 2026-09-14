@@ -4,6 +4,23 @@ Long-term archive of completed work, migrated from TODO.md on release.
 
 ---
 
+## v1.18.5 — Released 2026-09-14
+
+### Added
+
+- **LG-061 — New Album Page suggests a title from the picked disk folder.** Clicking a folder in **Folders already on disk** now also fills the Title field (when still empty) with a title guessed from the folder's last path segment — `PromosAndPosters` or `promos_and_posters` both suggest `Promos And Posters`.
+- **LG-062 — "Use as Category Cover" button on the Edit Image page.** Alongside the existing **Use as Album Cover** button, an admin/moderator can now also set an image as the cover of the category its album belongs to — `GalleryService::setCategoryCoverFromImage()` mirrors the existing album-cover mechanism.
+- **LG-063 — Display Name, separate from the login Username.** Staff accounts now have a public-facing **Display Name**, distinct from the login **Username** — preventive/foundational hardening so a future "who uploaded/posted this" feature never has to expose half of a working login credential to visitors. `{PREFIX}users` gained a `display_name` column (`Migration0009_AddDisplayNameToUsers`, DB version 15, backfilled from `username` for existing accounts). The Admin → Users create/edit forms and Account Management both require a Display Name that differs from the account's Username, for every role except the lowest-privilege one (`UserService::usernameMatchesDisplayName()`); Username itself remains fully admin-editable as before.
+
+### Changed
+
+- PHP 8.5 added to the supported version range (previously 8.2–8.4); the full test suite runs clean with no deprecation warnings on all four versions.
+
+### Fixed
+
+- **Sort bar buttons had no accent styling in the `default` theme.** The album-view sort links (`ThemeRenderer::renderSortControls()`) render as Bootstrap's generic `.btn-outline-secondary`, which the theme never overrode — leaving them Bootstrap's default grey instead of the theme's own accent colour, including for the active/selected sort option. `themes/default/style.css` now styles `.lum-sort-bar .btn-outline-secondary` (and its hover/active states) with the theme's own tokens.
+- Thumbnail generation triggered a `Function imagedestroy() is deprecated` warning on PHP 8.5 — the call has had no effect since PHP 8.0 made GD images garbage-collected objects, so it was removed rather than suppressed.
+
 ## v1.18.4 — Released 2026-09-11
 
 ### Added
