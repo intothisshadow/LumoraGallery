@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **New Album Page suggests a title from the picked disk folder (LG-061).** Clicking a folder in **Folders already on disk** now also fills the Title field (when still empty) with a title guessed from the folder's last path segment — `PromosAndPosters` or `promos_and_posters` both suggest `Promos And Posters`.
+
 ### Changed
 
 - PHP 8.5 added to the supported version range (previously 8.2–8.4); the full test suite runs clean with no deprecation warnings on all four versions.

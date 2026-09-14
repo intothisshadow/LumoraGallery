@@ -495,13 +495,34 @@ PREVIEW;
   var LIST_URL = {$list_url_js};
   var CSRF     = {$csrf_js};
 
-  var input     = document.getElementById('lum-folder-input');
-  var datalist  = document.getElementById('lum-available-folders');
-  var wrap      = document.getElementById('lum-folder-suggestions');
-  var list      = document.getElementById('lum-folder-suggestions-list');
-  var searching = document.getElementById('lum-folder-searching');
-  var empty     = document.getElementById('lum-folder-suggestions-empty');
+  var input      = document.getElementById('lum-folder-input');
+  var datalist   = document.getElementById('lum-available-folders');
+  var wrap       = document.getElementById('lum-folder-suggestions');
+  var list       = document.getElementById('lum-folder-suggestions-list');
+  var searching  = document.getElementById('lum-folder-searching');
+  var empty      = document.getElementById('lum-folder-suggestions-empty');
+  var titleInput = document.getElementById('lum-title-input');
   if (!input || !datalist || !wrap || !list) return;
+
+  // Suggest an album title from the last path segment of a picked folder,
+  // e.g. "Photos/Season3/PromosAndPosters" -> "Promos And Posters". Only
+  // fills the Title field when it's still empty, so it never clobbers
+  // something the admin already typed.
+  function suggestTitleFromFolder(folder) {
+    if (!titleInput || titleInput.value.trim() !== '') return;
+    var last = folder.split('/').pop();
+    if (!last) return;
+    var words = last
+      .replace(/[-_.]+/g, ' ')
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+      .trim()
+      .split(/\s+/);
+    if (!words.length || words[0] === '') return;
+    titleInput.value = words.map(function (w) {
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    }).join(' ');
+  }
 
   var body = new URLSearchParams();
   body.set('csrf_token', CSRF);
@@ -536,6 +557,7 @@ PREVIEW;
             el.classList.remove('is-selected');
           });
           btn.classList.add('is-selected');
+          suggestTitleFromFolder(folder);
           input.focus();
         });
         list.appendChild(btn);
@@ -565,7 +587,7 @@ HTML;
     <input type="hidden" name="csrf_token" value="{$csrf}">
     <div class="mb-3">
       <label class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
-      <input type="text" name="title" value="{$title_v}" class="form-control" required>
+      <input type="text" name="title" value="{$title_v}" class="form-control" id="lum-title-input" required>
     </div>
     <div class="mb-3">
       <label class="form-label fw-semibold">Description</label>
