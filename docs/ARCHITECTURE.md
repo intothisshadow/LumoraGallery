@@ -157,10 +157,16 @@ free function; see the file header comments in each service and
 Lumora has two kinds of plugin, both living under `plugins/{id}/plugin.json`:
 
 - **Importer plugins** (`"type": "importer"`, e.g. `coppermine-importer`) — discovered by
-  `admin/migrate.php` and run on demand.
+  `admin/migrate.php` and run on demand from there.
 - **Feature plugins** (`"type": "feature"`, e.g. `lumora-visitor-stats`) — extend core
-  behaviour by registering hooks, without patching any core file. Managed from
-  **Admin → Plugins**; every feature plugin ships **disabled by default** (opt-in).
+  behaviour by registering hooks, without patching any core file.
+
+Both types are listed and toggled from **Admin → Plugins** (`PluginService::discoverManageablePlugins()`),
+but default oppositely: a feature plugin ships **disabled by default** (opt-in, since enabling
+it starts running its `bootstrap.php` on every page load), while an importer plugin ships
+**enabled by default** (opt-out, since it only ever runs when an admin opens it from
+`admin/migrate.php`, and needs to be usable immediately without configuration). Disabling an
+importer there hides its "Run Importer" button on the migration hub, without deleting it.
 
 Feature plugins hook into two small core services:
 
@@ -196,9 +202,12 @@ the image lightbox's info panel respectively, both logged-in-users-only).
 ## Importer Plugins
 
 The other plugin type (`"type": "importer"`, e.g. `coppermine-importer`) migrates data
-from another gallery system into Lumora. Unlike feature plugins, importers have no
-enable/disable state and run entirely on demand from **Admin → Import**
+from another gallery system into Lumora. It runs entirely on demand from **Admin → Import**
 (`admin/migrate.php`), which discovers every importer plugin's manifest automatically.
+Like a feature plugin, it can be enabled/disabled from **Admin → Plugins** — but it ships
+enabled by default (see "Plugin System" above), and disabling it only hides its "Run
+Importer" button on the migration hub; it has no `bootstrap.php` to stop running, since it
+was never loaded on every request to begin with.
 
 To build a new importer plugin:
 

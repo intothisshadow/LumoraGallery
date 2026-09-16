@@ -5,6 +5,10 @@ declare(strict_types=1);
  *
  * Discovers installed importer plugins and displays migration status.
  * Each plugin handles its own import UI; this page acts as the entry point.
+ * An importer disabled from Admin → Plugins (PluginService::isEnabled())
+ * still shows its card here, but with "Run Importer" disabled — an admin
+ * who has already migrated a gallery can put an importer they no longer
+ * need out of the way without deleting it outright.
  *
  * @package    LumoraGallery
  * @subpackage Admin
@@ -40,15 +44,19 @@ if (empty($importers)) {
         $description = h($imp['description'] ?? '');
         $version     = h($imp['version']     ?? '');
         $author      = h($imp['author']      ?? '');
-        $source      = $imp['source']        ?? ($imp['id'] ?? '');
+        $id          = $imp['id']            ?? '';
+        $source      = $imp['source']        ?? $id;
         $min_lumora  = $imp['min_lumora']    ?? '1.0.0';
         $admin_url   = h(lumora_base_url() . ltrim($imp['admin_url'] ?? '', '/'));
 
-        // Compatibility check
+        // Compatibility + enabled/disabled check
         $compatible  = MigrationService::isCompatible($min_lumora);
-        $compat_html = $compatible
-            ? '<span class="badge bg-success">Compatible</span>'
-            : '<span class="badge bg-danger">Requires Lumora ' . h($min_lumora) . '+</span>';
+        $enabled     = PluginService::isEnabled($id, 'importer');
+        $compat_html = !$enabled
+            ? '<span class="badge bg-secondary">Disabled</span>'
+            : ($compatible
+                ? '<span class="badge bg-success">Compatible</span>'
+                : '<span class="badge bg-danger">Requires Lumora ' . h($min_lumora) . '+</span>');
 
         // Previous import status
         $status     = MigrationService::getMigrationStatus($source);
@@ -68,9 +76,14 @@ if (empty($importers)) {
 HTML;
         }
 
-        $run_btn = $compatible
-            ? '<a href="' . $admin_url . '" class="btn btn-primary btn-sm">Run Importer</a>'
-            : '<button class="btn btn-secondary btn-sm" disabled title="Incompatible with this Lumora version">Run Importer</button>';
+        if (!$enabled) {
+            $run_btn = '<button class="btn btn-secondary btn-sm" disabled title="Enable this importer from Admin → Plugins first">Run Importer</button>'
+                . ' <a href="' . h(lumora_base_url() . 'admin/plugins.php') . '" class="btn btn-outline-secondary btn-sm">Enable</a>';
+        } elseif ($compatible) {
+            $run_btn = '<a href="' . $admin_url . '" class="btn btn-primary btn-sm">Run Importer</a>';
+        } else {
+            $run_btn = '<button class="btn btn-secondary btn-sm" disabled title="Incompatible with this Lumora version">Run Importer</button>';
+        }
 
         echo <<<HTML
 <div class="col-md-6 col-lg-4">

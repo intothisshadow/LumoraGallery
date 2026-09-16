@@ -3,9 +3,9 @@ declare(strict_types=1);
 /**
  * Lumora Gallery — Admin AJAX: Delete Plugins
  *
- * Permanently deletes one or more disabled feature plugins' directories
- * from disk, backing both the per-row Delete button and the Delete
- * Selected bulk action on admin/plugins.php.
+ * Permanently deletes one or more disabled feature or importer plugins'
+ * directories from disk, backing both the per-row Delete button and the
+ * Delete Selected bulk action on admin/plugins.php.
  *
  * POST params: ids[] (string plugin id, up to 100), csrf_token (string)
  * Response:    JSON { deleted: int, errors: string[] }
@@ -69,7 +69,7 @@ foreach ($ids as $id) {
         continue;
     }
 
-    if ($plugin['type'] === 'feature' && PluginService::isEnabled($id)) {
+    if (in_array($plugin['type'], ['feature', 'importer'], true) && PluginService::isEnabled($id, $plugin['type'])) {
         $errors[] = $plugin['name'] . ': still enabled — disable it first.';
         continue;
     }

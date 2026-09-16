@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Coppermine Importer now appears on Admin → Plugins, with a proper Enable/Disable toggle.** Importer plugins previously had no enabled/disabled state at all and were only ever discoverable from Admin → Import; they're now listed on Admin → Plugins too (badged "Importer" to distinguish them from feature plugins), enabled by default so nothing changes for an existing install. Disabling an importer there hides its "Run Importer" button on the migration hub — useful once you've finished migrating a gallery and don't need it live any more — without deleting the plugin itself; deleting it still requires disabling it first, same as a feature plugin.
+
 ### Changed
 
 - Coppermine Importer now documents the source Coppermine Gallery versions it supports (CPG 1.4 through 1.6) and the specific version it's actually been tested against (1.6.27) — in its own README, the import wizard's first step, and its description on the migration hub — since this had gone unstated even though the plugin was never actually version-gated beyond its existing schema-adaptive queries.

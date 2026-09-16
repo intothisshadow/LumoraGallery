@@ -3,15 +3,16 @@ declare(strict_types=1);
 /**
  * Lumora Gallery — Admin: Plugins
  *
- * Lists every discovered "feature" plugin — self-contained add-ons under
- * plugins/*&#47;plugin.json that hook into core via HookService — and lets
- * an admin enable, disable, or (once disabled) permanently delete each one.
- * Deletion is AJAX-only via ajax_plugin_delete.php and
+ * Lists every discovered "feature" and "importer" plugin — see
+ * PluginService's own class docblock for what distinguishes the two — and
+ * lets an admin enable, disable, or (once disabled) permanently delete each
+ * one. Deletion is AJAX-only via ajax_plugin_delete.php and
  * PluginService::deletePlugin().
  *
- * The older "importer" plugin type (Coppermine, etc.) is unaffected: those
- * are still discovered and run on-demand from admin/migrate.php, since they
- * don't hook into every page load and have no enable/disable state.
+ * An importer plugin (Coppermine, etc.) is still run on-demand from
+ * admin/migrate.php, not from anywhere on this page — disabling it here
+ * only hides its "Run Importer" button there, for an admin who has already
+ * migrated a gallery and wants it out of the way without deleting it.
  *
  * @package    LumoraGallery
  * @subpackage Admin
@@ -38,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) ($_POST['do'] ?? '');
 
     $plugin = null;
-    foreach (PluginService::discoverFeaturePlugins() as $p) {
+    foreach (PluginService::discoverManageablePlugins() as $p) {
         if ($p['id'] === $id) { $plugin = $p; break; }
     }
 
@@ -61,17 +62,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ── List ──────────────────────────────────────────────────────────────────────
-$plugins = PluginService::discoverFeaturePlugins();
+$plugins = PluginService::discoverManageablePlugins();
 $csrf_h  = h(lumora_csrf_token());
 $csrf_js = json_encode(lumora_csrf_token());
 
 $rows           = '';
 $any_deletable  = false;
 if (empty($plugins)) {
-    $rows = '<p class="text-muted">No feature plugins found in <code>plugins/</code>.</p>';
+    $rows = '<p class="text-muted">No plugins found in <code>plugins/</code>.</p>';
 } else {
     foreach ($plugins as $p) {
-        $enabled    = PluginService::isEnabled($p['id']);
+        $enabled    = PluginService::isEnabled($p['id'], $p['type']);
         $compatible = PluginService::isCompatible($p['min_lumora']);
         $name_h     = h($p['name']);
         $ver_h      = h($p['version']);
@@ -83,6 +84,10 @@ if (empty($plugins)) {
         $badge = $enabled
             ? '<span class="badge bg-success">Enabled</span>'
             : '<span class="badge bg-secondary">Disabled</span>';
+
+        $type_badge = $p['type'] === 'importer'
+            ? ' <span class="badge bg-info text-dark">Importer</span>'
+            : '';
 
         $incompatible_note = !$compatible
             ? '<div class="text-danger small mt-1">Requires Lumora ' . h($p['min_lumora']) . ' or newer.</div>'
@@ -128,7 +133,7 @@ if (empty($plugins)) {
     <div class="d-flex align-items-start gap-2">
       <div class="pt-1">{$checkbox_html}</div>
       <div>
-        <h6 class="mb-1">{$name_h} <span class="text-muted small">v{$ver_h}</span> {$badge}</h6>
+        <h6 class="mb-1">{$name_h} <span class="text-muted small">v{$ver_h}</span> {$badge}{$type_badge}</h6>
         <p class="text-muted small mb-1 lum-plugin-desc">{$desc_h}</p>
         <p class="text-muted small mb-0">By {$author_h}</p>
         {$incompatible_note}
@@ -242,6 +247,9 @@ HTML;
 
 $content = '<p class="text-muted">Feature plugins extend Lumora by hooking into core behaviour '
     . '(pageview logging, admin nav items, dashboard widgets) without modifying any core files. '
+    . 'An <strong>Importer</strong>-badged plugin instead runs on demand from '
+    . '<a href="' . h(lumora_base_url() . 'admin/migrate.php') . '">Admin &rarr; Import</a> — disabling it here just '
+    . 'hides it there, for one you have already used and do not need again right now. '
     . 'Disabling a plugin stops it from running but never deletes its data.</p>'
     . $toolbar_html
     . $rows;

@@ -6,6 +6,12 @@ An official Lumora Gallery plugin that migrates categories, albums, and image me
 
 ---
 
+## Enabling / disabling
+
+This plugin is listed on **Admin → Plugins** alongside feature plugins (badged **Importer**), enabled by default. Once you've finished migrating a gallery and don't need it live any more, disable it there — this hides the "Run Importer" button on **Admin → Import** without deleting anything, and it can be re-enabled at any time for a future migration.
+
+---
+
 ## Supported Coppermine versions
 
 Supports Coppermine Gallery 1.4 through 1.6. There's no version to select — schema-adaptive queries handle the column differences across that range automatically (e.g. `width`/`height` vs. `pwidth`/`pheight` in CPG 1.6.29+, the `ENUM('YES','NO')` vs. `tinyint` boolean columns CPG 1.4.x used, and a Unix timestamp vs. a `datetime` value for dates in older versions). Tested with Coppermine Gallery 1.6.27.
