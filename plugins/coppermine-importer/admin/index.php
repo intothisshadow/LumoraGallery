@@ -188,6 +188,16 @@ if ($step === 1) {
             . '</label></div>';
     }
 
+    // ── Supported Coppermine versions ─────────────────────────────────────────
+    echo '<div class="card mb-3" style="max-width:600px;">';
+    echo '<div class="card-header">Supported Coppermine versions</div>';
+    echo '<div class="card-body">';
+    echo '<p class="text-muted small mb-0">'
+        . 'Supports Coppermine Gallery 1.4 through 1.6 &mdash; there is no version to select. '
+        . 'Tested with Coppermine Gallery 1.6.27.'
+        . '</p>';
+    echo '</div></div>';
+
     echo $reimport_html;
 
     if ($status !== null) {

@@ -6,6 +6,12 @@ An official Lumora Gallery plugin that migrates categories, albums, and image me
 
 ---
 
+## Supported Coppermine versions
+
+Supports Coppermine Gallery 1.4 through 1.6. There's no version to select — schema-adaptive queries handle the column differences across that range automatically (e.g. `width`/`height` vs. `pwidth`/`pheight` in CPG 1.6.29+, the `ENUM('YES','NO')` vs. `tinyint` boolean columns CPG 1.4.x used, and a Unix timestamp vs. a `datetime` value for dates in older versions). Tested with Coppermine Gallery 1.6.27.
+
+---
+
 ## What it imports
 
 | Data                         | Imported | Notes                                                        |

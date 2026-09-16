@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- Coppermine Importer now documents the source Coppermine Gallery versions it supports (CPG 1.4 through 1.6) and the specific version it's actually been tested against (1.6.27) — in its own README, the import wizard's first step, and its description on the migration hub — since this had gone unstated even though the plugin was never actually version-gated beyond its existing schema-adaptive queries.
+
+---
+
 ## [1.18.5] — 2026-09-14
 
 ### Added
