@@ -16,6 +16,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Coppermine Importer now documents the source Coppermine Gallery versions it supports (CPG 1.4 through 1.6) and the specific version it's actually been tested against (1.6.27) — in its own README, the import wizard's first step, and its description on the migration hub — since this had gone unstated even though the plugin was never actually version-gated beyond its existing schema-adaptive queries.
 
+### Fixed
+
+- **The updater's extracted release copy (`cache/.updates/extract/`) was never cleaned up after a successful update (LG-064).** `UpdaterService`'s Extract stage unpacks the downloaded release into a working directory that Replace then copies from, but nothing removed it afterward — every update left a full extra copy of the release sitting in `cache/.updates/extract/` indefinitely, wasting disk space that accumulates across updates. The Cleanup stage now removes it once the update completes successfully; a failed update leaves it in place for troubleshooting.
+
 ---
 
 ## [1.18.5] — 2026-09-14

@@ -1283,6 +1283,24 @@ class UpdaterService
             self::logUpdate('info', "Cleanup after failed update to v{$version}");
         }
 
+        // Remove the extracted release copy — its contents were already
+        // copied into LUMORA_ROOT by stageReplace(), so leaving it behind
+        // just wastes disk space (a full copy of the release) until the
+        // next update overwrites it. Only on success: a failed update may
+        // still need the extracted files for troubleshooting.
+        if ($success) {
+            $extractDir = self::extractDir();
+            if (is_dir($extractDir)) {
+                self::removeDirectory($extractDir);
+                if (!is_dir($extractDir)) {
+                    $details[] = '✓ Extract folder cleaned up';
+                    self::logUpdate('info', 'Extract folder removed after successful update');
+                } else {
+                    self::logUpdate('warning', 'Extract folder could not be fully removed after update');
+                }
+            }
+        }
+
         // Auto-remove the install/ directory on a successful upgrade.
         // The installer already attempts this after a fresh install; doing it here
         // also catches cases where that step was skipped, or a reinstall left the
