@@ -900,8 +900,12 @@ class UpdaterService
      * Stage 5 — Enable maintenance mode.
      *
      * Sets the gallery_offline config key and writes a maintenance flag file.
-     * The flag file is the primary indicator used by rollback/cleanup to decide
-     * whether maintenance mode needs to be disabled.
+     * The flag file is only used internally, to tell rollback/cleanup whether
+     * a disable attempt is needed — the actual visitor-facing gate is the
+     * gallery_offline config value alone (see ThemeRenderer::renderPage()),
+     * so a config write that silently fails here leaves the flag file and
+     * the real state out of sync. See disableMaintenanceMode()'s docblock
+     * for the equivalent failure mode on the disable side (LG-065).
      */
     private static function stageMaintenance(): array
     {
@@ -1234,6 +1238,86 @@ class UpdaterService
     }
 
     /**
+     * Disable maintenance mode and verify the write actually persisted.
+     *
+     * LumoraConfig::set() previously had its exceptions swallowed here with
+     * no verification — every caller (stageCleanup(), forceAbort()) then
+     * unconditionally reported "Maintenance mode disabled" regardless of
+     * whether the database write actually succeeded, so a transient DB
+     * failure could leave gallery_offline stuck at '1' — the gallery
+     * offline to every visitor — with no error anywhere and every log line
+     * claiming success (LG-065). This re-reads the persisted value straight
+     * from the database (not the in-memory cache LumoraConfig::set() also
+     * updates, which would reflect the attempt regardless of whether it
+     * landed) before reporting success.
+     *
+     * @return bool True once gallery_offline is confirmed '0' in the database.
+     */
+    private static function disableMaintenanceMode(): bool
+    {
+        $flagFile = self::maintenanceFlagFile();
+        if (file_exists($flagFile)) {
+            unlink($flagFile);
+        }
+
+        try {
+            LumoraConfig::set('gallery_offline', '0');
+            $persisted = LumoraDB::fetchValue(
+                "SELECT value FROM `{PREFIX}config` WHERE name = 'gallery_offline'"
+            );
+        } catch (\Throwable $e) {
+            self::logUpdate('error', 'Failed to disable maintenance mode: ' . $e->getMessage());
+            return false;
+        }
+
+        if ($persisted !== '0') {
+            self::logUpdate(
+                'error',
+                "Maintenance mode disable did not persist — gallery_offline is still "
+                . var_export($persisted, true) . ' in the database.'
+            );
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * True when the gallery is offline for maintenance but no update session
+     * is running to eventually turn it back off — an update whose disable
+     * step failed (see disableMaintenanceMode()) leaves exactly this state.
+     * Admin → Updates uses this to offer a manual recovery button.
+     */
+    public static function isMaintenanceStuck(): bool
+    {
+        return !self::isUpdateRunning() && ((string) LumoraConfig::get('gallery_offline', '0')) === '1';
+    }
+
+    /**
+     * Administrator-triggered manual recovery for the stuck state
+     * isMaintenanceStuck() detects — used by the "Disable Maintenance Mode
+     * Now" button on Admin → Updates.
+     *
+     * @return array{success: bool, message: string}
+     */
+    public static function disableMaintenanceModeManually(): array
+    {
+        $ok = self::disableMaintenanceMode();
+        self::logUpdate(
+            $ok ? 'info' : 'error',
+            $ok ? 'Maintenance mode manually disabled by administrator'
+                : 'Manual maintenance-mode disable failed — see the error logged above'
+        );
+
+        return [
+            'success' => $ok,
+            'message' => $ok
+                ? 'Maintenance mode disabled. The gallery is back online.'
+                : 'Could not disable maintenance mode. Check the update log and database connectivity.',
+        ];
+    }
+
+    /**
      * Stage 10 — Cleanup: clear caches, disable maintenance mode, release lock.
      *
      * Called with $success = false during rollback to indicate that the update
@@ -1265,15 +1349,12 @@ class UpdaterService
             $details[] = "✓ Cleared {$cleared} cache file(s)";
         }
 
-        // Disable maintenance mode.
-        $flagFile = self::maintenanceFlagFile();
-        if (file_exists($flagFile)) {
-            unlink($flagFile);
+        // Disable maintenance mode — verified, not just attempted (LG-065).
+        if (self::disableMaintenanceMode()) {
+            $details[] = '✓ Maintenance mode disabled';
+        } else {
+            $details[] = '⚠ Maintenance mode could not be confirmed disabled — the gallery may still be offline to visitors. Check the update log, then use "Disable Maintenance Mode Now" on this page.';
         }
-        try {
-            LumoraConfig::set('gallery_offline', '0');
-        } catch (\Throwable) {}
-        $details[] = '✓ Maintenance mode disabled';
 
         // Log completion.
         if ($success) {
@@ -1448,14 +1529,9 @@ class UpdaterService
      */
     public static function forceAbort(): void
     {
-        // Disable maintenance mode.
-        $flagFile = self::maintenanceFlagFile();
-        if (file_exists($flagFile)) {
-            unlink($flagFile);
+        if (!self::disableMaintenanceMode()) {
+            self::logUpdate('error', 'Force-abort could not confirm maintenance mode was disabled — check Admin → Updates.');
         }
-        try {
-            LumoraConfig::set('gallery_offline', '0');
-        } catch (\Throwable) {}
 
         self::logUpdate('warning', 'Update session force-aborted by administrator');
         self::releaseLock();

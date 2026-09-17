@@ -98,6 +98,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             lumora_redirect($self_url);
             break;
 
+        case 'disable_maintenance':
+            $r = UpdaterService::disableMaintenanceModeManually();
+            lum_flash($r['message'], $r['success'] ? 'success' : 'danger');
+            lumora_redirect($self_url);
+            break;
+
         default:
             lum_flash('Unknown action.', 'danger');
             lumora_redirect($self_url);
@@ -159,6 +165,23 @@ $csrf_js       = json_encode(lumora_csrf_token());
 $csrf_h        = h(lumora_csrf_token());
 $ajax_base_js  = json_encode(lumora_base_url() . 'admin/');
 $auto_check_js = ($cache_expired && UpdateService::isAutoCheckEnabled()) ? 'true' : 'false';
+
+// Stuck-maintenance-mode notice — a completed update whose disable step
+// failed to persist (LG-065) leaves the gallery offline to visitors with
+// no update session left running to ever turn it back off. Distinct from
+// $stuck_notice above, which is about a stuck update session itself.
+$maintenance_stuck_notice = '';
+if ($can_perform_updates && UpdaterService::isMaintenanceStuck()) {
+    $maintenance_stuck_notice = '<div class="alert alert-danger py-2 mb-3 small">'
+        . '⚠ The gallery is currently offline for maintenance, but no update session is running to bring it back. '
+        . 'This can happen if a previous update could not confirm the gallery was brought back online. '
+        . '<form method="post" action="' . h($self_url) . '" class="d-inline">'
+        . '<input type="hidden" name="csrf_token" value="' . $csrf_h . '">'
+        . '<input type="hidden" name="action" value="disable_maintenance">'
+        . '<button type="submit" class="btn btn-sm btn-outline-danger ms-2">Disable Maintenance Mode Now</button>'
+        . '</form>'
+        . '</div>';
+}
 
 // ── Latest available version info (for "Update Now" target) ──────────────────
 $latest_h      = $upd['latest'] !== null ? h($upd['latest']) : '';
@@ -709,6 +732,7 @@ $content = <<<HTML
   {$header_grid}
 </div>
 
+{$maintenance_stuck_notice}
 {$stuck_notice}
 
 <!-- ── Release source tabs ─────────────────────────────────────────── -->

@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - **The updater's extracted release copy (`cache/.updates/extract/`) was never cleaned up after a successful update (LG-064).** `UpdaterService`'s Extract stage unpacks the downloaded release into a working directory that Replace then copies from, but nothing removed it afterward — every update left a full extra copy of the release sitting in `cache/.updates/extract/` indefinitely, wasting disk space that accumulates across updates. The Cleanup stage now removes it once the update completes successfully; a failed update leaves it in place for troubleshooting.
+- **Maintenance mode could get stuck on after an update, with no error anywhere (LG-065).** The Cleanup stage's maintenance-mode-disable step silently swallowed any failure writing `gallery_offline` back to `0` and unconditionally reported "Maintenance mode disabled" regardless — a failed write left the gallery offline to every visitor with the update log, update history, and progress UI all claiming success. `UpdaterService` now re-reads the value straight from the database to confirm the disable actually persisted before reporting it, and logs an error when it didn't (also applied to Abort). Admin → Updates now also detects this stuck state directly — offline with no update session running — and offers a **Disable Maintenance Mode Now** button to recover without needing database access.
 
 ---
 
