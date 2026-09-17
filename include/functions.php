@@ -603,12 +603,24 @@ function get_image_neighbours(int $image_id, int $album_id, string $sort = 'pos'
 // ── Gallery-wide image query wrappers ─────────────────────────────────────────
 
 function get_latest_updated_albums(int $limit = 5): array    { return GalleryService::getLatestUpdatedAlbums($limit); }
-function get_most_viewed_images(int $limit = 48, ?int $album_id = null, ?int $cat_id = null): array
+function get_most_viewed_images(int $limit = 48, ?int $album_id = null, ?int $cat_id = null, int $offset = 0): array
 {
-    return GalleryService::getMostViewedImages($limit, $album_id, $cat_id);
+    return GalleryService::getMostViewedImages($limit, $album_id, $cat_id, $offset);
 }
-function get_latest_images(int $limit = 48): array           { return GalleryService::getLatestImages($limit); }
-function get_random_images(int $limit = 48): array           { return GalleryService::getRandomImages($limit); }
+function count_most_viewed_images(?int $album_id = null, ?int $cat_id = null): int
+{
+    return GalleryService::countMostViewedImages($album_id, $cat_id);
+}
+function get_latest_images(int $limit = 48, int $offset = 0): array
+{
+    return GalleryService::getLatestImages($limit, $offset);
+}
+function count_latest_images(): int                          { return GalleryService::countLatestImages(); }
+function get_random_images(int $limit = 48, int $offset = 0, int $seed = 0, ?int $cat_id = null): array
+{
+    return GalleryService::getRandomImages($limit, $offset, $seed, $cat_id);
+}
+function count_random_images(?int $cat_id = null): int       { return GalleryService::countRandomImages($cat_id); }
 
 // ── Stats wrappers ────────────────────────────────────────────────────────────
 

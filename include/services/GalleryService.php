@@ -287,7 +287,7 @@ class GalleryService
      *
      * @return list<array<string, mixed>>
      */
-    public static function getLatestImagesInCategorySubtree(int $cat_id, int $limit = 8): array
+    public static function getLatestImagesInCategorySubtree(int $cat_id, int $limit = 8, int $offset = 0): array
     {
         $cat_ids = self::getCategorySubtreeIds($cat_id);
         if (empty($cat_ids)) return [];
@@ -295,6 +295,7 @@ class GalleryService
         $ph     = implode(',', array_fill(0, count($cat_ids), '?'));
         $params = $cat_ids;
         $params[] = $limit;
+        $params[] = $offset;
 
         return LumoraDB::fetchAll(
             "SELECT i.*, a.folder, a.title AS album_title
@@ -302,8 +303,24 @@ class GalleryService
              JOIN `{PREFIX}albums` a ON a.id = i.album_id
              WHERE i.approved = 1 AND a.visibility = 0 AND a.category_id IN ({$ph})
              ORDER BY i.added_at DESC
-             LIMIT ?",
+             LIMIT ? OFFSET ?",
             $params
+        );
+    }
+
+    /** Count approved images across a category's own albums and every descendant sub-category's albums. */
+    public static function countLatestImagesInCategorySubtree(int $cat_id): int
+    {
+        $cat_ids = self::getCategorySubtreeIds($cat_id);
+        if (empty($cat_ids)) return 0;
+
+        $ph = implode(',', array_fill(0, count($cat_ids), '?'));
+        return (int) LumoraDB::fetchValue(
+            "SELECT COUNT(*)
+             FROM `{PREFIX}images` i
+             JOIN `{PREFIX}albums` a ON a.id = i.album_id
+             WHERE i.approved = 1 AND a.visibility = 0 AND a.category_id IN ({$ph})",
+            $cat_ids
         );
     }
 
@@ -1424,7 +1441,44 @@ class GalleryService
      *
      * @return list<array<string, mixed>>
      */
-    public static function getMostViewedImages(int $limit = 48, ?int $album_id = null, ?int $cat_id = null): array
+    public static function getMostViewedImages(int $limit = 48, ?int $album_id = null, ?int $cat_id = null, int $offset = 0): array
+    {
+        [$where, $params] = self::mostViewedScopeClause($album_id, $cat_id);
+        $params[] = $limit;
+        $params[] = $offset;
+
+        return LumoraDB::fetchAll(
+            'SELECT i.*, a.folder, a.title AS album_title
+             FROM `{PREFIX}images` i
+             JOIN `{PREFIX}albums` a ON a.id = i.album_id
+             WHERE ' . implode(' AND ', $where) . '
+             ORDER BY i.hits DESC
+             LIMIT ? OFFSET ?',
+            $params
+        );
+    }
+
+    /** Count images matching getMostViewedImages()'s scope, for pagination. */
+    public static function countMostViewedImages(?int $album_id = null, ?int $cat_id = null): int
+    {
+        [$where, $params] = self::mostViewedScopeClause($album_id, $cat_id);
+
+        return (int) LumoraDB::fetchValue(
+            'SELECT COUNT(*)
+             FROM `{PREFIX}images` i
+             JOIN `{PREFIX}albums` a ON a.id = i.album_id
+             WHERE ' . implode(' AND ', $where),
+            $params
+        );
+    }
+
+    /**
+     * Shared WHERE clause + params for getMostViewedImages()/countMostViewedImages() —
+     * $album_id takes precedence over $cat_id when both are given.
+     *
+     * @return array{0: list<string>, 1: list<int>}
+     */
+    private static function mostViewedScopeClause(?int $album_id, ?int $cat_id): array
     {
         $where  = ['i.approved = 1', 'a.visibility = 0'];
         $params = [];
@@ -1439,21 +1493,11 @@ class GalleryService
             array_push($params, ...$cat_ids);
         }
 
-        $params[] = $limit;
-
-        return LumoraDB::fetchAll(
-            'SELECT i.*, a.folder, a.title AS album_title
-             FROM `{PREFIX}images` i
-             JOIN `{PREFIX}albums` a ON a.id = i.album_id
-             WHERE ' . implode(' AND ', $where) . '
-             ORDER BY i.hits DESC
-             LIMIT ?',
-            $params
-        );
+        return [$where, $params];
     }
 
     /** Most recently added images (public albums only). */
-    public static function getLatestImages(int $limit = 48): array
+    public static function getLatestImages(int $limit = 48, int $offset = 0): array
     {
         return LumoraDB::fetchAll(
             'SELECT i.*, a.folder, a.title AS album_title
@@ -1461,22 +1505,78 @@ class GalleryService
              JOIN `{PREFIX}albums` a ON a.id = i.album_id
              WHERE i.approved = 1 AND a.visibility = 0
              ORDER BY i.added_at DESC
-             LIMIT ?',
-            [$limit]
+             LIMIT ? OFFSET ?',
+            [$limit, $offset]
         );
     }
 
-    /** Random images from public albums. */
-    public static function getRandomImages(int $limit = 48): array
+    /** Count approved images (public albums only), for getLatestImages()/getRandomImages() pagination. */
+    public static function countLatestImages(): int
     {
+        return (int) LumoraDB::fetchValue(
+            'SELECT COUNT(*)
+             FROM `{PREFIX}images` i
+             JOIN `{PREFIX}albums` a ON a.id = i.album_id
+             WHERE i.approved = 1 AND a.visibility = 0'
+        );
+    }
+
+    /**
+     * Random images from public albums, optionally scoped to a category
+     * subtree (see getMostViewedImages() for the same $cat_id semantics).
+     *
+     * $seed makes the ordering stable across paginated requests — MySQL's
+     * RAND(seed) always produces the same shuffle for a given seed, so
+     * page 2 doesn't re-shuffle and duplicate/skip rows already shown on
+     * page 1. Pass 0 (the default) for a fresh, unseeded shuffle each call.
+     */
+    public static function getRandomImages(int $limit = 48, int $offset = 0, int $seed = 0, ?int $cat_id = null): array
+    {
+        $where  = ['i.approved = 1', 'a.visibility = 0'];
+        $params = [];
+
+        if ($cat_id !== null) {
+            $cat_ids = self::getCategorySubtreeIds($cat_id);
+            $ph      = implode(',', array_fill(0, count($cat_ids), '?'));
+            $where[] = "a.category_id IN ({$ph})";
+            array_push($params, ...$cat_ids);
+        }
+
+        $order = $seed !== 0 ? 'RAND(?)' : 'RAND()';
+        if ($seed !== 0) $params[] = $seed;
+        $params[] = $limit;
+        $params[] = $offset;
+
         return LumoraDB::fetchAll(
             'SELECT i.*, a.folder, a.title AS album_title
              FROM `{PREFIX}images` i
              JOIN `{PREFIX}albums` a ON a.id = i.album_id
-             WHERE i.approved = 1 AND a.visibility = 0
-             ORDER BY RAND()
-             LIMIT ?',
-            [$limit]
+             WHERE ' . implode(' AND ', $where) . "
+             ORDER BY {$order}
+             LIMIT ? OFFSET ?",
+            $params
+        );
+    }
+
+    /** Count images matching getRandomImages()'s scope, for pagination. */
+    public static function countRandomImages(?int $cat_id = null): int
+    {
+        $where  = ['i.approved = 1', 'a.visibility = 0'];
+        $params = [];
+
+        if ($cat_id !== null) {
+            $cat_ids = self::getCategorySubtreeIds($cat_id);
+            $ph      = implode(',', array_fill(0, count($cat_ids), '?'));
+            $where[] = "a.category_id IN ({$ph})";
+            array_push($params, ...$cat_ids);
+        }
+
+        return (int) LumoraDB::fetchValue(
+            'SELECT COUNT(*)
+             FROM `{PREFIX}images` i
+             JOIN `{PREFIX}albums` a ON a.id = i.album_id
+             WHERE ' . implode(' AND ', $where),
+            $params
         );
     }
 

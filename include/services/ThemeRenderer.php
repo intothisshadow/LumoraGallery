@@ -237,8 +237,9 @@ class ThemeRenderer
      *                           this album — pass when rendering the
      *                           nav on an album page.
      * @param int|null $cat_id   When set (and $album_id is not), the "Most
-     *                           Viewed" link is scoped to this category —
-     *                           pass when rendering the nav on a category page.
+     *                           Viewed", "Latest", and "Random" links are
+     *                           scoped to this category — pass when
+     *                           rendering the nav on a category page.
      */
     public static function renderNav(?int $album_id = null, ?int $cat_id = null): string
     {
@@ -258,8 +259,9 @@ HTML;
      * Compute the four primary nav destination URLs (Home / Latest /
      * Most Viewed / Random) used by renderNav(), each already
      * theme-preview-link-wrapped and HTML-escaped. Most Viewed optionally
-     * carries album/category context forward. Split out purely to
-     * keep renderNav()'s own markup readable.
+     * carries album/category context forward; Latest and Random carry
+     * category context forward (they have no album-level scoping). Split
+     * out purely to keep renderNav()'s own markup readable.
      *
      * @return array{home: string, latest: string, most_viewed: string, random: string}
      */
@@ -267,12 +269,13 @@ HTML;
     {
         $base    = lumora_base_url();
         $most_qs = $album_id !== null ? '&album=' . $album_id : ($cat_id !== null ? '&cat=' . $cat_id : '');
+        $cat_qs  = $cat_id !== null ? '&cat=' . $cat_id : '';
 
         return [
             'home'        => h(lumora_theme_preview_link($base)),
-            'latest'      => h(lumora_theme_preview_link($base . '?view=latest')),
+            'latest'      => h(lumora_theme_preview_link($base . '?view=latest' . $cat_qs)),
             'most_viewed' => h(lumora_theme_preview_link($base . '?view=most_viewed' . $most_qs)),
-            'random'      => h(lumora_theme_preview_link($base . '?view=random')),
+            'random'      => h(lumora_theme_preview_link($base . '?view=random' . $cat_qs)),
         ];
     }
 

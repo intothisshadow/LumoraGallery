@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Latest, Most Viewed, and Random now paginate instead of showing a single fixed-size page (LG-066).** All three previously returned only the first `per_page` images gallery-wide with no way to see more; they now use the same pagination control as album/category pages, and each accepts an optional `&cat=N` to scope the listing to a category (and its sub-categories) the same way Most Viewed already did — the "Latest"/"Most Viewed"/"Random" nav links and a category page's "Latest Additions" → **View all** link carry that context forward automatically. Random's page-to-page ordering stays stable via a seeded shuffle carried in the pagination URLs, so paging through it doesn't duplicate or skip images.
 - **Coppermine Importer now appears on Admin → Plugins, with a proper Enable/Disable toggle.** Importer plugins previously had no enabled/disabled state at all and were only ever discoverable from Admin → Import; they're now listed on Admin → Plugins too (badged "Importer" to distinguish them from feature plugins), enabled by default so nothing changes for an existing install. Disabling an importer there hides its "Run Importer" button on the migration hub — useful once you've finished migrating a gallery and don't need it live any more — without deleting the plugin itself; deleting it still requires disabling it first, same as a feature plugin.
 
 ### Changed

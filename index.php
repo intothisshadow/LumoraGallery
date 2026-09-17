@@ -8,10 +8,13 @@ declare(strict_types=1);
  *   /?cat=N        → browse a category (sub-categories + albums + latest
  *                    additions from the whole subtree)
  *   /?view=latest      → most recently added images
+ *   /?view=latest&cat=N        → most recently added images within category N
  *   /?view=most_viewed → all-time most viewed images (gallery-wide)
  *   /?view=most_viewed&album=N → most viewed images within album N
  *   /?view=most_viewed&cat=N   → most viewed images within category N
  *   /?view=random      → random selection
+ *   /?view=random&cat=N        → random selection within category N
+ *   Each of the above also takes &page=N for pagination.
  *
  * @package    LumoraGallery
  * @subpackage Routing
@@ -59,7 +62,8 @@ if ($view !== '') {
     ];
 
     // Most Viewed respects the current album/category context, if any —
-    // album takes precedence when both are present.
+    // album takes precedence when both are present. Latest and Random
+    // respect a category context too, but have no album-level scoping.
     if ($view === 'most_viewed') {
         $view_titles['most_viewed'] = match (true) {
             $album_id > 0 => 'Most Viewed in This Album',
@@ -71,22 +75,64 @@ if ($view !== '') {
         } elseif ($cat_id > 0) {
             $nav_cat_id = $cat_id;
         }
+    } elseif ($cat_id > 0) {
+        $view_titles[$view] .= ' in This Category';
+        $nav_cat_id = $cat_id;
     }
 
     $page_title = $view_titles[$view] . ' — ';
+    $offset     = ($page - 1) * $per_page;
 
-    $images = match ($view) {
-        'latest'      => get_latest_images($per_page),
-        'most_viewed' => get_most_viewed_images(
-            $per_page,
-            $album_id > 0 ? $album_id : null,
-            $cat_id   > 0 ? $cat_id   : null
-        ),
-        default       => get_random_images($per_page),
-    };
+    // Random's ordering must stay fixed across paginated requests (a fresh
+    // shuffle on every page load would duplicate/skip images between
+    // pages), so a seed is generated once and carried in the pagination
+    // URLs; reloading the base ?view=random URL (no seed) reshuffles.
+    $seed = 0;
+    if ($view === 'random') {
+        $seed = lumora_int($_GET['seed'] ?? 0, 0, 1, 2147483647);
+        if ($seed === 0) {
+            $seed = random_int(1, 2147483647);
+        }
+    }
+
+    if ($view === 'latest' && $cat_id > 0) {
+        $images = GalleryService::getLatestImagesInCategorySubtree($cat_id, $per_page, $offset);
+        $total  = GalleryService::countLatestImagesInCategorySubtree($cat_id);
+    } else {
+        $images = match ($view) {
+            'latest'      => get_latest_images($per_page, $offset),
+            'most_viewed' => get_most_viewed_images(
+                $per_page,
+                $album_id > 0 ? $album_id : null,
+                $cat_id   > 0 ? $cat_id   : null,
+                $offset
+            ),
+            default       => get_random_images($per_page, $offset, $seed, $cat_id > 0 ? $cat_id : null),
+        };
+        $total = match ($view) {
+            'latest'      => count_latest_images(),
+            'most_viewed' => count_most_viewed_images(
+                $album_id > 0 ? $album_id : null,
+                $cat_id   > 0 ? $cat_id   : null
+            ),
+            default       => count_random_images($cat_id > 0 ? $cat_id : null),
+        };
+    }
+
+    $qs = 'view=' . $view;
+    if ($view === 'most_viewed' && $album_id > 0) {
+        $qs .= '&album=' . $album_id;
+    } elseif ($cat_id > 0) {
+        $qs .= '&cat=' . $cat_id;
+    }
+    if ($view === 'random') {
+        $qs .= '&seed=' . $seed;
+    }
+    $url_pat = lumora_base_url() . '?' . $qs . '&page=%d';
+    $pag     = lumora_pagination($total, $per_page, $page, $url_pat);
 
     $content = '<h2 class="lum-section-title">' . h($view_titles[$view]) . '</h2>'
-        . lumora_render_thumbgrid($images)
+        . lumora_render_thumbgrid($images, $pag)
         . lumora_render_lightbox_js(lumora_base_url());
 
 } elseif ($cat_id > 0) {
@@ -132,7 +178,11 @@ if ($view !== '') {
             : [];
         if (!empty($latest_in_cat)) {
             $mt = (!empty($albums) || !empty($subcats)) ? ' mt-4' : '';
-            $content .= '<h2 class="lum-section-title' . $mt . '">Latest Additions</h2>'
+            $view_all_url = h(lumora_theme_preview_link(lumora_base_url() . '?view=latest&cat=' . $cat_id));
+            $content .= '<div class="d-flex justify-content-between align-items-center' . $mt . ' mb-2">'
+                . '<h2 class="lum-section-title mb-0">Latest Additions</h2>'
+                . '<a href="' . $view_all_url . '" class="btn btn-sm btn-outline-primary">View all</a>'
+                . '</div>'
                 . lumora_render_thumbgrid($latest_in_cat)
                 . lumora_render_lightbox_js(lumora_base_url());
         }
