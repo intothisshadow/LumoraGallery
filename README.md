@@ -141,7 +141,7 @@ Building your own theme? See [`docs/THEME_DEVELOPMENT.md`](docs/THEME_DEVELOPMEN
 
 ## Plugins
 
-Lumora supports optional plugins that extend the gallery without modifying any core files. Feature plugins ship **disabled by default** and are managed from **Admin → Plugins** — enable, disable, or permanently delete one (deletion is only available once a plugin is disabled, and removes its files from disk).
+Lumora supports optional plugins that extend the gallery without modifying any core files. Feature plugins ship **disabled by default** and are managed from **Admin → Plugins** — enable, disable, or permanently delete one (deletion is only available once a plugin is disabled, and removes its files from disk); a selection checkbox on each row also allows bulk-activating, bulk-deactivating, or bulk-deleting several at once. A new plugin can be installed by uploading a `.zip` archive containing a `plugin.json`, and an already-installed plugin can be updated the same way from its own **Update** button.
 
 Two feature plugins are included:
 

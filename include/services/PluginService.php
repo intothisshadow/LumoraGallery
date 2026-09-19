@@ -35,6 +35,14 @@ declare(strict_types=1);
  * `plugin_enabled__{id}` key via LumoraConfig, the same mechanism every
  * other setting in Lumora already uses — no new table required.
  *
+ * installFromZip()/updateFromZip() (LG-069) let Admin → Plugins install a
+ * new plugin or update an already-installed one from an uploaded ZIP,
+ * mirroring ThemeService's own ZIP pipeline: same staging-then-rename()
+ * approach, same path-safety checks, same single-wrapping-folder
+ * flattening. The destination folder is always the archive's own declared
+ * plugin.json "id", matching every bundled plugin's existing folder-name
+ * convention.
+ *
  * @package    LumoraGallery
  * @subpackage Plugins
  * @author     Ariane
@@ -44,12 +52,16 @@ declare(strict_types=1);
  * @source     https://github.com/intothisshadow/LumoraGallery
  * @since      1.16.0
  * @see        HookService The action/filter registry plugin bootstrap files call into.
+ * @see        ThemeService The equivalent ZIP install/update pipeline this mirrors.
  */
 
 if (!defined('LUMORA_ENTRY')) exit('Direct access denied.');
 
 class PluginService
 {
+    private const MAX_ZIP_ENTRIES           = 2000;
+    private const MAX_ZIP_UNCOMPRESSED_SIZE = 50 * 1024 * 1024;
+
     /**
      * Scan LUMORA_PLUGINS_PATH for every plugin manifest, regardless of type.
      *
@@ -260,6 +272,254 @@ class PluginService
 
         UpdaterService::removeDirectory($dir);
         return !is_dir($dir);
+    }
+
+    /**
+     * Validate an uploaded ZIP and install it as a brand-new plugin folder
+     * inside plugins/. The destination folder name is the archive's own
+     * declared plugin.json "id" — must not already exist (re-uploading for
+     * an already-installed plugin is updateFromZip() instead, mirroring
+     * ThemeService's install/update split).
+     *
+     * @return array{success: bool, message: string, id: string|null}
+     */
+    public static function installFromZip(string $tmpPath): array
+    {
+        return self::processZip($tmpPath, null);
+    }
+
+    /**
+     * Validate an uploaded ZIP and replace an already-installed plugin's
+     * files with it in place — enabled or not; a plugin's already-loaded
+     * bootstrap for the current request is unaffected, since the updated
+     * files only take effect from the next request onward.
+     *
+     * @return array{success: bool, message: string, id: string|null}
+     */
+    public static function updateFromZip(string $tmpPath, string $id): array
+    {
+        $found = false;
+        foreach (self::discoverAll() as $p) {
+            if ($p['id'] === $id) {
+                $found = true;
+                break;
+            }
+        }
+        if (!$found) {
+            return ['success' => false, 'message' => 'That plugin could not be found.', 'id' => null];
+        }
+        return self::processZip($tmpPath, $id);
+    }
+
+    /**
+     * Shared install/update ZIP pipeline, mirroring
+     * ThemeService::processZip() — same staging-then-rename() approach so a
+     * bad upload can never leave a half-extracted plugin live, and the same
+     * path-safety re-check against OS-specific normalisation/symlink edge
+     * cases after extraction. $targetId === null means "install as a new
+     * plugin"; a non-null value means "replace this already-installed
+     * plugin's files in place".
+     *
+     * @return array{success: bool, message: string, id: string|null}
+     */
+    private static function processZip(string $tmpPath, ?string $targetId): array
+    {
+        if (!is_file($tmpPath)) {
+            return ['success' => false, 'message' => 'The uploaded file could not be found.', 'id' => null];
+        }
+        if (!class_exists('ZipArchive')) {
+            return ['success' => false, 'message' => 'PHP ZipArchive extension is required. Enable ext-zip on your server.', 'id' => null];
+        }
+
+        $zip = new \ZipArchive();
+        if ($zip->open($tmpPath, \ZipArchive::RDONLY) !== true) {
+            return ['success' => false, 'message' => 'The uploaded file is not a valid ZIP archive.', 'id' => null];
+        }
+
+        $numFiles = $zip->count();
+        if ($numFiles === 0) {
+            $zip->close();
+            return ['success' => false, 'message' => 'The uploaded archive is empty.', 'id' => null];
+        }
+        if ($numFiles > self::MAX_ZIP_ENTRIES) {
+            $zip->close();
+            return ['success' => false, 'message' => 'The archive contains too many files to be a valid plugin package.', 'id' => null];
+        }
+
+        $names = [];
+        $totalUncompressed = 0;
+        for ($i = 0; $i < $numFiles; $i++) {
+            $stat = $zip->statIndex($i);
+            if ($stat === false) continue;
+
+            $name = (string) $stat['name'];
+            if (lumora_is_unsafe_zip_entry_name($name)) {
+                $zip->close();
+                return ['success' => false, 'message' => 'Archive contains an unsafe path entry: ' . $name . '. Aborting for security.', 'id' => null];
+            }
+
+            $names[]            = $name;
+            $totalUncompressed += (int) $stat['size'];
+        }
+
+        if ($totalUncompressed > self::MAX_ZIP_UNCOMPRESSED_SIZE) {
+            $zip->close();
+            return ['success' => false, 'message' => 'The archive is too large to be processed safely.', 'id' => null];
+        }
+
+        $prefix         = self::detectRootPrefix($names);
+        $manifestEntry  = $prefix . 'plugin.json';
+        if (!in_array($manifestEntry, $names, true)) {
+            $zip->close();
+            return ['success' => false, 'message' => 'The archive does not contain a plugin.json file and cannot be a valid Lumora plugin.', 'id' => null];
+        }
+
+        $manifestId = self::readPluginIdFromZip($zip, $manifestEntry);
+        if ($manifestId === '') {
+            $zip->close();
+            return ['success' => false, 'message' => 'plugin.json does not declare a valid "id".', 'id' => null];
+        }
+
+        if ($targetId === null) {
+            $id          = $manifestId;
+            $destination = LUMORA_PLUGINS_PATH . $id;
+            if (is_dir($destination)) {
+                $zip->close();
+                return [
+                    'success' => false,
+                    'id'      => null,
+                    'message' => "A plugin folder named \"{$id}\" already exists. "
+                        . 'Remove it first, or use the Update action on that plugin instead.',
+                ];
+            }
+        } else {
+            if ($manifestId !== $targetId) {
+                $zip->close();
+                return [
+                    'success' => false,
+                    'id'      => null,
+                    'message' => 'The uploaded archive\'s plugin.json id ("' . $manifestId . '") does not match the plugin being updated ("' . $targetId . '").',
+                ];
+            }
+            $id          = $targetId;
+            $destination = LUMORA_PLUGINS_PATH . $id;
+        }
+
+        $staging = LUMORA_PLUGINS_PATH . '.staging-' . bin2hex(random_bytes(8));
+        if (!mkdir($staging, 0755, true)) {
+            $zip->close();
+            return ['success' => false, 'message' => 'Could not create a staging directory for the plugin.', 'id' => null];
+        }
+
+        $extracted = $zip->extractTo($staging);
+        $zip->close();
+
+        if (!$extracted) {
+            UpdaterService::removeDirectory($staging);
+            return ['success' => false, 'message' => 'Failed to extract the plugin archive.', 'id' => null];
+        }
+
+        // Post-extraction realpath guard, mirroring
+        // ThemeService::processZip()'s belt-and-braces check against
+        // OS-specific path normalisation and symlink edge cases the
+        // string-based pre-extraction check alone cannot catch.
+        $canonStaging = rtrim((string) (realpath($staging) ?: $staging), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($staging, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST
+        );
+        foreach ($iterator as $item) {
+            $resolved = realpath($item->getPathname());
+            if ($resolved !== false && !str_starts_with($resolved . DIRECTORY_SEPARATOR, $canonStaging)) {
+                UpdaterService::removeDirectory($staging);
+                return [
+                    'success' => false,
+                    'id'      => null,
+                    'message' => 'Archive extraction produced a path outside the staging directory. Aborting for security.',
+                ];
+            }
+        }
+
+        $extractedRoot = $prefix !== ''
+            ? rtrim($staging . DIRECTORY_SEPARATOR . rtrim($prefix, '/'), DIRECTORY_SEPARATOR)
+            : rtrim($staging, DIRECTORY_SEPARATOR);
+
+        if (!is_dir($extractedRoot) || !file_exists($extractedRoot . DIRECTORY_SEPARATOR . 'plugin.json')) {
+            UpdaterService::removeDirectory($staging);
+            return ['success' => false, 'message' => 'The archive does not have the expected plugin folder structure.', 'id' => null];
+        }
+
+        if ($targetId !== null) {
+            // Update-in-place: swap the old folder out and the new one in
+            // via two fast local rename() calls, so the window where
+            // $destination doesn't exist at all is as small as the
+            // filesystem allows — true atomicity would need a symlink
+            // indirection layer this simpler feature doesn't have.
+            $displaced = $destination . '.replaced-' . bin2hex(random_bytes(4));
+            if (!@rename($destination, $displaced)) {
+                UpdaterService::removeDirectory($staging);
+                return ['success' => false, 'message' => 'Could not remove the existing plugin files before updating.', 'id' => null];
+            }
+            if (!@rename($extractedRoot, $destination)) {
+                @rename($displaced, $destination);
+                UpdaterService::removeDirectory($staging);
+                return ['success' => false, 'message' => 'Could not install the updated plugin files; the previous version was restored.', 'id' => null];
+            }
+            UpdaterService::removeDirectory($displaced);
+        } else {
+            if (!@rename($extractedRoot, $destination)) {
+                UpdaterService::removeDirectory($staging);
+                return ['success' => false, 'message' => 'Could not install the plugin.', 'id' => null];
+            }
+        }
+
+        UpdaterService::removeDirectory($staging);
+
+        return [
+            'success' => true,
+            'id'      => $id,
+            'message' => $targetId !== null
+                ? 'Plugin "' . $id . '" updated.'
+                : 'Plugin "' . $id . '" installed.',
+        ];
+    }
+
+    /** Read and validate the "id" field out of a ZIP archive's plugin.json before anything is extracted. */
+    private static function readPluginIdFromZip(\ZipArchive $zip, string $manifestEntry): string
+    {
+        $json = $zip->getFromName($manifestEntry);
+        if ($json === false) return '';
+
+        try {
+            $data = json_decode($json, true, 512, \JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            return '';
+        }
+        if (!is_array($data) || empty($data['id']) || !is_string($data['id'])) return '';
+
+        // Same charset a destination folder name must be safe as — mirrors
+        // configKey()'s own sanitisation so an id containing anything else
+        // can never be used to influence the destination path.
+        return preg_match('/^[a-z0-9_-]+$/', $data['id']) === 1 ? $data['id'] : '';
+    }
+
+    /**
+     * Detect a single wrapping top-level folder (a GitHub-export-style
+     * plugin-name-1.0.0/ zip) so it can be flattened on extract, mirroring
+     * ThemeService::detectRootPrefix()'s equivalent check for template.html.
+     *
+     * @param list<string> $names
+     */
+    private static function detectRootPrefix(array $names): string
+    {
+        if (in_array('plugin.json', $names, true)) return '';
+
+        foreach ($names as $name) {
+            if (str_ends_with($name, '/plugin.json') && substr_count($name, '/') === 1) {
+                return substr($name, 0, -strlen('plugin.json'));
+            }
+        }
+        return '';
     }
 
     /**
