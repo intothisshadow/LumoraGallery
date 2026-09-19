@@ -4,6 +4,19 @@ Long-term archive of completed work, migrated from TODO.md on release.
 
 ---
 
+## v1.19.0 — Released 2026-09-19
+
+### Added
+
+- **LG-066 — Latest, Most Viewed, and Random now paginate instead of showing a single fixed-size page.** All three previously returned only the first `per_page` images gallery-wide with no way to see more; they now use the same pagination control as album/category pages, and each accepts an optional `&cat=N` to scope the listing to a category (and its sub-categories) the same way Most Viewed already did — the "Latest"/"Most Viewed"/"Random" nav links and a category page's "Latest Additions" → **View all** link carry that context forward automatically. Random's page-to-page ordering stays stable via a seeded shuffle carried in the pagination URLs, so paging through it doesn't duplicate or skip images.
+- **LG-067 — New Admin → Logs page.** A new, always-on `{PREFIX}admin_log` table (via `LogService`) records login successes/failures and staff account/plugin changes (create/edit/delete, role changes, enable/disable) — previously nowhere visible in the admin UI at all. The Logs page is filterable by event type, username/IP/message search, and date range, with the existing (but likewise never-surfaced) `{PREFIX}config_changes` audit trail and the existing system error/info log shown alongside it as two further read-only tabs. Security/admin events are pruned automatically after a configurable retention window (90 days by default, adjustable on the page itself).
+- **LG-068 — On-Demand Thumbnails now has a real Admin settings page.** Previously required manually editing `albums/.htaccess` over SSH/FTP and had a fixed, always-on rate limit. **Admin → On-Demand Thumbnails** can now install/remove the required `albums/.htaccess` rewrite rule for you (additive — never overwrites other content already in that file), turn the per-IP rate limiter on/off and choose its threshold (30/60/120/240 requests per rolling 60 seconds), and run the batch thumbnail-delete tools (delete all / delete every other, optionally recursive, with a dry-run preview) directly from the browser instead of only over SSH. `tools/delete-all-thumbs.sh` and `tools/delete-every-other-thumb.sh` now share their deletion logic with the new settings page via `OnDemandThumbnailService::deleteThumbnails()` rather than duplicating it.
+
+### Fixed
+
+- **LG-064 — The updater's extracted release copy (`cache/.updates/extract/`) was never cleaned up after a successful update.** `UpdaterService`'s Extract stage unpacks the downloaded release into a working directory that Replace then copies from, but nothing removed it afterward — every update left a full extra copy of the release sitting in `cache/.updates/extract/` indefinitely, wasting disk space that accumulates across updates. The Cleanup stage now removes it once the update completes successfully; a failed update leaves it in place for troubleshooting.
+- **LG-065 — Maintenance mode could get stuck on after an update, with no error anywhere.** The Cleanup stage's maintenance-mode-disable step silently swallowed any failure writing `gallery_offline` back to `0` and unconditionally reported "Maintenance mode disabled" regardless — a failed write left the gallery offline to every visitor with the update log, update history, and progress UI all claiming success. `UpdaterService` now re-reads the value straight from the database to confirm the disable actually persisted before reporting it, and logs an error when it didn't (also applied to Abort). Admin → Updates now also detects this stuck state directly — offline with no update session running — and offers a **Disable Maintenance Mode Now** button to recover without needing database access.
+
 ## v1.18.5 — Released 2026-09-14
 
 ### Added
