@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **On-Demand Thumbnails: a real (non-dry-run) batch delete showed no success/failure notice, unlike its dry run.** Root cause: the real delete ran as one synchronous form POST, and against a large recursive folder tree could silently die against PHP's `max_execution_time` mid-delete, before the request ever reached the code that sets the flash message — a dry run over the same tree, being read-only, stayed fast enough to never hit this. A real delete now runs as a chunked, in-place AJAX flow instead (`plugins/on-demand-thumbnails/admin/ajax_delete_thumbs.php` + new `OnDemandDeleteJobService`, mirroring Admin → Updates' own multi-stage update AJAX pattern), showing a live progress bar and a final summary on the page itself — no reload, and no request long enough to hit the time limit. A dry run is unaffected (still a plain, synchronous form POST, since it never touches the filesystem).
+
 ## [1.19.0] — 2026-09-19
 
 ### Added

@@ -295,7 +295,13 @@ class OnDemandThumbnailService
     // original photo is still in place.
 
     /**
-     * Delete (or, with $dryRun, just report) thumb_* files under $path.
+     * Delete (or, with $dryRun, just report) thumb_* files under $path, in
+     * one call. Used by the CLI wrappers, where there is no request time
+     * limit to worry about. The admin settings page instead drives a real
+     * (non-dry-run) delete through planDeletion() + deleteFiles() below, in
+     * small chunks over several AJAX calls, so a large recursive delete can
+     * never silently die mid-way against PHP's max_execution_time with no
+     * feedback — see ajax_delete_thumbs.php.
      *
      * @param string $path       Directory to operate on — an album folder, or
      *                           (with $recursive) a top-level directory
@@ -313,39 +319,101 @@ class OnDemandThumbnailService
      */
     public static function deleteThumbnails(string $path, bool $recursive, bool $everyOther, bool $dryRun): array
     {
-        $result = ['total_found' => 0, 'total_deleted' => 0, 'dry_run' => $dryRun, 'folders' => []];
+        $plan = self::planDeletion($path, $recursive, $everyOther);
 
-        if (!is_dir($path)) {
-            return $result;
+        $result = ['total_found' => $plan['total_found'], 'total_deleted' => 0, 'dry_run' => $dryRun, 'folders' => []];
+
+        $to_delete_by_folder = [];
+        foreach ($plan['to_delete'] as $f) {
+            $to_delete_by_folder[dirname($f)][] = $f;
         }
 
-        $dirs = $recursive ? self::findThumbFolders($path) : [rtrim($path, '/\\')];
+        foreach ($plan['per_folder_found'] as $dir => $found) {
+            $selected = $to_delete_by_folder[$dir] ?? [];
+            $deleted  = $dryRun ? count($selected) : self::deleteFiles($selected);
+            $result['folders'][$dir]  = ['found' => $found, 'deleted' => $deleted];
+            $result['total_deleted'] += $deleted;
+        }
 
-        foreach ($dirs as $dir) {
+        return $result;
+    }
+
+    /**
+     * Read-only planning step: every folder that will be touched, the exact
+     * files selected for deletion in each (after $everyOther filtering), and
+     * total counts — no filesystem writes happen here. This is fast even for
+     * a large recursive tree (a directory scan + sort, no I/O per file), so
+     * it's safe to run synchronously; deleteFiles() below does the actual
+     * (potentially slow) unlink() work in caller-controlled chunks.
+     *
+     * @return array{folders: list<string>, to_delete: list<string>,
+     *               total_found: int, per_folder_found: array<string, int>}
+     */
+    public static function planDeletion(string $path, bool $recursive, bool $everyOther): array
+    {
+        if (!is_dir($path)) {
+            return ['folders' => [], 'to_delete' => [], 'total_found' => 0, 'per_folder_found' => []];
+        }
+
+        $to_delete        = [];
+        $total_found      = 0;
+        $per_folder_found = [];
+
+        foreach (self::listFoldersForDeletion($path, $recursive) as $dir) {
             $files = self::sortedThumbFiles($dir);
             if ($files === []) {
                 continue;
             }
 
-            $to_delete = $everyOther
+            $per_folder_found[$dir] = count($files);
+            $total_found            += count($files);
+
+            $selected = $everyOther
                 ? array_values(array_filter($files, static fn($i) => $i % 2 === 0, ARRAY_FILTER_USE_KEY))
                 : $files;
-
-            $deleted = 0;
-            if (!$dryRun) {
-                foreach ($to_delete as $f) {
-                    if (@unlink($f)) {
-                        $deleted++;
-                    }
-                }
-            }
-
-            $result['folders'][$dir] = ['found' => count($files), 'deleted' => $dryRun ? count($to_delete) : $deleted];
-            $result['total_found']   += count($files);
-            $result['total_deleted'] += $dryRun ? count($to_delete) : $deleted;
+            array_push($to_delete, ...$selected);
         }
 
-        return $result;
+        return [
+            'folders'          => array_keys($per_folder_found),
+            'to_delete'        => $to_delete,
+            'total_found'      => $total_found,
+            'per_folder_found' => $per_folder_found,
+        ];
+    }
+
+    /**
+     * Delete exactly the given files — no further validation, no directory
+     * traversal, no globbing. Callers (deleteThumbnails() above, and the
+     * chunked AJAX delete) are responsible for only ever passing paths that
+     * came from planDeletion()'s own output, never anything client-supplied.
+     * Returns the number actually deleted (a file already gone, or an
+     * unwritable permission, is simply not counted rather than failing the
+     * whole batch).
+     *
+     * @param list<string> $files
+     */
+    public static function deleteFiles(array $files): int
+    {
+        $deleted = 0;
+        foreach ($files as $f) {
+            if (@unlink($f)) {
+                $deleted++;
+            }
+        }
+        return $deleted;
+    }
+
+    /**
+     * The ordered list of directories planDeletion() and deleteThumbnails()
+     * operate over: every subfolder under $path with at least one thumb_*
+     * file when $recursive, or just $path itself otherwise.
+     *
+     * @return list<string>
+     */
+    private static function listFoldersForDeletion(string $path, bool $recursive): array
+    {
+        return $recursive ? self::findThumbFolders($path) : [rtrim($path, '/\\')];
     }
 
     /**

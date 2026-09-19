@@ -51,7 +51,7 @@ Nothing about this plugin's code or the `albums/.htaccess` rule changes based on
 
 ## Batch-deleting thumbnails
 
-**From Admin → On-Demand Thumbnails** (the easiest way): pick a folder relative to `albums/` (e.g. `Season8/8x03-TheLongNight`, or `albums` itself with **Recursive** checked for every album at once), choose **Delete all** or **Delete every other**, and click **Run**. **Dry run** is checked by default so the first click just previews what would happen — uncheck it and confirm to actually delete. This runs the exact same logic as the two SSH scripts below.
+**From Admin → On-Demand Thumbnails** (the easiest way): pick a folder relative to `albums/` (e.g. `Season8/8x03-TheLongNight`, or `albums` itself with **Recursive** checked for every album at once), choose **Delete all** or **Delete every other**, and click **Run**. **Dry run** is checked by default so the first click just previews what would happen — uncheck it and confirm to actually delete. This runs the exact same logic as the two SSH scripts below. A real (non-dry-run) delete shows a live progress bar in place while it works, processing in small chunks rather than one long request — safe even for a large recursive delete across the whole gallery, since it can't silently time out mid-way with nothing to show for it.
 
 **Over SSH**, two scripts are provided, both under `tools/`. Neither ever touches original photos, and anything either one deletes can always be undone via **Admin → Tools → Regenerate Missing Thumbnails**. Both support `--dry-run` (preview only, nothing deleted) and `--yes` (skip the confirmation prompt).
 

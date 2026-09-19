@@ -14,7 +14,13 @@ declare(strict_types=1);
  *     logic as tools/delete-all-thumbs.sh and tools/delete-every-other-
  *     thumb.sh (now thin CLI wrappers around
  *     OnDemandThumbnailService::deleteThumbnails()), run from the browser
- *     instead of over SSH.
+ *     instead of over SSH. A dry run is a plain, synchronous form POST
+ *     (read-only, no timeout risk); a real delete instead drives an
+ *     in-place, no-reload AJAX progress loop via ajax_delete_thumbs.php,
+ *     the same pattern Admin → Updates uses for its own multi-stage update
+ *     workflow — a single synchronous request risked silently dying against
+ *     PHP's max_execution_time on a large recursive delete with no feedback
+ *     shown at all.
  *
  * @package    LumoraGallery
  * @subpackage Plugins
@@ -25,6 +31,7 @@ declare(strict_types=1);
  * @source     https://github.com/intothisshadow/LumoraGallery
  * @since      1.19.0
  * @see        OnDemandThumbnailService Backing logic for every action on this page.
+ * @see        OnDemandDeleteJobService Persists a real delete's plan between AJAX batch calls.
  * @see        OnDemandRateLimitService Reads the rate-limit settings this page writes.
  */
 define('LUMORA_ENTRY', true);
@@ -39,9 +46,11 @@ require_once dirname(__DIR__) . '/OnDemandThumbnailService.php';
 
 lumora_require_permission('site_configuration');
 
-$base   = lumora_base_url() . 'plugins/on-demand-thumbnails/admin/settings.php';
-$base_h = h($base);
-$csrf_h = h(lumora_csrf_token());
+$base         = lumora_base_url() . 'plugins/on-demand-thumbnails/admin/settings.php';
+$base_h       = h($base);
+$csrf_h       = h(lumora_csrf_token());
+$csrf_js      = json_encode(lumora_csrf_token());
+$ajax_base_js = json_encode(lumora_base_url() . 'plugins/on-demand-thumbnails/admin/');
 
 if (!PluginService::isEnabled('on-demand-thumbnails')) {
     $plugins_url_h = h(lumora_base_url() . 'admin/plugins.php');
@@ -197,11 +206,11 @@ $content = <<<HTML
     <div class="row g-2 align-items-end mb-2">
       <div class="col-md-5">
         <label class="form-label small text-muted mb-1">Folder (relative to albums/)</label>
-        <input type="text" name="folder" class="form-control form-control-sm" placeholder="Season8/8x03-TheLongNight" required>
+        <input type="text" id="lum-odt-folder" name="folder" class="form-control form-control-sm" placeholder="Season8/8x03-TheLongNight" required>
       </div>
       <div class="col-md-3">
         <label class="form-label small text-muted mb-1">Mode</label>
-        <select name="mode" class="form-select form-select-sm">
+        <select id="lum-odt-mode" name="mode" class="form-select form-select-sm">
           <option value="all">Delete all</option>
           <option value="every_other">Delete every other</option>
         </select>
@@ -219,25 +228,158 @@ $content = <<<HTML
     </div>
     <button type="submit" class="btn btn-sm btn-warning">Run</button>
   </form>
+
+  <div id="lum-odt-delete-progress" class="d-none mt-3">
+    <div class="progress mb-2" style="height:1.25rem" role="progressbar" aria-label="Delete progress"
+         aria-valuemin="0" aria-valuemax="100" id="lum-odt-progress-wrap">
+      <div id="lum-odt-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" style="width:0%">0%</div>
+    </div>
+    <div id="lum-odt-progress-status" class="small text-muted"></div>
+    <button type="button" id="lum-odt-progress-reset" class="btn btn-sm btn-outline-secondary mt-2 d-none">Run Another</button>
+  </div>
 </div>
 
 <script>
-(function () {
+document.addEventListener('DOMContentLoaded', function () {
   'use strict';
+
+  var CSRF      = {$csrf_js};
+  var AJAX_BASE = {$ajax_base_js};
+
   document.querySelectorAll('form[data-confirm]').forEach(function (f) {
     f.addEventListener('submit', function (e) {
       if (!confirm(f.dataset.confirm)) e.preventDefault();
     });
   });
 
-  var delForm = document.getElementById('lum-odt-delete-form');
-  var dryRun  = document.getElementById('lum-odt-dryrun');
+  async function post(endpoint, body) {
+    var params = new URLSearchParams(Object.assign({ csrf_token: CSRF }, body));
+    var resp = await fetch(AJAX_BASE + endpoint, {
+      method : 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body   : params.toString(),
+    });
+    if (!resp.ok) throw new Error('Server returned HTTP ' + resp.status);
+    return resp.json();
+  }
+
+  // ── Batch-delete: dry run stays a plain form POST (fast, read-only, no
+  // timeout risk); a real delete is driven here as a chunked AJAX loop
+  // instead — mirroring Admin → Updates' own in-place, no-reload progress
+  // pattern (admin/ajax_update_perform.php) — so a large recursive delete
+  // can't silently die against PHP's max_execution_time with no feedback,
+  // which a single synchronous request risked.
+
+  var delForm      = document.getElementById('lum-odt-delete-form');
+  var dryRun       = document.getElementById('lum-odt-dryrun');
+  var folderInput  = document.getElementById('lum-odt-folder');
+  var modeSelect   = document.getElementById('lum-odt-mode');
+  var recursiveChk = document.getElementById('lum-odt-recursive');
+  var progressWrap = document.getElementById('lum-odt-delete-progress');
+  var progressBar  = document.getElementById('lum-odt-progress-bar');
+  var progressStat = document.getElementById('lum-odt-progress-status');
+  var progressReset= document.getElementById('lum-odt-progress-reset');
+
+  function setProgress(processed, total, statusHtml) {
+    var pct = total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
+    if (progressBar) {
+      progressBar.style.width = pct + '%';
+      progressBar.textContent = pct + '%';
+    }
+    if (progressStat) progressStat.innerHTML = statusHtml;
+  }
+
+  async function runRealDelete() {
+    delForm.classList.add('d-none');
+    progressWrap.classList.remove('d-none');
+    progressReset.classList.add('d-none');
+    progressBar.classList.add('progress-bar-animated');
+    setProgress(0, 1, 'Planning…');
+
+    var startResp;
+    try {
+      startResp = await post('ajax_delete_thumbs.php', {
+        action   : 'start',
+        folder   : folderInput.value,
+        recursive: recursiveChk.checked ? '1' : '',
+        mode     : modeSelect.value,
+      });
+    } catch (err) {
+      finishWithError('Could not start delete: ' + err.message);
+      return;
+    }
+
+    if (!startResp.success) {
+      finishWithError(startResp.message || 'Could not start delete.');
+      return;
+    }
+
+    if (startResp.done) {
+      // Nothing matched — no job was created.
+      progressBar.classList.remove('progress-bar-animated');
+      setProgress(1, 1, 'No thumb_* files found under that folder.');
+      progressReset.classList.remove('d-none');
+      return;
+    }
+
+    var jobId = startResp.job_id;
+    var total = startResp.to_delete_count;
+    setProgress(0, total, 'Deleting… 0 of ' + total);
+
+    while (true) {
+      var batchResp;
+      try {
+        batchResp = await post('ajax_delete_thumbs.php', { action: 'batch', job_id: jobId });
+      } catch (err) {
+        finishWithError('Delete interrupted: ' + err.message + ' — already-deleted files are not restored automatically; check Admin → Tools → Regenerate Missing Thumbnails.');
+        return;
+      }
+
+      if (!batchResp.success) {
+        finishWithError(batchResp.message || 'Delete failed mid-way.');
+        return;
+      }
+
+      setProgress(batchResp.processed, batchResp.to_delete_count, 'Deleting… ' + batchResp.processed + ' of ' + batchResp.to_delete_count);
+
+      if (batchResp.done) {
+        progressBar.classList.remove('progress-bar-animated');
+        progressBar.classList.remove('progress-bar-striped');
+        setProgress(1, 1,
+          '✓ Deleted ' + batchResp.deleted + ' of ' + batchResp.total_found
+          + ' thumb_* file(s) found across ' + batchResp.folder_count + ' folder(s). '
+          + 'Recover any of these later via Admin → Tools → Regenerate Missing Thumbnails.'
+        );
+        progressReset.classList.remove('d-none');
+        return;
+      }
+    }
+  }
+
+  function finishWithError(message) {
+    progressBar.classList.remove('progress-bar-animated');
+    progressBar.classList.add('bg-danger');
+    progressStat.innerHTML = '<span class="text-danger">✗ ' + message + '</span>';
+    progressReset.classList.remove('d-none');
+  }
+
+  if (progressReset) {
+    progressReset.addEventListener('click', function () {
+      progressWrap.classList.add('d-none');
+      progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated';
+      delForm.classList.remove('d-none');
+    });
+  }
+
   if (delForm) {
     delForm.addEventListener('submit', function (e) {
-      if (dryRun && dryRun.checked) return; // Dry run needs no confirmation.
+      if (dryRun && dryRun.checked) return; // Dry run: plain form POST, unchanged.
+
+      e.preventDefault();
       if (!confirm('Delete thumbnails as configured above? This cannot be undone directly, but can be recovered via Regenerate Missing Thumbnails.')) {
-        e.preventDefault();
+        return;
       }
+      runRealDelete();
     });
   }
 
@@ -247,7 +389,7 @@ $content = <<<HTML
     var el = document.getElementById(hash);
     if (el) { el.scrollIntoView({behavior: 'smooth', block: 'start'}); }
   }
-}());
+});
 </script>
 HTML;
 

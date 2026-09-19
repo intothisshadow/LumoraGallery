@@ -2,7 +2,7 @@
   "id": "on-demand-thumbnails",
   "type": "feature",
   "name": "On-Demand Thumbnails",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "min_lumora": "1.18.5",
   "description": "Experimental: generates thumbnails on request instead of storing them on disk, to reduce inode usage on very large galleries. Its settings page can install the required albums/.htaccess rewrite rule for you and configure rate limiting — see README.md before enabling.",
   "author": "Ariane",
