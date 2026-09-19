@@ -64,7 +64,7 @@ class LumoraConfig
      * Boolean-style config keys: stored as '1' or '0' only.
      * Shared by sanitizeValue() below.
      */
-    private const BOOL_KEYS = ['count_album_views', 'gallery_offline', 'show_powered_by', 'install_ping_enabled', 'update_auto_check', 'litespeed_cache_purge'];
+    private const BOOL_KEYS = ['count_album_views', 'gallery_offline', 'show_powered_by', 'install_ping_enabled', 'update_auto_check', 'litespeed_cache_purge', 'odt_rate_limit_enabled'];
 
     /**
      * Validate and normalise a raw config value for a known config key,
@@ -115,6 +115,8 @@ class LumoraConfig
                                                     ? $raw : 'daily',
             'litespeed_page_cache_ttl'         => (string) max(0, min(86400, (int) $raw)),
             'admin_log_retention_days'         => (string) max(1, min(3650, (int) $raw)),
+            'odt_rate_limit_max_requests'      => in_array((int) $raw, [30, 60, 120, 240], true)
+                                                    ? (string) ((int) $raw) : '120',
             default                            => trim($raw),
         };
     }
