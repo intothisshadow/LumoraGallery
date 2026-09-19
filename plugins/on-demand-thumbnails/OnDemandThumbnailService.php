@@ -407,7 +407,12 @@ class OnDemandThumbnailService
     /**
      * The ordered list of directories planDeletion() and deleteThumbnails()
      * operate over: every subfolder under $path with at least one thumb_*
-     * file when $recursive, or just $path itself otherwise.
+     * file when $recursive, or just $path itself otherwise. Only used by
+     * the CLI's synchronous path (via planDeletion()) — the chunked AJAX
+     * job instead expands its work queue one level at a time via
+     * immediateSubdirectories() above, since walking the whole tree up
+     * front is exactly what could exceed a web request's time/memory limits
+     * for a large recursive section.
      *
      * @return list<string>
      */
@@ -417,9 +422,69 @@ class OnDemandThumbnailService
     }
 
     /**
+     * Plan or execute deletion for exactly one folder. Used by the chunked
+     * AJAX job to bound each request's work to a single folder's file
+     * count — the same shape already proven to complete comfortably within
+     * a normal request even for a single large album — instead of
+     * planDeletion()'s whole-tree-at-once approach, which held every
+     * matched file path (across every folder) in memory and in one on-disk
+     * job file at once, and could exceed shared-hosting memory/time limits
+     * for a large recursive section with no response sent at all.
+     *
+     * @return array{found: int, deleted: int}
+     */
+    public static function processFolder(string $dir, bool $everyOther, bool $dryRun): array
+    {
+        $files = self::sortedThumbFiles($dir);
+        if ($files === []) {
+            return ['found' => 0, 'deleted' => 0];
+        }
+
+        $selected = $everyOther
+            ? array_values(array_filter($files, static fn($i) => $i % 2 === 0, ARRAY_FILTER_USE_KEY))
+            : $files;
+
+        $deleted = $dryRun ? count($selected) : self::deleteFiles($selected);
+
+        return ['found' => count($files), 'deleted' => $deleted];
+    }
+
+    /**
+     * Immediate subdirectories of $dir — one level only, no recursion.
+     * Used by the chunked AJAX delete job (OnDemandDeleteJobService) to
+     * expand its work queue one directory at a time as it goes, instead of
+     * walking the whole recursive tree up front in a single request the
+     * way findThumbFolders() below does — a whole-tree walk in one request
+     * is exactly what could exceed request time/memory limits for a large
+     * section, and on hosts that don't honour a runtime limit override
+     * there's no way to raise that ceiling from within the script at all.
+     *
+     * @return list<string>
+     */
+    public static function immediateSubdirectories(string $dir): array
+    {
+        $subdirs = [];
+        foreach (scandir($dir) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $path = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $entry;
+            if (is_dir($path)) {
+                $subdirs[] = $path;
+            }
+        }
+        sort($subdirs);
+        return $subdirs;
+    }
+
+    /**
      * Every subfolder under $root that directly contains at least one
      * thumb_* file, each treated independently by deleteThumbnails() above
      * — mirrors delete-every-other-thumb.sh's `find ... -exec dirname` step.
+     * Walks the whole tree in one pass; only used by planDeletion() for the
+     * CLI's synchronous path, which has no request time limit to worry
+     * about. The chunked AJAX job instead expands one level at a time via
+     * immediateSubdirectories() above.
      *
      * @return list<string>
      */

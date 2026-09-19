@@ -3,17 +3,34 @@ declare(strict_types=1);
 /**
  * Lumora Gallery — On-Demand Thumbnails Plugin — Batch-Delete Job Store
  *
- * A real (non-dry-run) batch delete on the Admin → On-Demand Thumbnails
+ * A batch delete (or its dry run) on the Admin → On-Demand Thumbnails
  * settings page is driven in small chunks over several AJAX calls (see
  * ajax_delete_thumbs.php) instead of one long synchronous request, so a
- * large recursive delete can never silently die mid-way against PHP's
- * max_execution_time with no feedback shown to the admin.
+ * large recursive scan can never silently die mid-way with no feedback
+ * shown to the admin.
  *
- * The list of files a job will delete is computed once, server-side, by
- * OnDemandThumbnailService::planDeletion() and persisted here — the browser
- * only ever sends back a job ID on subsequent calls, never file paths, so a
- * tampered request can't be used to make the server delete something
- * outside the originally planned, already-validated folder.
+ * The job is a breadth-first work queue of directories, discovered one
+ * level at a time rather than enumerated up front: each batch() call pops
+ * exactly one directory off the queue, processes that directory's own
+ * thumb_* files (the same bounded shape already proven to complete
+ * comfortably within a normal request even for a single large album), and
+ * — if this is a recursive job — pushes that directory's immediate
+ * subdirectories onto the back of the queue for a later call to expand in
+ * turn. Two earlier versions of this job instead tried to enumerate
+ * everything up front in the 'start' action: first every matched file path
+ * across the whole scope (planDeletion()), then just every matching folder
+ * path (listFoldersForDeletion()/findThumbFolders()) — both still walk the
+ * *entire* recursive tree in one request, and for a large enough section
+ * that alone could exceed request time/memory limits and die with no HTTP
+ * response at all, before a job was ever created. On hosts that lock those
+ * limits (a runtime override from within the script has no effect there),
+ * there is no way to raise that ceiling at all — so this design instead
+ * keeps every single request's filesystem work bounded to "one directory's
+ * immediate contents", regardless of how large the overall tree is.
+ *
+ * Since the queue grows as it's expanded, the total number of directories
+ * isn't known until the job finishes — there is no fixed "N of M" to
+ * report, only a running count of directories checked so far.
  *
  * One JSON file per job under cache/.odt_delete/, named by a random job ID.
  * No flock: each job file is only ever touched by the one browser tab that
@@ -30,16 +47,13 @@ declare(strict_types=1);
  * @link       https://coding.unloved-heart.net/scripts/lumoragallery
  * @source     https://github.com/intothisshadow/LumoraGallery
  * @since      1.19.1
- * @see        OnDemandThumbnailService::planDeletion()/deleteFiles() Do the actual planning/deleting.
+ * @see        OnDemandThumbnailService::processFolder()/immediateSubdirectories() Do the actual scanning/deleting.
  */
 
 if (!defined('LUMORA_ENTRY')) exit('Direct access denied.');
 
 class OnDemandDeleteJobService
 {
-    /** Files processed per batch() call — bounds worst-case per-request unlink() work. */
-    public const BATCH_SIZE = 200;
-
     /** Job files older than this are treated as abandoned and pruned on the next start(). */
     private const STALE_SECONDS = 3600;
 
@@ -54,12 +68,12 @@ class OnDemandDeleteJobService
     }
 
     /**
-     * Create a new job from an already-computed deletion plan (see
-     * OnDemandThumbnailService::planDeletion()) and return its ID.
-     *
-     * @param array{to_delete: list<string>, total_found: int, folders: list<string>} $plan
+     * Create a new job with just the root directory queued — nothing is
+     * scanned yet; the first batch() call processes the root itself and,
+     * if $recursive, discovers its immediate children for later calls to
+     * work through in turn.
      */
-    public static function create(array $plan): string
+    public static function create(string $rootPath, bool $recursive, bool $everyOther, bool $dryRun): string
     {
         $dir = self::jobDir();
         if (!is_dir($dir)) {
@@ -69,12 +83,14 @@ class OnDemandDeleteJobService
 
         $jobId = bin2hex(random_bytes(16));
         $job   = [
-            'to_delete'    => $plan['to_delete'],
-            'total_found'  => $plan['total_found'],
-            'folder_count' => count($plan['folders']),
-            'offset'       => 0,
-            'deleted'      => 0,
-            'created_at'   => time(),
+            'queue'          => [$rootPath],
+            'recursive'      => $recursive,
+            'every_other'    => $everyOther,
+            'dry_run'        => $dryRun,
+            'processed_dirs' => 0,
+            'total_found'    => 0,
+            'total_deleted'  => 0,
+            'created_at'     => time(),
         ];
 
         file_put_contents(self::jobFile($jobId), json_encode($job, JSON_UNESCAPED_SLASHES));
@@ -82,11 +98,13 @@ class OnDemandDeleteJobService
     }
 
     /**
-     * Process the next BATCH_SIZE files of $jobId, delete the job file once
-     * exhausted, and return the running/final totals.
+     * Process the next directory off $jobId's queue — scanning/deleting its
+     * own thumb_* files and, if recursive, discovering its immediate
+     * subdirectories for later calls — delete the job file once the queue
+     * is empty, and return the running/final totals.
      *
-     * @return array{success: bool, done: bool, message?: string, total_found?: int,
-     *               to_delete_count?: int, processed?: int, deleted?: int, folder_count?: int}
+     * @return array{success: bool, done: bool, message?: string, dry_run?: bool,
+     *               processed_dirs?: int, total_found?: int, total_deleted?: int}
      */
     public static function processBatch(string $jobId): array
     {
@@ -95,14 +113,19 @@ class OnDemandDeleteJobService
             return ['success' => false, 'done' => true, 'message' => 'Unknown or expired delete job.'];
         }
 
-        $slice = array_slice($job['to_delete'], $job['offset'], self::BATCH_SIZE);
-        $deletedInBatch = OnDemandThumbnailService::deleteFiles($slice);
+        $dir = array_shift($job['queue']);
+        if ($dir !== null) {
+            $result = OnDemandThumbnailService::processFolder($dir, $job['every_other'], $job['dry_run']);
+            $job['total_found']   += $result['found'];
+            $job['total_deleted'] += $result['deleted'];
+            $job['processed_dirs']++;
 
-        $job['offset']  += count($slice);
-        $job['deleted'] += $deletedInBatch;
+            if ($job['recursive']) {
+                array_push($job['queue'], ...OnDemandThumbnailService::immediateSubdirectories($dir));
+            }
+        }
 
-        $toDeleteCount = count($job['to_delete']);
-        $done          = $job['offset'] >= $toDeleteCount;
+        $done = $job['queue'] === [];
 
         if ($done) {
             @unlink(self::jobFile($jobId));
@@ -111,19 +134,18 @@ class OnDemandDeleteJobService
         }
 
         return [
-            'success'         => true,
-            'done'            => $done,
-            'total_found'     => $job['total_found'],
-            'to_delete_count' => $toDeleteCount,
-            'processed'       => $job['offset'],
-            'deleted'         => $job['deleted'],
-            'folder_count'    => $job['folder_count'],
+            'success'        => true,
+            'done'           => $done,
+            'dry_run'        => $job['dry_run'],
+            'processed_dirs' => $job['processed_dirs'],
+            'total_found'    => $job['total_found'],
+            'total_deleted'  => $job['total_deleted'],
         ];
     }
 
     /**
-     * @return array{to_delete: list<string>, total_found: int, folder_count: int,
-     *               offset: int, deleted: int, created_at: int}|null
+     * @return array{queue: list<string>, recursive: bool, every_other: bool, dry_run: bool,
+     *               processed_dirs: int, total_found: int, total_deleted: int, created_at: int}|null
      */
     private static function read(string $jobId): ?array
     {

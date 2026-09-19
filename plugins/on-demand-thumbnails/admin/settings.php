@@ -14,13 +14,16 @@ declare(strict_types=1);
  *     logic as tools/delete-all-thumbs.sh and tools/delete-every-other-
  *     thumb.sh (now thin CLI wrappers around
  *     OnDemandThumbnailService::deleteThumbnails()), run from the browser
- *     instead of over SSH. A dry run is a plain, synchronous form POST
- *     (read-only, no timeout risk); a real delete instead drives an
- *     in-place, no-reload AJAX progress loop via ajax_delete_thumbs.php,
- *     the same pattern Admin → Updates uses for its own multi-stage update
- *     workflow — a single synchronous request risked silently dying against
- *     PHP's max_execution_time on a large recursive delete with no feedback
- *     shown at all.
+ *     instead of over SSH. Both a dry run and a real delete drive the same
+ *     in-place, no-reload, folder-chunked AJAX progress loop via
+ *     ajax_delete_thumbs.php — the same pattern Admin → Updates uses for
+ *     its own multi-stage update workflow — because a dry run needs the
+ *     same potentially-large filesystem scan a real delete does (it just
+ *     skips the actual unlink() calls); a single synchronous request for
+ *     either risked silently dying against PHP's max_execution_time or
+ *     memory_limit on a large recursive section with no feedback shown at
+ *     all. The plain form POST below (`delete_thumbnails`) only runs as a
+ *     no-JS fallback.
  *
  * @package    LumoraGallery
  * @subpackage Plugins
@@ -31,7 +34,7 @@ declare(strict_types=1);
  * @source     https://github.com/intothisshadow/LumoraGallery
  * @since      1.19.0
  * @see        OnDemandThumbnailService Backing logic for every action on this page.
- * @see        OnDemandDeleteJobService Persists a real delete's plan between AJAX batch calls.
+ * @see        OnDemandDeleteJobService Persists a delete/dry-run job's work queue between AJAX batch calls.
  * @see        OnDemandRateLimitService Reads the rate-limit settings this page writes.
  */
 define('LUMORA_ENTRY', true);
@@ -97,6 +100,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $recursive    = isset($_POST['recursive']);
             $every_other  = ($_POST['mode'] ?? 'all') === 'every_other';
             $dry_run      = isset($_POST['dry_run']);
+
+            // A dry run never deletes anything, but it still has to plan the
+            // delete (enumerate every folder/file) to report what would
+            // happen — the expensive part for a whole recursive section,
+            // not the deleting. Same limits as ajax_delete_thumbs.php's
+            // 'start' action, for the same reason: without this, planning
+            // a large enough section dies mid-request against the default
+            // 30s/128M with no output sent yet, so lum_flash()/redirect()
+            // never run and the page just shows nothing happened.
+            set_time_limit(300);
+            ini_set('memory_limit', '512M');
 
             // Resolve and confine to albums/ — this is a web-triggered action,
             // unlike the CLI scripts (shell access already implies trust), so
@@ -211,8 +225,8 @@ $content = <<<HTML
       <div class="col-md-3">
         <label class="form-label small text-muted mb-1">Mode</label>
         <select id="lum-odt-mode" name="mode" class="form-select form-select-sm">
-          <option value="all">Delete all</option>
           <option value="every_other">Delete every other</option>
+          <option value="all" selected>Delete all</option>
         </select>
       </div>
       <div class="col-md-4 d-flex align-items-center gap-3">
@@ -263,12 +277,22 @@ document.addEventListener('DOMContentLoaded', function () {
     return resp.json();
   }
 
-  // ── Batch-delete: dry run stays a plain form POST (fast, read-only, no
-  // timeout risk); a real delete is driven here as a chunked AJAX loop
-  // instead — mirroring Admin → Updates' own in-place, no-reload progress
-  // pattern (admin/ajax_update_perform.php) — so a large recursive delete
-  // can't silently die against PHP's max_execution_time with no feedback,
-  // which a single synchronous request risked.
+  // ── Batch-delete: both a dry run and a real delete are driven here as a
+  // chunked AJAX loop — mirroring Admin → Updates' own in-place, no-reload
+  // progress pattern (admin/ajax_update_perform.php) — so scanning a large
+  // recursive section can't silently die against PHP's max_execution_time
+  // or memory_limit with no feedback at all, which a single synchronous
+  // request risked. A dry run needs the same scan as a real delete (it just
+  // skips the actual unlink() calls), so it's exposed to the same risk and
+  // gets the same chunked treatment; the plain form POST fallback in
+  // settings.php's own POST handler only runs if JS is unavailable.
+  //
+  // Each 'batch' call processes exactly one directory (see
+  // OnDemandDeleteJobService), discovering subdirectories to check as it
+  // goes rather than up front — so the total directory count isn't known
+  // until the job finishes, and there's no meaningful "N of M" percentage
+  // to show. The bar just stays a full-width moving-stripes indicator
+  // while running; the status line's running counts are the real feedback.
 
   var delForm      = document.getElementById('lum-odt-delete-form');
   var dryRun       = document.getElementById('lum-odt-dryrun');
@@ -280,21 +304,18 @@ document.addEventListener('DOMContentLoaded', function () {
   var progressStat = document.getElementById('lum-odt-progress-status');
   var progressReset= document.getElementById('lum-odt-progress-reset');
 
-  function setProgress(processed, total, statusHtml) {
-    var pct = total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
-    if (progressBar) {
-      progressBar.style.width = pct + '%';
-      progressBar.textContent = pct + '%';
-    }
+  function setStatus(statusHtml) {
     if (progressStat) progressStat.innerHTML = statusHtml;
   }
 
-  async function runRealDelete() {
+  async function runDelete(isDryRun) {
     delForm.classList.add('d-none');
     progressWrap.classList.remove('d-none');
     progressReset.classList.add('d-none');
-    progressBar.classList.add('progress-bar-animated');
-    setProgress(0, 1, 'Planning…');
+    progressBar.classList.add('progress-bar-animated', 'progress-bar-striped');
+    progressBar.style.width = '100%';
+    progressBar.textContent = '';
+    setStatus('Starting…');
 
     var startResp;
     try {
@@ -303,53 +324,53 @@ document.addEventListener('DOMContentLoaded', function () {
         folder   : folderInput.value,
         recursive: recursiveChk.checked ? '1' : '',
         mode     : modeSelect.value,
+        dry_run  : isDryRun ? '1' : '',
       });
     } catch (err) {
-      finishWithError('Could not start delete: ' + err.message);
+      finishWithError((isDryRun ? 'Could not start dry run: ' : 'Could not start delete: ') + err.message);
       return;
     }
 
     if (!startResp.success) {
-      finishWithError(startResp.message || 'Could not start delete.');
-      return;
-    }
-
-    if (startResp.done) {
-      // Nothing matched — no job was created.
-      progressBar.classList.remove('progress-bar-animated');
-      setProgress(1, 1, 'No thumb_* files found under that folder.');
-      progressReset.classList.remove('d-none');
+      finishWithError(startResp.message || 'Could not start.');
       return;
     }
 
     var jobId = startResp.job_id;
-    var total = startResp.to_delete_count;
-    setProgress(0, total, 'Deleting… 0 of ' + total);
 
     while (true) {
       var batchResp;
       try {
         batchResp = await post('ajax_delete_thumbs.php', { action: 'batch', job_id: jobId });
       } catch (err) {
-        finishWithError('Delete interrupted: ' + err.message + ' — already-deleted files are not restored automatically; check Admin → Tools → Regenerate Missing Thumbnails.');
+        finishWithError((isDryRun ? 'Scan interrupted: ' : 'Delete interrupted: ') + err.message
+          + (isDryRun ? '' : ' — already-deleted files are not restored automatically; check Admin → Tools → Regenerate Missing Thumbnails.'));
         return;
       }
 
       if (!batchResp.success) {
-        finishWithError(batchResp.message || 'Delete failed mid-way.');
+        finishWithError(batchResp.message || 'Failed mid-way.');
         return;
       }
 
-      setProgress(batchResp.processed, batchResp.to_delete_count, 'Deleting… ' + batchResp.processed + ' of ' + batchResp.to_delete_count);
+      setStatus(
+        (isDryRun ? 'Scanning… ' : 'Deleting… ') + batchResp.processed_dirs + ' folder(s) checked, '
+        + (isDryRun ? 'would delete ' : 'deleted ') + batchResp.total_deleted + ' of ' + batchResp.total_found + ' file(s) so far'
+      );
 
       if (batchResp.done) {
-        progressBar.classList.remove('progress-bar-animated');
-        progressBar.classList.remove('progress-bar-striped');
-        setProgress(1, 1,
-          '✓ Deleted ' + batchResp.deleted + ' of ' + batchResp.total_found
-          + ' thumb_* file(s) found across ' + batchResp.folder_count + ' folder(s). '
-          + 'Recover any of these later via Admin → Tools → Regenerate Missing Thumbnails.'
-        );
+        progressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+        if (batchResp.total_found === 0) {
+          setStatus('No thumb_* files found under that folder (checked ' + batchResp.processed_dirs + ' folder(s)).');
+        } else {
+          setStatus(isDryRun
+            ? ('✓ Dry run: would delete ' + batchResp.total_deleted + ' of ' + batchResp.total_found
+               + ' thumb_* file(s) found across ' + batchResp.processed_dirs + ' folder(s) checked.')
+            : ('✓ Deleted ' + batchResp.total_deleted + ' of ' + batchResp.total_found
+               + ' thumb_* file(s) found across ' + batchResp.processed_dirs + ' folder(s) checked. '
+               + 'Recover any of these later via Admin → Tools → Regenerate Missing Thumbnails.')
+          );
+        }
         progressReset.classList.remove('d-none');
         return;
       }
@@ -373,13 +394,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
   if (delForm) {
     delForm.addEventListener('submit', function (e) {
-      if (dryRun && dryRun.checked) return; // Dry run: plain form POST, unchanged.
-
       e.preventDefault();
-      if (!confirm('Delete thumbnails as configured above? This cannot be undone directly, but can be recovered via Regenerate Missing Thumbnails.')) {
+      var isDryRun = !!(dryRun && dryRun.checked);
+      if (!isDryRun && !confirm('Delete thumbnails as configured above? This cannot be undone directly, but can be recovered via Regenerate Missing Thumbnails.')) {
         return;
       }
-      runRealDelete();
+      runDelete(isDryRun);
     });
   }
 

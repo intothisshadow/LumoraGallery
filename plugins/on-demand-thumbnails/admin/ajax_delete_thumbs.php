@@ -3,13 +3,21 @@ declare(strict_types=1);
 /**
  * Lumora Gallery — On-Demand Thumbnails Plugin — AJAX: Batch-Delete Thumbnails
  *
- * Drives a real (non-dry-run) batch delete from the Admin → On-Demand
+ * Drives a batch delete — real or dry run — from the Admin → On-Demand
  * Thumbnails settings page in small chunks, mirroring the in-place AJAX
  * pattern Admin → Updates uses for its own multi-stage update workflow
  * (see admin/ajax_update_perform.php) rather than a single long-running
- * request with a full page reload at the end. A dry run stays a plain,
- * synchronous form POST on settings.php — it never touches the filesystem,
- * so there is nothing here for it to time out on.
+ * request with a full page reload at the end. Both modes share this same
+ * chunked flow because both have to do the same potentially-large
+ * filesystem scan — a dry run skips only the actual unlink() calls, not
+ * the scanning, so it's exposed to the same large-recursive-section risk.
+ *
+ * 'start' does no scanning at all — it only validates the target folder
+ * and opens a job queued with just that one directory (see
+ * OnDemandDeleteJobService); everything else happens one directory per
+ * 'batch' call, so no single request ever has to walk more of the tree
+ * than one directory's immediate contents, regardless of how large the
+ * overall scope is.
  *
  * POST parameters:
  *   csrf_token string  (always required)
@@ -17,12 +25,11 @@ declare(strict_types=1);
  *   folder     string  Path relative to albums/ (action = 'start' only)
  *   recursive  '1'|''  (action = 'start' only)
  *   mode       string  'all' | 'every_other' (action = 'start' only)
+ *   dry_run    '1'|''  (action = 'start' only)
  *   job_id     string  32-hex job ID returned by 'start' (action = 'batch' only)
  *
  * Response JSON shape ('start'):
- *   { success: bool, message?: string, done: bool, job_id?: string,
- *     total_found: int, to_delete_count?: int, folder_count?: int }
- *   done = true with no job_id means nothing matched — no job was created.
+ *   { success: bool, message?: string, done: bool, job_id?: string, dry_run?: bool }
  *
  * Response JSON shape ('batch'): see OnDemandDeleteJobService::processBatch().
  *
@@ -34,8 +41,8 @@ declare(strict_types=1);
  * @link       https://coding.unloved-heart.net/scripts/lumoragallery
  * @source     https://github.com/intothisshadow/LumoraGallery
  * @since      1.19.1
- * @see        OnDemandThumbnailService::planDeletion()/deleteFiles() Backing logic.
- * @see        OnDemandDeleteJobService Persists the plan between 'start' and each 'batch' call.
+ * @see        OnDemandThumbnailService::processFolder()/immediateSubdirectories() Backing logic.
+ * @see        OnDemandDeleteJobService Persists the work queue between 'start' and each 'batch' call.
  */
 define('LUMORA_ENTRY', true);
 
@@ -70,15 +77,15 @@ $action = trim((string) ($_POST['action'] ?? ''));
 
 switch ($action) {
 
-    // ── Plan the delete and open a job for it ──────────────────────────────
+    // ── Validate the target and open a job queued with just that folder ────
     case 'start':
         $folder_input = trim((string) ($_POST['folder'] ?? ''));
         $recursive    = ($_POST['recursive'] ?? '') === '1';
         $every_other  = ($_POST['mode'] ?? 'all') === 'every_other';
+        $dry_run      = ($_POST['dry_run'] ?? '') === '1';
 
-        // Same confinement check as the plain-form dry-run path in
-        // settings.php — resolve real paths and confirm the target actually
-        // lives under albums/ before touching anything.
+        // Same confinement check as before — resolve real paths and confirm
+        // the target actually lives under albums/ before touching anything.
         $albums_real = realpath(LUMORA_ALBUMS_PATH);
         $target_real = $folder_input !== '' ? realpath(LUMORA_ALBUMS_PATH . $folder_input) : false;
 
@@ -90,25 +97,16 @@ switch ($action) {
             exit;
         }
 
-        $plan = OnDemandThumbnailService::planDeletion($target_real, $recursive, $every_other);
-
-        if ($plan['total_found'] === 0) {
-            echo json_encode(['success' => true, 'done' => true, 'total_found' => 0]);
-            exit;
-        }
-
-        $jobId = OnDemandDeleteJobService::create($plan);
+        $jobId = OnDemandDeleteJobService::create($target_real, $recursive, $every_other, $dry_run);
         echo json_encode([
-            'success'         => true,
-            'done'            => false,
-            'job_id'          => $jobId,
-            'total_found'     => $plan['total_found'],
-            'to_delete_count' => count($plan['to_delete']),
-            'folder_count'    => count($plan['folders']),
+            'success' => true,
+            'done'    => false,
+            'job_id'  => $jobId,
+            'dry_run' => $dry_run,
         ]);
         break;
 
-    // ── Process one batch of an already-open job ────────────────────────────
+    // ── Process one directory of an already-open job ────────────────────────
     case 'batch':
         $jobId = trim((string) ($_POST['job_id'] ?? ''));
         if ($jobId === '') {
