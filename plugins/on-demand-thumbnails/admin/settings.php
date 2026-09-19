@@ -225,8 +225,8 @@ $content = <<<HTML
       <div class="col-md-3">
         <label class="form-label small text-muted mb-1">Mode</label>
         <select id="lum-odt-mode" name="mode" class="form-select form-select-sm">
-          <option value="every_other">Delete every other</option>
-          <option value="all" selected>Delete all</option>
+          <option value="every_other" selected>Delete every other</option>
+          <option value="all">Delete all</option>
         </select>
       </div>
       <div class="col-md-4 d-flex align-items-center gap-3">
