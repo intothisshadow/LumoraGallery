@@ -274,6 +274,7 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
         ['label' => 'Maintenance', 'items' => [
             'migrate'      => ['icon' => '📥', 'label' => 'Import',                   'url' => 'migrate.php',      'permission' => 'site_configuration'],
             'updates'      => ['icon' => '🔔', 'label' => 'Updates' . $update_badge,  'url' => 'update.php',       'permission' => 'view_updates'],
+            'logs'         => ['icon' => '📜', 'label' => 'Logs',                     'url' => 'logs.php',         'permission' => 'site_configuration'],
             'tools'        => ['icon' => '🔧', 'label' => 'Tools',                    'url' => 'tools.php',        'permission' => 'maintenance_tools'],
             'plugins'      => ['icon' => '🧩', 'label' => 'Plugins',                  'url' => 'plugins.php',      'permission' => 'site_configuration'],
             'installation' => ['icon' => '🖥️', 'label' => 'Installation',             'url' => 'installation.php', 'permission' => 'site_configuration'],

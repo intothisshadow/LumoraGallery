@@ -14,6 +14,8 @@ declare(strict_types=1);
  * only hides its "Run Importer" button there, for an admin who has already
  * migrated a gallery and wants it out of the way without deleting it.
  *
+ * Every enable/disable is recorded via LogService for the Admin → Logs page.
+ *
  * @package    LumoraGallery
  * @subpackage Admin
  * @author     Ariane
@@ -49,12 +51,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!PluginService::isCompatible($plugin['min_lumora'])) {
             lum_flash('This plugin requires Lumora ' . $plugin['min_lumora'] . ' or newer.', 'danger');
         } elseif (PluginService::enablePlugin($plugin)) {
+            $actor = lumora_current_user();
+            LogService::log(
+                'plugin_enabled',
+                (int) ($actor['user_id'] ?? 0),
+                (string) ($actor['username'] ?? ''),
+                (string) ($_SERVER['REMOTE_ADDR'] ?? ''),
+                'Enabled plugin "' . $plugin['name'] . '" (' . $plugin['id'] . ')'
+            );
             lum_flash('"' . $plugin['name'] . '" enabled.');
         } else {
             lum_flash('"' . $plugin['name'] . '" could not be activated — see the server error log for details.', 'danger');
         }
     } elseif ($action === 'disable') {
         PluginService::disablePlugin($plugin);
+        $actor = lumora_current_user();
+        LogService::log(
+            'plugin_disabled',
+            (int) ($actor['user_id'] ?? 0),
+            (string) ($actor['username'] ?? ''),
+            (string) ($_SERVER['REMOTE_ADDR'] ?? ''),
+            'Disabled plugin "' . $plugin['name'] . '" (' . $plugin['id'] . ')'
+        );
         lum_flash('"' . $plugin['name'] . '" disabled.');
     }
 

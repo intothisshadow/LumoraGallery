@@ -114,6 +114,7 @@ A dedicated cover image uploaded for a category or album (see [Administration](#
 - **Configuration** — all gallery settings in one place — see [Configuration](#configuration) below
 - **Tools** — maintenance operations, each scoped to all albums or a single one: verify every image's file and thumbnail actually exist on disk, refresh stored dimensions/file sizes from disk, and regenerate thumbnails (all or missing-only)
 - **Installation Settings** — update the site's base URL after moving to a new domain, subdirectory, or server, with a nine-item health check and guided migration steps
+- **Logs** — filterable, paginated view of login attempts and staff account/plugin changes, alongside the configuration-change history and (when Log Mode is enabled in Configuration) recent system error/info entries; security/admin events are pruned automatically after a configurable retention window (90 days by default)
 - **Updates** — check for and install new releases directly from the admin panel, sourced from either GitHub or an administrator-uploaded ZIP; downloads are SHA-256 verified, an automatic backup is taken before any file is touched, and one-click rollback is available if anything goes wrong; custom themes and plugins are preserved by default. On-demand full installation backups (code + config + database) are available separately, with up to 3 retained.
 - **Plugins** — enable, disable, or permanently delete optional feature plugins — see [Plugins](#plugins) below
 

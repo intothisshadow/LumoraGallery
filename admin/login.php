@@ -16,6 +16,9 @@ declare(strict_types=1);
  * targets like "//evil.com", which also start with '/' but browsers treat
  * as an off-site redirect.
  *
+ * Every attempt (success or failure) is recorded via LogService for the
+ * Admin → Logs page, independent of the rate-limit tracking above.
+ *
  * @package    LumoraGallery
  * @subpackage Admin
  * @author     Ariane
@@ -74,11 +77,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Any active staff role (admin, moderator, contributor) may log in;
             // page-level access within the panel is enforced per-permission.
             RateLimitService::clearFailures($rl_ip);
+            LogService::log(
+                'login_success',
+                (int) ($user['id'] ?? 0),
+                (string) ($user['username'] ?? ''),
+                $rl_ip,
+                'Successful login for "' . ($user['username'] ?? '') . '"'
+            );
             $dest = lumora_safe_redirect_target($redirect, lumora_base_url() . 'admin/dashboard.php');
             lumora_redirect($dest);
         } else {
             // Failure — record attempt and add a per-failure delay.
             $rl_failure_count = RateLimitService::recordFailure($rl_ip);
+            LogService::log(
+                'login_failure',
+                0,
+                trim($_POST['username'] ?? ''),
+                $rl_ip,
+                'Failed login attempt for "' . trim($_POST['username'] ?? '') . '"'
+            );
             usleep(1_000_000); // 1-second delay on every failure
             // If this failure just tripped the limit, upgrade the message.
             if ($rl_failure_count >= RateLimitService::MAX_FAILURES) {

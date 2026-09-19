@@ -105,6 +105,7 @@ require_once LUMORA_INCLUDE . 'services/ServerEnvironmentService.php';
 require_once LUMORA_INCLUDE . 'services/CacheHeaderService.php';
 require_once LUMORA_INCLUDE . 'services/HookService.php';
 require_once LUMORA_INCLUDE . 'services/PluginService.php';
+require_once LUMORA_INCLUDE . 'services/LogService.php';
 
 // ── 8–11. Legacy includes (wrappers + utilities) ─────────────────────────────
 require_once LUMORA_INCLUDE . 'functions.php';

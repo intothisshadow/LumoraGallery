@@ -114,6 +114,7 @@ class LumoraConfig
             'update_check_frequency'           => in_array($raw, ['daily', 'weekly'], true)
                                                     ? $raw : 'daily',
             'litespeed_page_cache_ttl'         => (string) max(0, min(86400, (int) $raw)),
+            'admin_log_retention_days'         => (string) max(1, min(3650, (int) $raw)),
             default                            => trim($raw),
         };
     }

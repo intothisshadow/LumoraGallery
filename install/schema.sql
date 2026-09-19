@@ -1,5 +1,5 @@
 -- Lumora Gallery — Database Schema
--- Version: 15
+-- Version: 16
 -- Requires: MySQL 5.7+ / MariaDB 10.3+
 -- Charset: utf8mb4 / utf8mb4_unicode_ci
 --
@@ -21,6 +21,24 @@
 --   {PREFIX}album_assignments      — per-user album assignments for the contributor role (DB version 11)
 --   {PREFIX}groups                  — permission groups, replacing the former fixed users.role ENUM (DB version 13)
 --   {PREFIX}group_permissions       — per-group permission grants (DB version 13)
+--   {PREFIX}admin_log                — security/admin event audit log for Admin → Logs (DB version 16)
+--
+-- Migration from DB version 15:
+--   Run Migration0010_CreateAdminLogTable via Admin → Updates → Run Database Update,
+--   or apply the following statement manually (replace `lum_` with your actual prefix):
+--
+--     CREATE TABLE IF NOT EXISTS `lum_admin_log` (
+--       `id`         bigint UNSIGNED NOT NULL AUTO_INCREMENT,
+--       `event_type` varchar(32)     NOT NULL,
+--       `user_id`    int UNSIGNED    NOT NULL DEFAULT 0,
+--       `username`   varchar(50)     NOT NULL DEFAULT '',
+--       `ip`         varchar(45)     NOT NULL DEFAULT '',
+--       `message`    text            NOT NULL,
+--       `created_at` datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+--       PRIMARY KEY (`id`),
+--       KEY `type_created` (`event_type`, `created_at`),
+--       KEY `user_created` (`user_id`, `created_at`)
+--     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 --
 -- Migration from DB version 14:
 --   Run Migration0009_AddDisplayNameToUsers via Admin → Updates → Run Database Update,
@@ -583,3 +601,28 @@ INSERT IGNORE INTO `{PREFIX}group_permissions` (`group_id`, `permission`)
       SELECT 'contributor', 'edit_own_images' UNION ALL
       SELECT 'contributor', 'manage_assigned_albums'
     ) p ON p.slug = g.slug;
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- admin_log  (DB version 16)
+-- ──────────────────────────────────────────────────────────────────────────────
+-- Security/admin event audit log written by LogService — login successes and
+-- failures, and staff account and plugin changes — for the Admin → Logs page.
+-- Always written to, unlike {PREFIX}log above which only records entries when
+-- log_mode = 'all'. user_id is 0 for events with no authenticated actor (e.g.
+-- a failed login for a username that doesn't exist).
+-- ──────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS `{PREFIX}admin_log` (
+  `id`         bigint UNSIGNED NOT NULL AUTO_INCREMENT,
+  `event_type` varchar(32)     NOT NULL,
+  `user_id`    int UNSIGNED    NOT NULL DEFAULT 0,
+  `username`   varchar(50)     NOT NULL DEFAULT '',
+  `ip`         varchar(45)     NOT NULL DEFAULT '',
+  `message`    text            NOT NULL,
+  `created_at` datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `type_created` (`event_type`, `created_at`),
+  KEY `user_created` (`user_id`, `created_at`)
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci
+  COMMENT='Security/admin event audit log (DB version 16)';

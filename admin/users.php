@@ -13,6 +13,8 @@ declare(strict_types=1);
  *
  * Security:
  *   - All POST actions require a valid CSRF token.
+ *   - Account creation, updates, role changes, enable/disable, and deletion
+ *     are recorded via LogService for the Admin → Logs page.
  *   - Self-deletion and self-deactivation are blocked server-side (UserService).
  *   - The last active administrator account cannot be deleted or deactivated.
  *   - Requires Migration0003 (DB version 9) for the is_active column and
@@ -67,6 +69,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $result = UserService::createUser($username, $password, $email, $role, $display_name);
             if (is_int($result)) {
+                LogService::log(
+                    'user_created',
+                    $current_user_id,
+                    (string) ($current_user['username'] ?? ''),
+                    (string) ($_SERVER['REMOTE_ADDR'] ?? ''),
+                    'Created user "' . $username . '" (role: ' . $role . ')'
+                );
                 lum_flash('User "' . h($username) . '" created successfully.');
                 lumora_redirect($base);
             }
@@ -86,6 +95,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 lumora_redirect($base);
             }
 
+            $before_role = (string) (UserService::getUser($uid)['role'] ?? '');
+
             // Prevent the current admin from changing their own role via this form.
             $data = ['username' => $username, 'display_name' => $display_name, 'email' => $email];
             if ($uid !== $current_user_id) {
@@ -97,6 +108,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Keep the session username in sync when editing own account.
                 if ($uid === $current_user_id) {
                     $_SESSION[LUMORA_SESSION_KEY]['username'] = $username;
+                }
+                $actor_ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+                $actor_un = (string) ($current_user['username'] ?? '');
+                if (isset($data['role']) && $data['role'] !== $before_role) {
+                    LogService::log(
+                        'role_changed',
+                        $current_user_id,
+                        $actor_un,
+                        $actor_ip,
+                        'Changed role for "' . $username . '" from "' . $before_role . '" to "' . $data['role'] . '"'
+                    );
+                } else {
+                    LogService::log(
+                        'user_updated',
+                        $current_user_id,
+                        $actor_un,
+                        $actor_ip,
+                        'Updated user "' . $username . '"'
+                    );
                 }
                 lum_flash('User updated successfully.');
             } else {
@@ -137,8 +167,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 lumora_redirect($base);
             }
 
+            $target_username = (string) (UserService::getUser($uid)['username'] ?? '');
             $result = UserService::setActive($uid, $new_state, $current_user_id);
             if ($result === true) {
+                LogService::log(
+                    $new_state ? 'user_enabled' : 'user_disabled',
+                    $current_user_id,
+                    (string) ($current_user['username'] ?? ''),
+                    (string) ($_SERVER['REMOTE_ADDR'] ?? ''),
+                    ($new_state ? 'Enabled' : 'Disabled') . ' user "' . $target_username . '"'
+                );
                 lum_flash('Account ' . ($new_state ? 'enabled' : 'disabled') . ' successfully.');
             } else {
                 lum_flash((string) $result, 'danger');
@@ -154,8 +192,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 lumora_redirect($base);
             }
 
+            $target_username = (string) (UserService::getUser($uid)['username'] ?? '');
             $result = UserService::deleteUser($uid, $current_user_id);
             if ($result === true) {
+                LogService::log(
+                    'user_deleted',
+                    $current_user_id,
+                    (string) ($current_user['username'] ?? ''),
+                    (string) ($_SERVER['REMOTE_ADDR'] ?? ''),
+                    'Deleted user "' . $target_username . '"'
+                );
                 lum_flash('User account deleted.');
             } else {
                 lum_flash((string) $result, 'danger');
