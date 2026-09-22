@@ -101,6 +101,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $every_other  = ($_POST['mode'] ?? 'all') === 'every_other';
             $dry_run      = isset($_POST['dry_run']);
 
+            // An empty folder targets albums/ itself — every top-level folder
+            // directly under albums/ (e.g. Season 1, Season 2, ...) in one run
+            // — but only paired with Recursive, so leaving the field blank by
+            // mistake can't silently no-op against a folder with nothing in it.
+            if ($folder_input === '' && !$recursive) {
+                lum_flash('Check Recursive to run against all of albums/, or enter a specific folder.', 'danger');
+                lumora_redirect($base . '#batch-delete');
+            }
+
             // A dry run never deletes anything, but it still has to plan the
             // delete (enumerate every folder/file) to report what would
             // happen — the expensive part for a whole recursive section,
@@ -117,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // the target must be verified to actually live under albums/
             // before anything is touched.
             $albums_real = realpath(LUMORA_ALBUMS_PATH);
-            $target_real = $folder_input !== '' ? realpath(LUMORA_ALBUMS_PATH . $folder_input) : false;
+            $target_real = $folder_input !== '' ? realpath(LUMORA_ALBUMS_PATH . $folder_input) : $albums_real;
 
             if ($albums_real === false || $target_real === false
                 || !str_starts_with($target_real . DIRECTORY_SEPARATOR, $albums_real . DIRECTORY_SEPARATOR)
@@ -212,15 +221,16 @@ $content = <<<HTML
     Deletes <code>thumb_*</code> files under a folder inside <code>albums/</code> — originals are never touched, and
     anything deleted here can be recovered via <strong>Admin → Tools → Regenerate Missing Thumbnails</strong>. Same
     logic as <code>tools/delete-all-thumbs.sh</code> / <code>tools/delete-every-other-thumb.sh</code>, run from here
-    instead of over SSH.
+    instead of over SSH. Leave Folder blank with <strong>Recursive</strong> checked to run against every top-level
+    folder directly under <code>albums/</code> in one go (e.g. several season folders sitting side by side there).
   </p>
   <form method="post" action="{$base_h}" id="lum-odt-delete-form">
     <input type="hidden" name="action" value="delete_thumbnails">
     <input type="hidden" name="csrf_token" value="{$csrf_h}">
     <div class="row g-2 align-items-end mb-2">
       <div class="col-md-5">
-        <label class="form-label small text-muted mb-1">Folder (relative to albums/)</label>
-        <input type="text" id="lum-odt-folder" name="folder" class="form-control form-control-sm" placeholder="Season8/8x03-TheLongNight" required>
+        <label class="form-label small text-muted mb-1">Folder (relative to albums/ — blank + Recursive = all of albums/)</label>
+        <input type="text" id="lum-odt-folder" name="folder" class="form-control form-control-sm" placeholder="Season8/8x03-TheLongNight (blank = all of albums/)">
       </div>
       <div class="col-md-3">
         <label class="form-label small text-muted mb-1">Mode</label>
@@ -395,9 +405,19 @@ document.addEventListener('DOMContentLoaded', function () {
   if (delForm) {
     delForm.addEventListener('submit', function (e) {
       e.preventDefault();
-      var isDryRun = !!(dryRun && dryRun.checked);
-      if (!isDryRun && !confirm('Delete thumbnails as configured above? This cannot be undone directly, but can be recovered via Regenerate Missing Thumbnails.')) {
+      var isDryRun     = !!(dryRun && dryRun.checked);
+      var isAllAlbums  = folderInput.value.trim() === '';
+
+      if (isAllAlbums && !recursiveChk.checked) {
+        alert('Check Recursive to run against all of albums/, or enter a specific folder.');
         return;
+      }
+
+      if (!isDryRun) {
+        var confirmMsg = isAllAlbums
+          ? 'Delete thumbnails across EVERY folder under albums/ as configured above? This cannot be undone directly, but can be recovered via Regenerate Missing Thumbnails.'
+          : 'Delete thumbnails as configured above? This cannot be undone directly, but can be recovered via Regenerate Missing Thumbnails.';
+        if (!confirm(confirmMsg)) return;
       }
       runDelete(isDryRun);
     });

@@ -84,10 +84,19 @@ switch ($action) {
         $every_other  = ($_POST['mode'] ?? 'all') === 'every_other';
         $dry_run      = ($_POST['dry_run'] ?? '') === '1';
 
+        // An empty folder targets albums/ itself — every top-level folder
+        // directly under albums/ in one run — but only paired with
+        // Recursive, so a blank field can't silently no-op.
+        if ($folder_input === '' && !$recursive) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'Check Recursive to run against all of albums/, or enter a specific folder.']);
+            exit;
+        }
+
         // Same confinement check as before — resolve real paths and confirm
         // the target actually lives under albums/ before touching anything.
         $albums_real = realpath(LUMORA_ALBUMS_PATH);
-        $target_real = $folder_input !== '' ? realpath(LUMORA_ALBUMS_PATH . $folder_input) : false;
+        $target_real = $folder_input !== '' ? realpath(LUMORA_ALBUMS_PATH . $folder_input) : $albums_real;
 
         if ($albums_real === false || $target_real === false
             || !str_starts_with($target_real . DIRECTORY_SEPARATOR, $albums_real . DIRECTORY_SEPARATOR)
