@@ -17,7 +17,7 @@ declare(strict_types=1);
  * @since      1.0.0
  */
 
-define('LUMORA_VERSION',        '1.19.0');
+define('LUMORA_VERSION',        '1.19.1');
 define('LUMORA_VERSION_STATUS', 'stable');
 define('LUMORA_DB_VERSION',     16);
 define('LUMORA_MIN_PHP',        '8.2.0');

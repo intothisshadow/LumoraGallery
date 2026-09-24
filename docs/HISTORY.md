@@ -4,6 +4,17 @@ Long-term archive of completed work, migrated from TODO.md on release.
 
 ---
 
+## v1.19.1 — Released 2026-09-25
+
+### Added
+
+- **LG-069 — Admin → Plugins: ZIP install/update and bulk activate/deactivate.** A new plugin can now be installed, or an already-installed one updated, from an uploaded ZIP — mirroring Admin → Appearance's theme ZIP pipeline: the archive must contain a `plugin.json`, a single wrapping top-level folder is flattened automatically, and the destination folder is always the archive's own declared plugin id (an update requires that id to match the plugin being updated). Every plugin row now has a selection checkbox regardless of its enabled state, and the bulk-actions toolbar gained Activate Selected / Deactivate Selected alongside the existing Delete Selected.
+
+### Fixed
+
+- **On-Demand Thumbnails: batch delete / dry run over a large recursive section failed with no notice at all.** Planning the operation walked the entire tree in a single request, which exceeded shared-hosting time/memory limits on large sections (and on hosts that lock those limits, couldn't be raised from within the script). The job is now a breadth-first work queue processed one directory per AJAX call, so no single request does more than one directory's worth of filesystem work; dry run drives the same chunked in-place progress flow as a real delete. "Delete every other" is now the default mode.
+- **On-Demand Thumbnails: batch delete couldn't target every top-level folder under `albums/` at once.** Leaving Folder blank now targets `albums/` itself; with **Recursive**, the delete runs across every top-level folder in one pass. A blank folder without Recursive is rejected with a message instead of silently doing nothing.
+
 ## v1.19.0 — Released 2026-09-19
 
 ### Added
