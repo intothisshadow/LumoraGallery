@@ -111,9 +111,11 @@ $no_albums_notice = (!$can_manage_all && empty($all_albums))
 // entire IIFE from running, making the Process button unresponsive).
 $new_count = 0;
 $scan_html = '';
+$extra_fields_html = '';
 if ($selected) {
     $new_files = lumora_scan_new_images($selected['folder'], (int)$selected['id']);
     $new_count = count($new_files);
+    $extra_fields_html = (string) HookService::applyFilters('admin_batch_add_extra_fields', '', $selected);
 
     if ($new_count === 0) {
         $scan_html = '<div class="alert alert-success py-2">No new images found in <code>' . h($selected['folder']) . '</code>. The album is up to date.</div>';
@@ -131,6 +133,7 @@ if ($selected) {
             .     '<div id="lum-batch-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width:0%"></div>'
             .   '</div>'
             . '</div>'
+            . ($extra_fields_html !== '' ? '<div id="lum-batch-options" class="lum-batch-options mb-3">' . $extra_fields_html . '</div>' : '')
             . '<div id="lum-batch-errors" class="mb-2"></div>'
             . '<button id="lum-batch-start" class="btn btn-primary">'
             .   '▶ Process ' . number_format($new_count) . ' Image' . ($new_count !== 1 ? 's' : '')
@@ -151,7 +154,7 @@ $content = <<<HTML
   </form>
   <p class="text-muted small mt-2 mb-0">
     Upload images via FTP to <code>albums/{folder}/</code>, then scan and process them here.
-    Thumbnails are generated automatically.
+    Thumbnails are generated automatically unless a plugin offers otherwise below.
   </p>
 </div>
 
@@ -165,6 +168,7 @@ $content = <<<HTML
   var csrf    = {$csrf_js};
   var total   = {$new_count};
   var chunkSz = 50;
+  var skippedTotal = 0;
 
   var btnStart = document.getElementById('lum-batch-start');
   var btnDone  = document.getElementById('lum-batch-done');
@@ -208,6 +212,7 @@ $content = <<<HTML
         return;
       }
 
+      skippedTotal += (data.thumbs_skipped || 0);
       var doneCount = processed + (data.processed || 0);
       var pct = total > 0 ? Math.round(doneCount / total * 100) : 100;
       if (bar)     { bar.style.width = pct + '%'; bar.textContent = pct + '%'; }
@@ -226,7 +231,8 @@ $content = <<<HTML
 
       if (data.done) {
         if (statusEl) {
-          statusEl.textContent = 'Done! ' + doneCount + ' image' + (doneCount !== 1 ? 's' : '') + ' processed.';
+          statusEl.textContent = 'Done! ' + doneCount + ' image' + (doneCount !== 1 ? 's' : '') + ' processed.' +
+            (skippedTotal > 0 ? ' ' + skippedTotal + ' thumbnail' + (skippedTotal !== 1 ? 's' : '') + ' left for on-demand generation.' : '');
           statusEl.classList.remove('small', 'text-muted');
           statusEl.classList.add('lum-batch-status-done');
         }
@@ -244,8 +250,22 @@ $content = <<<HTML
     xhr.send(
       'album=' + encodeURIComponent(albumId) +
       '&limit=' + encodeURIComponent(chunkSz) +
-      '&csrf_token=' + encodeURIComponent(csrf)
+      '&csrf_token=' + encodeURIComponent(csrf) +
+      collectOptions()
     );
+  }
+
+  // Plugin-supplied form fields named batch_opt[...] inside #lum-batch-options.
+  function collectOptions() {
+    var out = '';
+    var box = document.getElementById('lum-batch-options');
+    if (!box) return out;
+    box.querySelectorAll('input, select, textarea').forEach(function (el) {
+      if (!el.name || el.name.indexOf('batch_opt[') !== 0 || el.disabled) return;
+      if ((el.type === 'radio' || el.type === 'checkbox') && !el.checked) return;
+      out += '&' + encodeURIComponent(el.name) + '=' + encodeURIComponent(el.value);
+    });
+    return out;
   }
 
   function showError(msg) {

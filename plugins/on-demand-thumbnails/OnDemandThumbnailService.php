@@ -504,6 +504,62 @@ class OnDemandThumbnailService
         return $dirs;
     }
 
+    // ── Batch Add thumbnail modes ─────────────────────────────────────────────
+
+    public const BATCH_MODE_ALL         = 'all';
+    public const BATCH_MODE_EVERY_OTHER = 'every_other';
+    public const BATCH_MODE_NONE        = 'none';
+    public const BATCH_MODES            = [self::BATCH_MODE_ALL, self::BATCH_MODE_EVERY_OTHER, self::BATCH_MODE_NONE];
+
+    /** Configured default Batch Add thumbnail mode; falls back to generating all. */
+    public static function batchDefaultMode(): string
+    {
+        return self::normalizeBatchMode((string) LumoraConfig::get('odt_batch_default_mode', self::BATCH_MODE_ALL));
+    }
+
+    /** Unknown or empty values mean "generate all". */
+    public static function normalizeBatchMode(string $mode): string
+    {
+        return in_array($mode, self::BATCH_MODES, true) ? $mode : self::BATCH_MODE_ALL;
+    }
+
+    /**
+     * Whether Batch Add should write a thumbnail for $filename in $dir.
+     * "Every other" skips the thumbnails at even positions of the folder's
+     * natural-sorted originals — the same half planDeletion(…, everyOther)
+     * would remove from a full set of thumbnails.
+     */
+    public static function shouldGenerateBatchThumb(string $mode, string $dir, string $filename): bool
+    {
+        return match (self::normalizeBatchMode($mode)) {
+            self::BATCH_MODE_NONE        => false,
+            self::BATCH_MODE_EVERY_OTHER => (self::originalPositions($dir)[$filename] ?? 1) % 2 !== 0,
+            default                      => true,
+        };
+    }
+
+    /**
+     * Position of each original image file directly inside $dir in natural
+     * order, cached per request (a Batch Add chunk asks once per image).
+     *
+     * @return array<string, int> filename => 0-based position
+     */
+    private static function originalPositions(string $dir): array
+    {
+        static $cache = [];
+        $key = rtrim($dir, '/\\');
+        if (isset($cache[$key])) return $cache[$key];
+
+        $names = [];
+        foreach (scandir($dir) ?: [] as $entry) {
+            if (str_starts_with($entry, LUMORA_THUMB_PREFIX) || !is_file($key . DIRECTORY_SEPARATOR . $entry)) continue;
+            if (ThumbnailService::isAllowedImage($entry)) $names[] = $entry;
+        }
+        natsort($names);
+
+        return $cache[$key] = array_flip(array_values($names));
+    }
+
     /**
      * thumb_* files directly inside $dir, natural-sorted (matches `sort -V`
      * in the original shell scripts) so "every other" selects a stable,

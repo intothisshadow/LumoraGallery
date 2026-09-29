@@ -95,6 +95,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             lumora_redirect($base . '#rate-limit');
             break;
 
+        case 'save_batch_mode':
+            LumoraConfig::set('odt_batch_default_mode', OnDemandThumbnailService::normalizeBatchMode((string) ($_POST['batch_mode'] ?? '')));
+            lum_flash('Batch Add default saved.');
+            lumora_redirect($base . '#batch-add');
+            break;
+
         case 'delete_thumbnails':
             $folder_input = trim($_POST['folder'] ?? '');
             $recursive    = isset($_POST['recursive']);
@@ -181,6 +187,17 @@ $htaccess_action_form = $htaccess_installed
 
 $rl_checked = $rl_enabled ? ' checked' : '';
 
+$batch_mode_labels = [
+    OnDemandThumbnailService::BATCH_MODE_ALL         => 'Generate all thumbnails',
+    OnDemandThumbnailService::BATCH_MODE_EVERY_OTHER => 'Generate every other thumbnail',
+    OnDemandThumbnailService::BATCH_MODE_NONE        => 'Generate no thumbnails',
+];
+$batch_mode_opts = '';
+foreach ($batch_mode_labels as $value => $label) {
+    $sel = ($value === OnDemandThumbnailService::batchDefaultMode()) ? ' selected' : '';
+    $batch_mode_opts .= '<option value="' . h($value) . '"' . $sel . '>' . h($label) . '</option>';
+}
+
 $content = <<<HTML
 <div class="lum-adm-card mb-4" id="htaccess">
   <h5 class="mb-1">albums/.htaccess Rewrite Rule</h5>
@@ -210,6 +227,25 @@ $content = <<<HTML
     </div>
     <select name="rl_max" class="form-select form-select-sm" style="max-width:200px">
       {$rl_opts}
+    </select>
+    <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
+  </form>
+</div>
+
+<div class="lum-adm-card mb-4" id="batch-add">
+  <h5 class="mb-1">Batch Add Thumbnails</h5>
+  <p class="text-muted small mb-3">
+    Admin &rarr; Batch Add can skip writing thumbnails for some or all new images, leaving them to be created the first
+    time they are viewed &mdash; the same end result as adding everything and then deleting thumbnails afterwards, without
+    the wasted work. This sets which choice is preselected. Skipping requires the <code>albums/.htaccess</code> rule above.
+    Note that <strong>Admin &rarr; Tools &rarr; Regenerate Missing Thumbnails</strong> will still list skipped thumbnails
+    as missing.
+  </p>
+  <form method="post" action="{$base_h}" class="d-flex align-items-center flex-wrap gap-3">
+    <input type="hidden" name="action" value="save_batch_mode">
+    <input type="hidden" name="csrf_token" value="{$csrf_h}">
+    <select name="batch_mode" class="form-select form-select-sm" style="max-width:260px">
+      {$batch_mode_opts}
     </select>
     <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
   </form>

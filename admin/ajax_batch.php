@@ -17,13 +17,15 @@ declare(strict_types=1);
  * POST params:
  *   album      int    Album ID
  *   limit      int    How many to process this call (max 100, default 50)
+ *   batch_opt  array  Optional extra settings from plugins (string => string)
  *   csrf_token string
  *
  * JSON response:
  *   {
- *     "processed": 10,   // images successfully added this call
- *     "errors":    [],   // array of per-file error strings
- *     "done":      false // true when no more unprocessed images remain
+ *     "processed":      10,   // images successfully added this call
+ *     "thumbs_skipped": 0,    // of those, how many had thumbnail generation skipped by a plugin
+ *     "errors":         [],   // array of per-file error strings
+ *     "done":           false // true when no more unprocessed images remain
  *   }
  *
  * @package    LumoraGallery
@@ -57,6 +59,16 @@ if (!isset($_POST['csrf_token']) || !hash_equals(lumora_csrf_token(), $_POST['cs
 // ── Input ─────────────────────────────────────────────────────────────────────
 $album_id = lumora_int($_POST['album'] ?? 0, 0, 1);
 $limit    = min(100, max(1, lumora_int($_POST['limit'] ?? 50, 50, 1, 100)));
+
+// Plugin-supplied options: short string keys/values only, capped in count.
+$batch_opts = [];
+if (isset($_POST['batch_opt']) && is_array($_POST['batch_opt'])) {
+    foreach (array_slice($_POST['batch_opt'], 0, 20, true) as $key => $value) {
+        if (is_string($key) && is_string($value) && preg_match('/^[a-z0-9_-]{1,40}$/', $key) === 1) {
+            $batch_opts[$key] = mb_substr($value, 0, 100);
+        }
+    }
+}
 
 if ($album_id === 0) {
     http_response_code(400);
@@ -92,16 +104,18 @@ $chunk   = array_slice($all_new, 0, $limit);
 $done    = count($all_new) <= $limit; // true when this is the last (or only) chunk
 
 // ── Process chunk ─────────────────────────────────────────────────────────────
-$processed = 0;
-$errors    = [];
+$processed      = 0;
+$thumbs_skipped = 0;
+$errors         = [];
 
 // Give shared-hosts time for large thumbnails (most allow at least 60 s).
 set_time_limit(180);
 
 foreach ($chunk as $filename) {
-    $result = lumora_batch_add_image($filename, $album['folder'], $album_id, $current_user_id);
+    $result = ThumbnailService::batchAddImage($filename, $album['folder'], $album_id, $current_user_id, $batch_opts, $skipped);
     if ($result !== false) {
         $processed++;
+        if ($skipped) $thumbs_skipped++;
     } else {
         $errors[] = 'Failed: ' . $filename;
     }
@@ -115,7 +129,8 @@ if (!$done && $processed === 0 && !empty($chunk)) {
 
 header('Content-Type: application/json; charset=utf-8');
 echo json_encode([
-    'processed' => $processed,
-    'errors'    => $errors,
-    'done'      => $done,
+    'processed'      => $processed,
+    'thumbs_skipped' => $thumbs_skipped,
+    'errors'         => $errors,
+    'done'           => $done,
 ]);

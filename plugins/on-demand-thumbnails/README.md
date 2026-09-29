@@ -87,6 +87,18 @@ tools/delete-all-thumbs.sh albums --recursive --dry-run
 tools/delete-all-thumbs.sh albums --recursive
 ```
 
+## Skipping thumbnails during Batch Add
+
+Instead of adding a whole album and then deleting most of its thumbnails, you can avoid writing them in the first place. With this plugin enabled, **Admin → Batch Add** shows a **Thumbnails** choice next to the Process button:
+
+- **Generate all thumbnails** — the normal behaviour.
+- **Generate every other thumbnail** — skips half of them: the same half **Delete every other** would remove from a full set.
+- **Generate no thumbnails** — skips all of them.
+
+Skipped thumbnails are created the first time they are viewed. The two skipping options need the `albums/.htaccess` rule from the settings page and stay greyed out until it is installed. **Admin → On-Demand Thumbnails → Batch Add Thumbnails** sets which choice is preselected.
+
+Two things to know: **Admin → Tools → Regenerate Missing Thumbnails** and the missing-thumbnails check will still list the skipped thumbnails as missing, and running **Delete every other** afterwards on an album added with "every other" removes half of the thumbnails that remain — it does not recognise that half is already gone.
+
 ## Rolling back
 
 Delete the `albums/.htaccess` file, then use **Admin → Tools → Regenerate Missing Thumbnails** to recreate any stored thumbnail files you'd deleted. Everything returns to normal static-file thumbnail serving with no other trace of this plugin having been there.

@@ -108,7 +108,7 @@ A dedicated cover image uploaded for a category or album (see [Administration](#
 - **Dashboard** — stats overview, plus a widget from any enabled plugin (e.g. Visitor Stats' "Last 7 Days" summary)
 - **Categories & Albums** — nested category tree with drag-and-drop reordering and reparenting (with touch-friendly Up/Down buttons as a mobile fallback); albums support custom or auto-generated folder paths, public/private visibility, and an optional cover image — upload one directly, or pick an existing gallery image, with the album/image edit screens both able to set it
 - **Images** — per-album grid with filename/title search, edit title/position/visibility, replace the file in place, bulk delete/move between albums, per-image thumbnail regeneration, and pattern-based **Bulk Rename** with a duplicate-collision preview step
-- **Batch Add** — scans an album's folder for new images already uploaded via FTP and indexes them in chunks (handles 9,000+ images per album without timing out)
+- **Batch Add** — scans an album's folder for new images already uploaded via FTP and indexes them in chunks (handles 9,000+ images per album without timing out); with the On-Demand Thumbnails plugin enabled it can also skip generating some or all thumbnails
 - **Users & Groups** — staff accounts with role-based permissions (Admin, Moderator, and Contributor out of the box); create custom permission groups with any combination of permissions; contributors can be scoped to specific assigned albums
 - **Appearance** — pick, preview, install, and update themes from the admin panel — see [Themes](#themes) below
 - **Configuration** — all gallery settings in one place — see [Configuration](#configuration) below

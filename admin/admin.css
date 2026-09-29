@@ -363,6 +363,13 @@ html, body { height: 100%; }
   to   { opacity: 1; transform: scale(1); }
 }
 
+/* Plugin-supplied options block on Batch Add */
+.lum-batch-options {
+  border: 1px solid var(--lum-adm-border, rgba(128, 128, 128, .3));
+  border-radius: .375rem;
+  padding: .75rem 1rem;
+}
+
 /* ── Tree hierarchy (categories.php / albums.php) ──────────── */
 
 /* Connector glyph (└) used for nested rows */

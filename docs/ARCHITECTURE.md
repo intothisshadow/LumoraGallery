@@ -195,7 +195,7 @@ append its own widget HTML to the Dashboard), `admin_album_edit_extra_fields` /
 `admin_image_edit_extra_fields` (filters — a plugin can append extra HTML to the Album/Image
 admin edit forms, passed the current album/image row), and `public_album_info_html` /
 `public_image_shortcode` (filters — the public-facing equivalents, on the album page and in
-the image lightbox's info panel respectively, both logged-in-users-only), plus the
+the image lightbox's info panel respectively, both logged-in-users-only), `admin_batch_add_extra_fields` (filter — HTML appended to the Batch Add form; inputs named `batch_opt[key]` are posted with every chunk and reach `ThumbnailService::batchAddImage()` as its `$options`), `batch_add_generate_thumb` (filter — `(bool $generate, string $filename, string $folder, int $albumId, array $options)`; returning exactly `false` skips only that image's thumbnail, the image is still added), plus the
 `before_plugin_update` / `after_plugin_update` actions fired around a GitHub plugin update
 (`(string $id, string $from, string $to)` and `(…, bool $success)`).
 

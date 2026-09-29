@@ -15,7 +15,7 @@ declare(strict_types=1);
  */
 
 /** Plugin version. Update only when releasing a new plugin version — must match plugin.json. */
-define('LUMORA_ODT_VERSION', '0.2.1');
+define('LUMORA_ODT_VERSION', '0.3.0');
 
 /** How long a generated thumbnail may be cached by browsers/CDNs, in seconds (30 days). */
 define('LUMORA_ODT_CACHE_SECONDS', 2_592_000);

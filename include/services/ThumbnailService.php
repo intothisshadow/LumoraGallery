@@ -372,7 +372,7 @@ class ThumbnailService
      * Process a single image for batch-add:
      *   0. Check file size against max_upload_size_mb (skip if exceeded)
      *   1. Downscale original in-place if it exceeds max_image_width / max_image_height
-     *   2. Generate thumbnail
+     *   2. Generate thumbnail (unless a `batch_add_generate_thumb` filter returns false)
      *   3. Read dimensions and filesize (after any resize)
      *   4. Insert into DB
      *
@@ -382,10 +382,21 @@ class ThumbnailService
      *                         can scope access to only images that user
      *                         uploaded (GalleryService::imageBelongsToUser()).
      *                         0 = no recorded owner (legacy callers only).
+     * @param array<string, string> $options Sanitised `batch_opt[...]` values from the Batch Add form,
+     *                         passed to the `batch_add_generate_thumb` filter.
+     * @param bool|null $thumb_skipped Set to true when a filter suppressed thumbnail generation.
      * Returns the new image ID on success, or false on failure.
      */
-    public static function batchAddImage(string $filename, string $folder, int $album_id, int $uploaded_by = 0): int|false
-    {
+    public static function batchAddImage(
+        string $filename,
+        string $folder,
+        int $album_id,
+        int $uploaded_by = 0,
+        array $options = [],
+        ?bool &$thumb_skipped = null
+    ): int|false {
+        $thumb_skipped = false;
+
         $original_path = lumora_album_path($folder) . $filename;
         if (!file_exists($original_path)) return false;
 
@@ -417,8 +428,13 @@ class ThumbnailService
         $thumb_h = (int) LumoraConfig::get('thumb_height', 250);
         $thumb_p = lumora_album_path($folder) . LUMORA_THUMB_PREFIX . $filename;
 
-        // Thumbnail generation is non-fatal; dimensions are still recorded.
-        self::generateThumb($original_path, $thumb_p, $thumb_w, $thumb_h);
+        // A filter returning exactly false skips only the thumbnail; the image is still added.
+        if (HookService::applyFilters('batch_add_generate_thumb', true, $filename, $folder, $album_id, $options) === false) {
+            $thumb_skipped = true;
+        } else {
+            // Thumbnail generation is non-fatal; dimensions are still recorded.
+            self::generateThumb($original_path, $thumb_p, $thumb_w, $thumb_h);
+        }
 
         // ── 3. Read metadata (after any in-place resize) ─────────────────────
         [$width, $height] = self::getImageDimensions($original_path);
