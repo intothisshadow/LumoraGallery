@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **The bundled theme is now called Lumora Classic (folder `themes/lumora-classic/`), replacing "Default".** A site running the old `default` theme is switched automatically by a new database migration (schema version 17) as long as the new folder is installed. Core updates deliver the new theme folder even when "preserve themes" is on, and the old `themes/default/` folder is never removed by an update — after the switch it's a normal theme you can delete from Admin → Appearance. If the active theme's template is ever missing, the gallery falls back to Lumora Classic, then to a leftover `default` folder.
+
 ## [1.19.1] — 2026-09-25
 
 ### Added

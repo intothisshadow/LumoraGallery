@@ -1,8 +1,8 @@
 # Lumora Gallery — Theme Development Guide
 
 This guide covers everything needed to build a Lumora theme, with a focus on
-the built-in dark mode system. The bundled `default` theme
-(`themes/default/`) is the reference implementation referred to throughout —
+the built-in dark mode system. The bundled Lumora Classic theme
+(`themes/lumora-classic/`) is the reference implementation referred to throughout —
 read this guide for the underlying mechanics, then look at its
 `template.html`/`style.css` for a complete working example.
 
@@ -32,7 +32,7 @@ file — no registration step is required. The active theme is chosen in
 | `{THEME_URL}` | URL to this theme's directory, with trailing slash |
 | `{BASE_URL}` | Gallery root URL, with trailing slash |
 | `{LUMORA_VERSION}` | Version string, e.g. `"1.9.2"` |
-| `{NAVIGATION}` | Site nav links (Home/Latest/Most Viewed/Random) — renders as `<ul class="navbar-nav"><li class="nav-item"><a class="nav-link">`; restyle those generic classes in your theme's CSS rather than hand-building the links, so the "Most Viewed" link keeps carrying the current album/category forward (LG-33) — see `default`'s `style.css` for an example of restyling them to a custom look |
+| `{NAVIGATION}` | Site nav links (Home/Latest/Most Viewed/Random) — renders as `<ul class="navbar-nav"><li class="nav-item"><a class="nav-link">`; restyle those generic classes in your theme's CSS rather than hand-building the links, so the "Most Viewed" link keeps carrying the current album/category forward (LG-33) — see `lumora-classic`'s `style.css` for an example of restyling them to a custom look |
 | `{ADMIN_LINK}` | Admin panel `<a>` link (empty for non-admin visitors) |
 | `{POWERED_BY}` | "Powered by Lumora Gallery" credit (empty when disabled in config) |
 | `{CONTENT}` | Main page HTML |
@@ -155,7 +155,7 @@ value inside your `html[data-bs-theme="dark"]` block.
 
 ### Inherit the standard variables where possible
 
-The bundled `default` theme uses generic `--lum-*` tokens (`--lum-bg`,
+The bundled Lumora Classic theme uses generic `--lum-*` tokens (`--lum-bg`,
 `--lum-surface`, `--lum-border`, `--lum-text`, `--lum-muted`,
 `--lum-head-text`, `--lum-accent`, plus semantic tint tokens like
 `--lum-card-tint-blue`) — a good starting point to copy from for a clean,
@@ -176,7 +176,7 @@ modes: `.lum-thumbgrid` / `.lum-thumb-item` / `.lum-thumb-caption` (thumbnail
 grid), `.lum-catgrid` / `.lum-catcard` / `.lum-catlist` (album & category
 grids/lists), `.lum-section-title`, `.lum-stat-box`, `.lum-album-desc` /
 `.lum-cat-desc`, `.lum-sort-bar`, `.lum-pagination`, `.breadcrumb`,
-`.lum-who-is-online`, `.lum-empty`. See `themes/default/style.css` for the
+`.lum-who-is-online`, `.lum-empty`. See `themes/lumora-classic/style.css` for the
 full reference implementation — it is organised under named section banners
 (Layout, Typography, Navigation, Albums & Categories, Image Pages, Forms,
 Buttons, Tables, Messages, Utility Components, Media, Loading indicator,
@@ -195,7 +195,7 @@ Run through this list before shipping a theme, in both light and dark mode:
   the text colour drawn on top of them, not just against the page background.
 - **Icons** — any inline SVG icon should use `fill="currentColor"` (never a
   hard-coded hex fill) so it automatically follows the surrounding text
-  colour in both modes. The bundled `default` theme's icons (the
+  colour in both modes. The bundled Lumora Classic theme's icons (the
   online-visitors icon, the category/album placeholder icon, and the
   PhotoSwipe download-button icon) already follow this pattern.
 - **Forms and buttons** — verify `.form-control`, `.form-select`,
@@ -262,10 +262,10 @@ html[data-bs-theme="dark"] .my-logo-dark  { display: block; }
 
 ### Print styles
 
-The bundled `default` theme ships a `@media print` block that hides
+The bundled Lumora Classic theme ships a `@media print` block that hides
 navigation, footer, sort bar, pagination, the admin link, and the
 colour-mode toggle so a printed page shows only gallery content. New themes
-should do the same — copy the block from `themes/default/style.css` and
+should do the same — copy the block from `themes/lumora-classic/style.css` and
 adjust the selector list to match your own chrome elements.
 
 ---

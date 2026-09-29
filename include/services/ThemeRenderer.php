@@ -74,11 +74,14 @@ class ThemeRenderer
         $theme_path = lumora_theme_path($theme);
         $tpl_file   = $theme_path . 'template.html';
 
-        // Graceful fallback to default theme.
+        // Fall back to the bundled theme, then the pre-rename legacy folder.
         if (!file_exists($tpl_file)) {
-            $theme      = 'default';
-            $theme_path = lumora_theme_path('default');
-            $tpl_file   = $theme_path . 'template.html';
+            foreach ([ThemeService::BUNDLED_THEME, ThemeService::LEGACY_BUNDLED_THEME] as $fallback) {
+                $theme      = $fallback;
+                $theme_path = lumora_theme_path($fallback);
+                $tpl_file   = $theme_path . 'template.html';
+                if (file_exists($tpl_file)) break;
+            }
         }
 
         // ── Admin-only theme preview notice ─────────────────────────────────────

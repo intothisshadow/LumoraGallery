@@ -1159,6 +1159,18 @@ class UpdaterService
             $stats['errors'][] = 'Copy operation failed: ' . $e->getMessage();
         }
 
+        // themes/ is preserved by default, but the bundled theme's folder must still
+        // arrive once (e.g. the default → lumora-classic rename); never overwrite an existing copy.
+        $bundledDest = LUMORA_ROOT . 'themes' . DIRECTORY_SEPARATOR . ThemeService::BUNDLED_THEME . DIRECTORY_SEPARATOR;
+        $bundledSrc  = rtrim($srcRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'themes' . DIRECTORY_SEPARATOR . ThemeService::BUNDLED_THEME . DIRECTORY_SEPARATOR;
+        if ($preserveThemes && is_dir($bundledSrc) && !is_file($bundledDest . 'template.html')) {
+            try {
+                self::copyDirectory($bundledSrc, $bundledDest, [], $stats, false);
+            } catch (\Throwable $e) {
+                $stats['errors'][] = 'Bundled theme copy failed: ' . $e->getMessage();
+            }
+        }
+
         if (!empty($stats['errors'])) {
             self::logUpdate('error', 'Replace stage errors: ' . implode('; ', $stats['errors']));
             return self::fail(
@@ -1176,7 +1188,7 @@ class UpdaterService
         // the core file replacement above already succeeded, so a cleanup
         // error here is logged as a warning, not treated as an update
         // failure.
-        $cleanup = self::removeObsoleteFiles($srcRoot, LUMORA_ROOT, self::readFileManifest(), $preserve);
+        $cleanup = self::removeObsoleteFiles($srcRoot, LUMORA_ROOT, self::readFileManifest(), $preserve, ['themes' . DIRECTORY_SEPARATOR . ThemeService::LEGACY_BUNDLED_THEME . DIRECTORY_SEPARATOR]);
         self::writeFileManifest($cleanup['current']);
         if (!empty($cleanup['errors'])) {
             self::logUpdate('warning', 'Obsolete file cleanup had errors: ' . implode('; ', $cleanup['errors']));
@@ -2134,9 +2146,10 @@ class UpdaterService
      *
      * @param list<string> $previousManifest
      * @param list<string> $preserve
+     * @param list<string> $keepPrefixes Relative path prefixes never removed even if obsolete.
      * @return array{removed: int, errors: list<string>, current: list<string>}
      */
-    public static function removeObsoleteFiles(string $srcRoot, string $destRoot, array $previousManifest, array $preserve): array
+    public static function removeObsoleteFiles(string $srcRoot, string $destRoot, array $previousManifest, array $preserve, array $keepPrefixes = []): array
     {
         $current  = self::listFilesRecursive($srcRoot, $preserve);
         $obsolete = array_diff($previousManifest, $current);
@@ -2151,6 +2164,12 @@ class UpdaterService
 
             if (in_array($top, self::ALWAYS_PROTECTED, true) || in_array($top, $preserve, true)) {
                 continue;
+            }
+
+            foreach ($keepPrefixes as $prefix) {
+                if (str_starts_with($relative, $prefix)) {
+                    continue 2;
+                }
             }
 
             $target = $destRoot . $relative;

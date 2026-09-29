@@ -125,7 +125,9 @@ The bundled theme (and every custom theme) fully supports light/dark mode, follo
 
 One theme is included:
 
-- **`default`** — Bootstrap 5 responsive layout with a dark navbar. Clean and neutral; a good starting point for any site.
+- **Lumora Classic** (`lumora-classic`) — Bootstrap 5 responsive layout with a dark navbar. Clean and neutral; a good starting point for any site.
+
+**Upgrading from an earlier version:** the bundled theme was previously named `default`. The update switches a site that was using it to Lumora Classic automatically. The old `themes/default/` folder is left in place (it may hold your own edits) as an ordinary theme you can delete from Admin → Appearance once you no longer need it.
 
 Themes can be installed or updated directly from a `.zip` upload in Admin → Appearance — no FTP needed — and every theme card has a **Preview** button: a logged-in administrator can preview any installed theme against the live gallery for their own session only, without changing what any other visitor sees, which is handy for trying out a theme (or a tweak to one) before switching everyone over to it.
 

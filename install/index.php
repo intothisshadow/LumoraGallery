@@ -634,7 +634,7 @@ HTML;
         'gallery_name'        => $gallery_name,
         'gallery_description' => '',
         'base_url'            => $base_url,
-        'theme'               => 'default',
+        'theme'               => ThemeService::BUNDLED_THEME,
         'thumb_width'         => '250',
         'thumb_height'        => '250',
         'per_page'            => '48',

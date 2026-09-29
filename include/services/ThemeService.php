@@ -36,8 +36,14 @@ class ThemeService
 
     private const SCREENSHOT_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'avif'];
 
+    /** Folder slug of the theme that ships with the app. */
+    public const BUNDLED_THEME = 'lumora-classic';
+
+    /** Pre-rename slug of the bundled theme; kept on disk during upgrades. */
+    public const LEGACY_BUNDLED_THEME = 'default';
+
     /** Bundled themes that ship with the app and must never be deleted. */
-    private const PROTECTED_THEMES = ['default'];
+    private const PROTECTED_THEMES = [self::BUNDLED_THEME];
 
     private const MAX_ZIP_ENTRIES           = 2000;
     private const MAX_ZIP_UNCOMPRESSED_SIZE = 50 * 1024 * 1024;
@@ -54,7 +60,7 @@ class ThemeService
      */
     public static function listThemesWithMeta(): array
     {
-        $active = (string) lumora_config('theme', 'default');
+        $active = (string) lumora_config('theme', self::BUNDLED_THEME);
 
         $out = [];
         foreach (lumora_list_themes() as $folder) {
@@ -317,7 +323,7 @@ class ThemeService
         if (!in_array($folder, lumora_list_themes(), true)) {
             return ['success' => false, 'message' => 'That theme could not be found.'];
         }
-        if ($folder === (string) lumora_config('theme', 'default')) {
+        if ($folder === (string) lumora_config('theme', self::BUNDLED_THEME)) {
             return ['success' => false, 'message' => 'The active theme cannot be deleted. Activate a different theme first.'];
         }
         if (in_array($folder, self::PROTECTED_THEMES, true)) {

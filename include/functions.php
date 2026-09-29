@@ -238,7 +238,7 @@ function lumora_theme_preview_state(): array
     static $state = null;
     if ($state !== null) return $state;
 
-    $configured = (string) (lumora_config('theme', 'default') ?: 'default');
+    $configured = (string) (lumora_config('theme', ThemeService::BUNDLED_THEME) ?: ThemeService::BUNDLED_THEME);
     $requested  = $_GET['theme'] ?? null;
 
     if (is_string($requested) && $requested !== '' && lumora_is_admin()) {
