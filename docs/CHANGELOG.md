@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Admin → Plugins: a plugin's own Delete button did nothing (it only worked via Select + Delete Selected).** The button's click handler was written into the page with unescaped quotes, so the browser cut it off and it never ran. The Update button shown for a pending GitHub update had the same fault. Both now work.
+
 ## [1.20.0] — 2026-09-29
 
 ### Removed

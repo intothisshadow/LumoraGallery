@@ -144,7 +144,7 @@ if (empty($plugins)) {
             ? ' <span class="badge bg-warning text-dark">Update available (v' . h($upd['latest']) . ')</span>'
             : '';
         $github_update_btn = $upd !== null
-            ? '<button type="button" class="btn btn-sm btn-warning" onclick="lumPluginGithubUpdate(' . $id_js . ', ' . h(json_encode($p['name'])) . ')">Update to v' . h($upd['latest']) . '</button>'
+            ? '<button type="button" class="btn btn-sm btn-warning" onclick="lumPluginGithubUpdate(' . h($id_js) . ', ' . h(json_encode($p['name'])) . ')">Update to v' . h($upd['latest']) . '</button>'
             : '';
 
         $type_badge = $p['type'] === 'importer'
@@ -189,7 +189,7 @@ if (empty($plugins)) {
             );
             $delete_btn = '<button type="button" class="btn btn-sm btn-outline-danger" '
                 . 'data-confirm="' . $del_conf_h . '" '
-                . 'onclick="lumPluginSingleDelete(' . $id_js . ', this.dataset.confirm)">Delete</button>';
+                . 'onclick="lumPluginSingleDelete(' . h($id_js) . ', this.dataset.confirm)">Delete</button>';
         }
 
         $rows .= <<<HTML
