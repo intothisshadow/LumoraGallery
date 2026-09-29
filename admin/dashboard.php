@@ -55,6 +55,15 @@ if ($plugin_update_count > 0) {
         . '</div>';
 }
 
+$theme_update_count = count(ThemeUpdateService::availableUpdates());
+if ($theme_update_count > 0) {
+    $update_notice .= '<div class="alert alert-info alert-dismissible fade show py-2 mb-4" role="alert">'
+        . '🔔 <strong>A theme update is available.</strong>'
+        . ' <a href="' . $base . 'appearance.php" class="btn btn-sm btn-outline-secondary ms-2">View Appearance</a>'
+        . '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>'
+        . '</div>';
+}
+
 // ── Migration notice (cache-only — no HTTP call) ─────────────────────────────
 $migration_notice = '';
 if (SchemaService::hasPendingMigrations()) {

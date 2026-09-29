@@ -79,6 +79,15 @@ abstract class AbstractUpdateProvider
      */
     abstract public function getReleasesUrl(): string;
 
+    /** True when $url is a release-asset download URL of the configured source. */
+    abstract public function isTrustedAssetUrl(string $url): bool;
+
+    /** SHA-256 for $filename from a checksum asset at $url, or null. */
+    abstract public function fetchChecksumFor(string $url, string $filename): ?string;
+
+    /** Download a release asset, capped at $maxBytes; null on failure or overflow. */
+    abstract public function downloadAsset(string $url, int $maxBytes): ?string;
+
     // ── Factory ───────────────────────────────────────────────────────────────
 
     /**

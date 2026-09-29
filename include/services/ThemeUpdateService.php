@@ -1,33 +1,30 @@
 <?php
 declare(strict_types=1);
 /**
- * Lumora Gallery — Plugin Update Service
+ * Lumora Gallery — Theme Update Service
  *
- * Updates the bundled plugins from `plugin-{id}-v{version}.zip` packages
+ * Updates the bundled theme from a `theme-{folder}-v{version}.zip` package
  * attached to the latest GitHub release, independently of a core update.
- * Discovery reuses the cached release check (GitHubUpdateProvider's
- * `plugins` map); applying reuses PluginService::updateFromZip(). Each
- * update runs as check → download → verify → apply stages under the
- * UpdaterService lock so it can never overlap a core update.
- *
- * A package must not need a database change; schema changes ship with a
- * core release.
+ * Mirrors PluginUpdateService: check → download → verify → apply stages under
+ * the UpdaterService lock, applied with ThemeService::updateFromZip(). A
+ * theme is versioned by the `Version:` header of its primary stylesheet; a
+ * theme without one is never offered an update.
  *
  * @package    LumoraGallery
- * @subpackage Plugins
+ * @subpackage Themes
  * @author     Ariane
  * @copyright  Copyright (c) 2026 Ariane
  * @license    GPL-3.0-or-later <https://www.gnu.org/licenses/gpl-3.0>
  * @link       https://coding.unloved-heart.net/scripts/lumoragallery
  * @source     https://github.com/intothisshadow/LumoraGallery
  * @since      1.20.0
- * @see        GitHubUpdateProvider::parsePluginAssets() Source of the package list.
- * @see        PluginService::updateFromZip() Performs the file swap.
+ * @see        PluginUpdateService The plugin equivalent this mirrors.
+ * @see        ThemeService::updateFromZip() Performs the folder swap.
  */
 
 if (!defined('LUMORA_ENTRY')) exit('Direct access denied.');
 
-class PluginUpdateService
+class ThemeUpdateService
 {
     public const STAGE_CHECK    = 'check';
     public const STAGE_DOWNLOAD = 'download';
@@ -46,25 +43,26 @@ class PluginUpdateService
     // ── Discovery ─────────────────────────────────────────────────────────────
 
     /**
-     * Pure selection: bundled plugins whose advertised package is newer than
-     * the installed version.
+     * Pure selection: installed, versioned bundled themes whose advertised
+     * package is newer than the installed version.
      *
      * @param array<string, array{version: string, download_url: string, sha256_url: string|null}> $advertised
-     * @param array<string, array{name: string, version: string, min_lumora: string}>               $installed
-     * @return array<string, array{id: string, name: string, installed: string, latest: string, download_url: string, sha256_url: string|null}>
+     * @param array<string, array{name: string, version: string}>                                  $installed
+     * @return array<string, array{folder: string, name: string, installed: string, latest: string, download_url: string, sha256_url: string|null}>
      */
     public static function selectUpdates(array $advertised, array $installed): array
     {
         $out = [];
-        foreach ($advertised as $id => $pkg) {
-            $id = (string) $id;
-            if (!PluginService::isBundled($id) || !isset($installed[$id])) continue;
-            if (version_compare($pkg['version'], $installed[$id]['version'], '<=')) continue;
+        foreach ($advertised as $folder => $pkg) {
+            $folder = (string) $folder;
+            if (!ThemeService::isBundled($folder) || !isset($installed[$folder])) continue;
+            if ($installed[$folder]['version'] === '') continue;
+            if (version_compare($pkg['version'], $installed[$folder]['version'], '<=')) continue;
 
-            $out[$id] = [
-                'id'           => $id,
-                'name'         => $installed[$id]['name'],
-                'installed'    => $installed[$id]['version'],
+            $out[$folder] = [
+                'folder'       => $folder,
+                'name'         => $installed[$folder]['name'],
+                'installed'    => $installed[$folder]['version'],
                 'latest'       => $pkg['version'],
                 'download_url' => $pkg['download_url'],
                 'sha256_url'   => $pkg['sha256_url'] ?? null,
@@ -74,56 +72,59 @@ class PluginUpdateService
     }
 
     /**
-     * Bundled-plugin updates known from the cached release check. Never
-     * makes a network call.
+     * Installed bundled themes with their header name and version ('' when
+     * unversioned).
      *
-     * @return array<string, array{id: string, name: string, installed: string, latest: string, download_url: string, sha256_url: string|null}>
+     * @return array<string, array{name: string, version: string}>
+     */
+    public static function installedBundled(): array
+    {
+        $out = [];
+        foreach (lumora_list_themes() as $folder) {
+            if (!ThemeService::isBundled($folder)) continue;
+            $meta        = lumora_get_theme_meta($folder);
+            $out[$folder] = ['name' => $meta['name'], 'version' => $meta['version']];
+        }
+        return $out;
+    }
+
+    /**
+     * Bundled-theme updates known from the cached release check. Never makes
+     * a network call.
+     *
+     * @return array<string, array{folder: string, name: string, installed: string, latest: string, download_url: string, sha256_url: string|null}>
      */
     public static function availableUpdates(): array
     {
         $payload    = UpdateService::getCachedPayload();
-        $advertised = is_array($payload['plugins'] ?? null) ? $payload['plugins'] : [];
+        $advertised = is_array($payload['themes'] ?? null) ? $payload['themes'] : [];
 
-        return self::selectUpdates($advertised, PluginService::installedBundledVersions());
-    }
-
-    /** Force a fresh release check, then return availableUpdates(). */
-    public static function refresh(): array
-    {
-        UpdateService::check(force: true);
-        return self::availableUpdates();
+        return self::selectUpdates($advertised, self::installedBundled());
     }
 
     // ── Gates ─────────────────────────────────────────────────────────────────
 
     /**
-     * Content gates for a downloaded package: manifest id matches, version is
-     * the advertised one and a strict upgrade, and the running Lumora meets
-     * `min_lumora`.
+     * Content gates for a downloaded package: it is a theme archive, its
+     * `Version:` is the advertised one and strictly newer than installed,
+     * and the running Lumora meets `Requires at least`.
      *
      * @return array{ok: bool, message: string}
      */
-    public static function evaluatePackage(string $zipPath, string $id, string $installedVersion, string $expectedVersion): array
+    public static function evaluatePackage(string $zipPath, string $installedVersion, string $expectedVersion): array
     {
-        $manifest = PluginService::readManifestFromZipFile($zipPath);
-        if ($manifest === null) {
-            return ['ok' => false, 'message' => 'The package is not a valid plugin archive.'];
+        $meta = ThemeService::readMetaFromZipFile($zipPath);
+        if ($meta === null) {
+            return ['ok' => false, 'message' => 'The package is not a valid theme archive.'];
         }
-        if (($manifest['id'] ?? null) !== $id) {
-            return ['ok' => false, 'message' => 'The package\'s plugin id does not match "' . $id . '".'];
+        if ($meta['version'] !== $expectedVersion) {
+            return ['ok' => false, 'message' => 'The package declares version "' . $meta['version'] . '", not the advertised ' . $expectedVersion . '.'];
         }
-
-        $version = (string) ($manifest['version'] ?? '');
-        if ($version !== $expectedVersion) {
-            return ['ok' => false, 'message' => 'The package declares version ' . $version . ', not the advertised ' . $expectedVersion . '.'];
+        if (version_compare($meta['version'], $installedVersion, '<=')) {
+            return ['ok' => false, 'message' => 'Version ' . $meta['version'] . ' is not newer than the installed ' . $installedVersion . '.'];
         }
-        if (version_compare($version, $installedVersion, '<=')) {
-            return ['ok' => false, 'message' => 'Version ' . $version . ' is not newer than the installed ' . $installedVersion . '.'];
-        }
-
-        $min = (string) ($manifest['min_lumora'] ?? '1.0.0');
-        if (!PluginService::isCompatible($min)) {
-            return ['ok' => false, 'message' => 'This update requires Lumora Gallery ' . $min . ' or newer — update Lumora Gallery first.'];
+        if ($meta['requires'] !== '' && version_compare(LUMORA_VERSION, $meta['requires'], '<')) {
+            return ['ok' => false, 'message' => 'This update requires Lumora Gallery ' . $meta['requires'] . ' or newer — update Lumora Gallery first.'];
         }
 
         return ['ok' => true, 'message' => 'Package accepted.'];
@@ -132,55 +133,55 @@ class PluginUpdateService
     // ── Stages ────────────────────────────────────────────────────────────────
 
     /**
-     * Run one stage for one plugin. Any failure after the lock was taken
+     * Run one stage for one theme. Any failure after the lock was taken
      * releases it and removes the downloaded package.
      *
      * @return array{success: bool, stage: string, message: string, next: string|null, details: list<string>}
      */
-    public static function runStage(string $stage, string $id): array
+    public static function runStage(string $stage, string $folder): array
     {
         if (!in_array($stage, self::STAGE_SEQUENCE, true)) {
             return self::result(false, $stage, 'Unknown stage.');
         }
-        if (!PluginService::isBundled($id)) {
-            return self::result(false, $stage, 'Only bundled plugins can be updated from GitHub.');
+        if (!ThemeService::isBundled($folder)) {
+            return self::result(false, $stage, 'Only the bundled theme can be updated from GitHub.');
         }
 
         if ($stage === self::STAGE_CHECK) {
-            return self::stageCheck($id);
+            return self::stageCheck($folder);
         }
 
         $lock = UpdaterService::getLockInfo();
-        if (($lock['kind'] ?? '') !== 'plugin' || ($lock['plugin_id'] ?? '') !== $id) {
-            return self::result(false, $stage, 'No active update session for this plugin. Please start again.');
+        if (($lock['kind'] ?? '') !== 'theme' || ($lock['theme_folder'] ?? '') !== $folder) {
+            return self::result(false, $stage, 'No active update session for this theme. Please start again.');
         }
 
         try {
             $result = match ($stage) {
-                self::STAGE_DOWNLOAD => self::stageDownload($id, $lock),
-                self::STAGE_VERIFY   => self::stageVerify($id, $lock),
-                default              => self::stageApply($id, $lock),
+                self::STAGE_DOWNLOAD => self::stageDownload($folder, $lock),
+                self::STAGE_VERIFY   => self::stageVerify($folder, $lock),
+                default              => self::stageApply($folder, $lock),
             };
         } catch (\Throwable $e) {
-            error_log('Lumora: plugin update stage "' . $stage . '" failed: ' . $e->getMessage());
+            error_log('Lumora: theme update stage "' . $stage . '" failed: ' . $e->getMessage());
             $result = self::result(false, $stage, 'Unexpected error during the update.');
         }
 
         if (!$result['success'] || $result['next'] === null) {
-            self::finish($id);
+            self::finish($folder);
         }
         return $result;
     }
 
-    private static function stageCheck(string $id): array
+    private static function stageCheck(string $folder): array
     {
         if (UpdaterService::isUpdateRunning()) {
             return self::result(false, self::STAGE_CHECK, 'Another update is already in progress.');
         }
 
-        $entry = self::availableUpdates()[$id] ?? null;
+        $entry = self::availableUpdates()[$folder] ?? null;
         if ($entry === null) {
-            return self::result(false, self::STAGE_CHECK, 'No update is available for this plugin. Run "Check for Updates" first.');
+            return self::result(false, self::STAGE_CHECK, 'No update is available for this theme. Run "Check for Updates" first.');
         }
         if (!AbstractUpdateProvider::createFromConfig()->isTrustedAssetUrl($entry['download_url'])) {
             return self::result(false, self::STAGE_CHECK, 'The package URL is not a release asset of the configured repository.');
@@ -190,8 +191,8 @@ class PluginUpdateService
         }
 
         $acquired = UpdaterService::acquireLock($entry['latest'], [
-            'kind'         => 'plugin',
-            'plugin_id'    => $id,
+            'kind'         => 'theme',
+            'theme_folder' => $folder,
             'from_version' => $entry['installed'],
             'download_url' => $entry['download_url'],
             'sha256_url'   => $entry['sha256_url'],
@@ -206,20 +207,21 @@ class PluginUpdateService
     }
 
     /** @param array<string, mixed> $lock */
-    private static function stageDownload(string $id, array $lock): array
+    private static function stageDownload(string $folder, array $lock): array
     {
-        $url = (string) ($lock['download_url'] ?? '');
-        if (!AbstractUpdateProvider::createFromConfig()->isTrustedAssetUrl($url)) {
+        $provider = AbstractUpdateProvider::createFromConfig();
+        $url      = (string) ($lock['download_url'] ?? '');
+        if (!$provider->isTrustedAssetUrl($url)) {
             return self::result(false, self::STAGE_DOWNLOAD, 'The package URL is not trusted.');
         }
 
-        $data = AbstractUpdateProvider::createFromConfig()->downloadAsset($url, self::MAX_PACKAGE_BYTES);
+        $data = $provider->downloadAsset($url, self::MAX_PACKAGE_BYTES);
         if ($data === null) {
             return self::result(false, self::STAGE_DOWNLOAD, 'Download failed or the package is larger than the allowed size. Check that the server can make outbound HTTPS requests.');
         }
 
         UpdaterService::ensureUpdatesDir();
-        if (file_put_contents(self::packagePath($id), $data) === false) {
+        if (file_put_contents(self::packagePath($folder), $data) === false) {
             return self::result(false, self::STAGE_DOWNLOAD, 'Could not write the package to disk. Check permissions on cache/.');
         }
 
@@ -229,9 +231,9 @@ class PluginUpdateService
     }
 
     /** @param array<string, mixed> $lock */
-    private static function stageVerify(string $id, array $lock): array
+    private static function stageVerify(string $folder, array $lock): array
     {
-        $path = self::packagePath($id);
+        $path = self::packagePath($folder);
         if (!is_file($path)) {
             return self::result(false, self::STAGE_VERIFY, 'The package was not found. Please start again.');
         }
@@ -252,7 +254,7 @@ class PluginUpdateService
             return self::result(false, self::STAGE_VERIFY, 'Integrity check failed: SHA-256 mismatch. The download may be corrupt or tampered with.');
         }
 
-        $gate = self::evaluatePackage($path, $id, (string) ($lock['from_version'] ?? '0.0.0'), (string) $lock['version']);
+        $gate = self::evaluatePackage($path, (string) ($lock['from_version'] ?? '0'), (string) $lock['version']);
         if (!$gate['ok']) {
             return self::result(false, self::STAGE_VERIFY, $gate['message']);
         }
@@ -266,9 +268,9 @@ class PluginUpdateService
     }
 
     /** @param array<string, mixed> $lock */
-    private static function stageApply(string $id, array $lock): array
+    private static function stageApply(string $folder, array $lock): array
     {
-        $path     = self::packagePath($id);
+        $path     = self::packagePath($folder);
         $from     = (string) ($lock['from_version'] ?? '');
         $to       = (string) $lock['version'];
         $expected = (string) ($lock['sha256'] ?? '');
@@ -278,41 +280,41 @@ class PluginUpdateService
             return self::result(false, self::STAGE_APPLY, 'The verified package is missing or changed. Please start again.');
         }
 
-        HookService::doAction('before_plugin_update', $id, $from, $to);
-        $r = PluginService::updateFromZip($path, $id);
-        HookService::doAction('after_plugin_update', $id, $from, $to, $r['success']);
+        HookService::doAction('before_theme_update', $folder, $from, $to);
+        $r = ThemeService::updateFromZip($path, $folder);
+        HookService::doAction('after_theme_update', $folder, $from, $to, $r['success']);
 
-        $label = $id . ' ' . $from . ' → ' . $to;
-        UpdaterService::logUpdate($r['success'] ? 'info' : 'error', 'Plugin update ' . $label . ': ' . $r['message']);
-        UpdaterService::recordUpdateHistory($id . ' ' . $to, $r['success'], 'Plugin ' . $label . ($r['success'] ? '' : ' — ' . $r['message']));
+        $label = $folder . ' ' . $from . ' → ' . $to;
+        UpdaterService::logUpdate($r['success'] ? 'info' : 'error', 'Theme update ' . $label . ': ' . $r['message']);
+        UpdaterService::recordUpdateHistory($folder . ' ' . $to, $r['success'], 'Theme ' . $label . ($r['success'] ? '' : ' — ' . $r['message']));
 
         if ($r['success'] && function_exists('lumora_current_user')) {
             $actor = lumora_current_user();
             LogService::log(
-                'plugin_updated',
+                'theme_updated',
                 (int) ($actor['user_id'] ?? 0),
                 (string) ($actor['username'] ?? ''),
                 (string) ($_SERVER['REMOTE_ADDR'] ?? ''),
-                'Updated plugin "' . $id . '" from ' . $from . ' to ' . $to . ' (GitHub)'
+                'Updated theme "' . $folder . '" from ' . $from . ' to ' . $to . ' (GitHub)'
             );
         }
 
         return $r['success']
-            ? self::result(true, self::STAGE_APPLY, 'Plugin updated to ' . $to . '.', null, ['✓ ' . $label])
+            ? self::result(true, self::STAGE_APPLY, 'Theme updated to ' . $to . '.', null, ['✓ ' . $label])
             : self::result(false, self::STAGE_APPLY, $r['message']);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static function packagePath(string $id): string
+    private static function packagePath(string $folder): string
     {
-        return UpdaterService::updatesDir() . 'plugin-' . preg_replace('/[^a-z0-9_-]/', '', $id) . '.zip';
+        return UpdaterService::updatesDir() . 'theme-' . preg_replace('/[^a-z0-9_-]/', '', $folder) . '.zip';
     }
 
     /** Remove the downloaded package and release the lock. */
-    private static function finish(string $id): void
+    private static function finish(string $folder): void
     {
-        $path = self::packagePath($id);
+        $path = self::packagePath($folder);
         if (is_file($path)) {
             unlink($path);
         }

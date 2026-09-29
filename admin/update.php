@@ -131,6 +131,12 @@ if ($plugin_update_count > 0) {
         . '<a href="' . h(lumora_base_url() . 'admin/plugins.php') . '">Open Plugins</a></div>';
 }
 
+if (ThemeUpdateService::availableUpdates() !== []) {
+    $plugin_update_notice .= '<div class="alert alert-info py-2 mb-3 small">'
+        . '🔔 A bundled theme update is available. '
+        . '<a href="' . h(lumora_base_url() . 'admin/appearance.php') . '">Open Appearance</a></div>';
+}
+
 $stuck_notice = '';
 if ($updater_running && $updater_lock !== null) {
     $stuck_ver  = h($updater_lock['version'] ?? 'unknown');

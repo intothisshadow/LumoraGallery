@@ -67,12 +67,17 @@ as WordPress theme headers:
  * Theme Name: My Theme
  * Author: Your Name
  * Design URI: https://example.com
+ * Version: 1.0.0
+ * Requires at least: 1.19.1
  */
 ```
 
-Recognized fields are `Theme Name`, `Author`, and `Design URI`. When present, they're shown
-on the theme's card and details modal in Admin → Appearance. The header is entirely
-optional — themes without one still work normally, falling back to the folder name.
+Recognized fields are `Theme Name`, `Author`, `Design URI`, `Version` and `Requires at least`.
+When present, they're shown on the theme's card and details modal in Admin → Appearance. The
+header is entirely optional — themes without one still work normally, falling back to the folder
+name. `Version` and `Requires at least` (the minimum Lumora Gallery version) are only used for
+GitHub updates of the bundled theme; a theme without a `Version` is "unversioned" and is never
+offered one. Bump `Version` whenever a bundled theme's files change.
 
 Screenshot discovery follows the same convention: a file named `preview.*`, `thumbnail.*`,
 or `screenshot.*` (jpg/jpeg/png/webp/avif) in a theme's folder becomes its card thumbnail, in

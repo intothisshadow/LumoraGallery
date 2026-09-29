@@ -129,6 +129,8 @@ One theme is included:
 
 **Upgrading from an earlier version:** the bundled theme was previously named `default`. The update switches a site that was using it to Lumora Classic automatically. The old `themes/default/` folder is left in place (it may hold your own edits) as an ordinary theme you can delete from Admin → Appearance once you no longer need it.
 
+The bundled theme can also be updated straight from GitHub without a full Lumora update: when a release carries a newer package, its card shows an **Update available** badge and an **Update** button (or click **Check for Updates** on Admin → Appearance). The package's SHA-256 checksum is verified first, your theme settings are kept, and any local edits to the bundled theme's own files are replaced — make changes in a copy of the theme instead. Custom themes are never touched.
+
 Themes can be installed or updated directly from a `.zip` upload in Admin → Appearance — no FTP needed — and every theme card has a **Preview** button: a logged-in administrator can preview any installed theme against the live gallery for their own session only, without changing what any other visitor sees, which is handy for trying out a theme (or a tweak to one) before switching everyone over to it.
 
 Building your own theme? See [`docs/THEME_DEVELOPMENT.md`](docs/THEME_DEVELOPMENT.md) for the full guide — template tokens, the dark mode system, an accessibility checklist, and the optional theme metadata header/screenshot conventions.

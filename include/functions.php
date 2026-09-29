@@ -358,7 +358,10 @@ function lumora_theme_primary_stylesheet(string $theme): ?string
 /**
  * Read WordPress-style theme metadata from the primary stylesheet.
  *
- * @return array{name: string, author: string, design_uri: string}
+ * `version`/`requires` come from optional `Version:` / `Requires at least:`
+ * headers; empty when absent (an "unversioned" theme).
+ *
+ * @return array{name: string, author: string, design_uri: string, version: string, requires: string}
  */
 function lumora_get_theme_meta(string $theme): array
 {
@@ -366,6 +369,8 @@ function lumora_get_theme_meta(string $theme): array
         'name'       => $theme,
         'author'     => '',
         'design_uri' => '',
+        'version'    => '',
+        'requires'   => '',
     ];
 
     $css_path = lumora_theme_primary_stylesheet($theme);
@@ -377,7 +382,10 @@ function lumora_get_theme_meta(string $theme): array
     if (!preg_match('#/\*(.*?)\*/#s', $head, $m)) return $meta;
     $comment = $m[1];
 
-    $fields = ['name' => 'Theme Name', 'author' => 'Author', 'design_uri' => 'Design URI'];
+    $fields = [
+        'name' => 'Theme Name', 'author' => 'Author', 'design_uri' => 'Design URI',
+        'version' => 'Version', 'requires' => 'Requires at least',
+    ];
     foreach ($fields as $key => $label) {
         if (preg_match('/^[ \t*]*' . preg_quote($label, '/') . '\s*:\s*(.+)$/mi', $comment, $mm)) {
             $value = trim($mm[1]);

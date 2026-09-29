@@ -27,7 +27,8 @@ declare(strict_types=1);
  * (logged as a warning).
  *
  * Bundled plugin packages (`plugin-{id}-v{version}.zip` + `.sha256`) attached
- * to the same release are exposed as `plugins` — see parsePluginAssets().
+ * to the same release are exposed as `plugins` — see parsePluginAssets() —
+ * and bundled theme packages (`theme-{folder}-v{version}.zip`) as `themes`.
  *
  * @package    LumoraGallery
  * @subpackage Core
@@ -235,7 +236,8 @@ class GitHubUpdateProvider extends AbstractUpdateProvider
      *   minimum_db:     int|null,
      *   sha256:         string|null,
      *   prerelease:     bool,
-     *   plugins:        array<string, array{version: string, download_url: string, sha256_url: string|null}>
+     *   plugins:        array<string, array{version: string, download_url: string, sha256_url: string|null}>,
+     *   themes:         array<string, array{version: string, download_url: string, sha256_url: string|null}>
      * }
      */
     private function mapRelease(array $data): array
@@ -303,7 +305,9 @@ class GitHubUpdateProvider extends AbstractUpdateProvider
             }
         }
 
-        $plugins = self::parsePluginAssets(is_array($data['assets'] ?? null) ? $data['assets'] : []);
+        $assets  = is_array($data['assets'] ?? null) ? $data['assets'] : [];
+        $plugins = self::parsePluginAssets($assets);
+        $themes  = self::parseThemeAssets($assets);
 
         return [
             'latest_version' => $version,
@@ -317,6 +321,7 @@ class GitHubUpdateProvider extends AbstractUpdateProvider
             'sha256'         => $sha256,
             'prerelease'     => $prerelease,
             'plugins'        => $plugins,
+            'themes'         => $themes,
         ];
     }
 
@@ -390,6 +395,26 @@ class GitHubUpdateProvider extends AbstractUpdateProvider
      */
     public static function parsePluginAssets(array $assets): array
     {
+        return self::parsePackageAssets($assets, 'plugin');
+    }
+
+    /**
+     * Same as parsePluginAssets() for `theme-{folder}-v{version}.zip` assets.
+     *
+     * @param list<array<string, mixed>> $assets
+     * @return array<string, array{version: string, download_url: string, sha256_url: string|null}>
+     */
+    public static function parseThemeAssets(array $assets): array
+    {
+        return self::parsePackageAssets($assets, 'theme');
+    }
+
+    /**
+     * @param list<array<string, mixed>> $assets
+     * @return array<string, array{version: string, download_url: string, sha256_url: string|null}>
+     */
+    private static function parsePackageAssets(array $assets, string $kind): array
+    {
         $urls = [];
         foreach ($assets as $asset) {
             if (!is_array($asset)) continue;
@@ -398,22 +423,50 @@ class GitHubUpdateProvider extends AbstractUpdateProvider
             if ($name !== '' && $url !== '') $urls[$name] = $url;
         }
 
-        $plugins = [];
+        $packages = [];
         foreach ($urls as $name => $url) {
-            if (!preg_match('/^plugin-([a-z0-9_-]+?)-v([0-9]+(?:\.[0-9]+)*)\.zip$/', $name, $m)) continue;
+            if (!preg_match('/^' . $kind . '-([a-z0-9_-]+?)-v([0-9]+(?:\.[0-9]+)*)\.zip$/', $name, $m)) continue;
 
             [, $id, $version] = $m;
-            if (isset($plugins[$id]) && version_compare($plugins[$id]['version'], $version, '>=')) continue;
+            if (isset($packages[$id]) && version_compare($packages[$id]['version'], $version, '>=')) continue;
 
-            $plugins[$id] = [
+            $packages[$id] = [
                 'version'      => $version,
                 'download_url' => $url,
                 'sha256_url'   => $urls[$name . '.sha256'] ?? null,
             ];
         }
 
-        ksort($plugins);
-        return $plugins;
+        ksort($packages);
+        return $packages;
+    }
+
+    /**
+     * Download a release asset (a package ZIP) as a string, capped at
+     * $maxBytes. Returns null on failure or when the cap is exceeded.
+     */
+    public function downloadAsset(string $url, int $maxBytes): ?string
+    {
+        $ctx = stream_context_create([
+            'http' => [
+                'method'          => 'GET',
+                'timeout'         => 60,
+                'follow_location' => 1,
+                'max_redirects'   => 5,
+                'user_agent'      => 'Lumora Gallery/' . LUMORA_VERSION,
+                'ignore_errors'   => false,
+            ],
+            'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
+        ]);
+
+        set_error_handler(static fn(): bool => true);
+        try {
+            $data = file_get_contents($url, false, $ctx, 0, $maxBytes + 1);
+        } finally {
+            restore_error_handler();
+        }
+
+        return ($data === false || $data === '' || strlen($data) > $maxBytes) ? null : $data;
     }
 
     /**

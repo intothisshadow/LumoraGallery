@@ -221,6 +221,22 @@ Enabled state and settings are untouched. A plugin-only package **must not need 
 change** — schema changes ship with a core release. Only the latest release's assets are
 considered, and only bundled plugins qualify; user-installed plugins update via ZIP upload.
 
+### Bundled theme updates from GitHub
+
+The bundled theme (`ThemeService::PROTECTED_THEMES`) updates the same way as a bundled plugin:
+`build-release.sh` attaches `theme-{folder}-v{version}.zip` + `.sha256` when the `Version:`
+header in the theme's primary stylesheet changed (and fails if the theme's files changed
+without a bump), `GitHubUpdateProvider::parseThemeAssets()` exposes them as a `themes` map,
+and `ThemeUpdateService` runs the same check → download → verify → apply stages
+(`admin/ajax_theme_update.php`) under the updater lock, applying with
+`ThemeService::updateFromZip()`. Gates: mandatory checksum, trusted release-asset URLs, the
+package's `Version:` equals the advertised one and is strictly newer, and `Requires at least`
+is met. A theme with no `Version:` header is unversioned and never offered an update; custom
+themes are never touched. The folder swap is two `rename()` calls, so the folder is briefly
+absent between them; theme settings live in config and are unaffected. Hooks:
+`before_theme_update` / `after_theme_update` (`(string $folder, string $from, string $to)`,
+the latter plus `bool $success`).
+
 ---
 
 ## Importer Plugins

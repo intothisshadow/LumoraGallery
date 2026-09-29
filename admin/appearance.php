@@ -110,6 +110,13 @@ $chk_powered_by = $cfg['show_powered_by']  === '1'     ? ' checked' : '';
 
 // ── Theme card grid data ──────────────────────────────────────────────────────
 $themes = ThemeService::listThemesWithMeta();
+$theme_updates = ThemeUpdateService::availableUpdates();
+$theme_update_count = count($theme_updates);
+$theme_update_text  = $theme_update_count === 0
+    ? 'The bundled theme is up to date.'
+    : $theme_update_count . ' theme update' . ($theme_update_count === 1 ? '' : 's') . ' available.';
+$csrf_js = json_encode(lumora_csrf_token());
+$ajax_theme_js = json_encode(lumora_base_url() . 'admin/ajax_theme_update.php');
 
 // ── Section-header icons (matches admin/config.php's pattern) ────────────────
 $ic_appearance = '<svg class="lum-adm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.4-.3-.4-.5-.9-.5-1.4 0-1.1.9-2 2-2h1.5c1.9 0 3.5-1.6 3.5-3.5C20 6.4 16.4 3 12 3z"></path><circle cx="7.5" cy="10.5" r="1" fill="currentColor" stroke="none"></circle><circle cx="10.5" cy="7" r="1" fill="currentColor" stroke="none"></circle><circle cx="15" cy="8" r="1" fill="currentColor" stroke="none"></circle></svg>';
@@ -133,6 +140,15 @@ foreach ($themes as $t) {
         ? '<img src="' . h($t['screenshot']) . '" alt="' . $name_h . ' screenshot" class="lum-theme-card__screenshot" loading="lazy">'
         : '<div class="lum-theme-card__screenshot lum-theme-card__screenshot--placeholder" aria-hidden="true"></div>';
 
+    $upd = $theme_updates[$t['folder']] ?? null;
+    $version_h = $t['version'] !== '' ? ' <span class="text-muted small">v' . h($t['version']) . '</span>' : '';
+    $update_badge = $upd !== null
+        ? ' <span class="badge bg-warning text-dark">Update available (v' . h($upd['latest']) . ')</span>'
+        : '';
+    $github_update_btn = $upd !== null
+        ? '<button type="button" class="btn btn-sm btn-warning lum-theme-github-update" onclick="lumThemeGithubUpdate(' . h(json_encode($t['folder'])) . ', ' . h(json_encode($t['name'])) . ')">Update to v' . h($upd['latest']) . '</button>'
+        : '';
+
     $badge_html = $t['is_active'] ? '<span class="badge bg-success lum-theme-card__badge">Active</span>' : '';
 
     $activate_html = !$t['is_active']
@@ -147,10 +163,11 @@ foreach ($themes as $t) {
     $cards_html .= '<div class="lum-theme-card' . ($t['is_active'] ? ' lum-theme-card--active' : '') . '">'
         . '<div class="lum-theme-card__screenshot-wrap">' . $thumb_html . '</div>'
         . '<div class="lum-theme-card__body">'
-        . '<h3 class="lum-theme-card__name">' . $name_h . ' ' . $badge_html . '</h3>'
+        . '<h3 class="lum-theme-card__name">' . $name_h . $version_h . ' ' . $badge_html . $update_badge . '</h3>'
         . ($author_h !== '' ? '<p class="lum-theme-card__meta">By ' . $author_h . '</p>' : '')
         . '<div class="lum-theme-card__actions">'
         . $activate_html
+        . $github_update_btn
         . '<a href="' . $preview_url . '" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">Preview &#x2197;</a>'
         . '<button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#' . h($modal_id) . '">Details</button>'
         . '</div></div></div>';
@@ -162,6 +179,8 @@ foreach ($themes as $t) {
             $gallery_html .= '<img src="' . h($shot) . '" alt="' . $name_h . ' screenshot" class="lum-theme-details__screenshot">';
         }
     }
+
+    $version_detail = $t['version'] !== '' ? h($t['version']) : '<span class="text-muted">Unversioned</span>';
 
     $delete_html = '';
     if (!$t['is_active'] && !$t['is_protected']) {
@@ -192,6 +211,7 @@ foreach ($themes as $t) {
         <dl class="row mb-0">
           <dt class="col-sm-3">Author</dt><dd class="col-sm-9">{$author_h}</dd>
           <dt class="col-sm-3">Design URI</dt><dd class="col-sm-9">{$design_h}</dd>
+          <dt class="col-sm-3">Version</dt><dd class="col-sm-9">{$version_detail}</dd>
           <dt class="col-sm-3">Folder</dt><dd class="col-sm-9"><code>{$folder_h}</code></dd>
         </dl>
       </div>
@@ -221,11 +241,76 @@ $content = <<<HTML
 <!-- ── Themes ─────────────────────────────────────────────────────── -->
 <div class="lum-adm-card mb-4">
   <h5 class="lum-adm-section-title mb-3">{$ic_appearance}Themes</h5>
-  <p class="text-muted small">Display name, author, and design URI are read from a <code>Theme Name</code> / <code>Author</code> / <code>Design URI</code> CSS header comment at the top of each theme's primary stylesheet. Use <strong>Preview</strong> to see any installed theme rendered on the live gallery without activating it &mdash; only visible to you, in a new tab.</p>
+  <p class="text-muted small">Display name, author, and design URI are read from a <code>Theme Name</code> / <code>Author</code> / <code>Design URI</code> (and optional <code>Version</code>) CSS header comment at the top of each theme's primary stylesheet. Use <strong>Preview</strong> to see any installed theme rendered on the live gallery without activating it &mdash; only visible to you, in a new tab.</p>
+  <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <button type="button" id="lum-theme-check-updates" class="btn btn-sm btn-outline-secondary" onclick="lumThemeCheckUpdates()">Check for Updates</button>
+    <span class="small text-muted">{$theme_update_text}</span>
+  </div>
+  <div id="lum-theme-update-log" class="small mb-3 d-none"></div>
   <div class="lum-theme-grid">{$cards_html}</div>
 </div>
 
 {$modals_html}
+
+<script>
+var LUM_THEME_CSRF = {$csrf_js};
+var LUM_THEME_AJAX = {$ajax_theme_js};
+
+function lumThemeUpdLog(lines, type) {
+  var el = document.getElementById('lum-theme-update-log');
+  el.classList.remove('d-none');
+  el.textContent = lines.join('\\n');
+  el.style.whiteSpace = 'pre-line';
+  el.className = 'small mb-3 text-' + (type || 'muted');
+}
+
+function lumThemePost(params, callback) {
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', LUM_THEME_AJAX, true);
+  xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+  xhr.timeout = 120000;
+  xhr.onload = function() {
+    try { callback(null, JSON.parse(xhr.responseText)); }
+    catch (e) { callback({ error: 'Bad server response (' + xhr.status + ').' }, null); }
+  };
+  xhr.onerror = xhr.ontimeout = function() { callback({ error: 'Network error.' }, null); };
+  var body = 'csrf_token=' + encodeURIComponent(LUM_THEME_CSRF);
+  Object.keys(params).forEach(function(k) { body += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); });
+  xhr.send(body);
+}
+
+function lumThemeCheckUpdates() {
+  var btn = document.getElementById('lum-theme-check-updates');
+  btn.disabled = true;
+  lumThemeUpdLog(['Checking for updates…'], 'muted');
+  lumThemePost({ action: 'check' }, function(err, data) {
+    btn.disabled = false;
+    if (err || !data || !data.success) { lumThemeUpdLog(['Check failed: ' + (err ? err.error : (data && data.message) || 'unknown error')], 'danger'); return; }
+    lumThemeUpdLog([data.count === 0 ? 'The bundled theme is up to date.' : data.count + ' theme update(s) available.'], 'success');
+    setTimeout(function() { location.reload(); }, 900);
+  });
+}
+
+function lumThemeGithubUpdate(folder, name) {
+  if (!confirm('Update "' + name + '" from GitHub? The theme folder is replaced; local edits to its files are lost, but your settings are kept.')) return;
+  var log = [];
+  document.querySelectorAll('.lum-theme-github-update, #lum-theme-check-updates').forEach(function(b) { b.disabled = true; });
+
+  function step(stage) {
+    lumThemeUpdLog(log.concat(['Running ' + stage + '…']), 'muted');
+    lumThemePost({ action: 'run_stage', folder: folder, stage: stage }, function(err, data) {
+      if (err || !data) { lumThemeUpdLog(log.concat(['✗ ' + (err ? err.error : 'No response')]), 'danger'); return; }
+      log.push((data.success ? '✓ ' : '✗ ') + stage + ': ' + data.message);
+      (data.details || []).forEach(function(d) { log.push('   ' + d); });
+      if (!data.success) { lumThemeUpdLog(log, 'danger'); document.getElementById('lum-theme-check-updates').disabled = false; return; }
+      if (data.next) { step(data.next); return; }
+      lumThemeUpdLog(log, 'success');
+      setTimeout(function() { location.reload(); }, 1400);
+    });
+  }
+  step('check');
+}
+</script>
 
 <!-- ── Install a theme ───────────────────────────────────────────── -->
 <div class="lum-adm-card mb-4">

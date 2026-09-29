@@ -53,7 +53,7 @@ class ThemeService
      * thumbnail, for the Appearance page's card grid.
      *
      * @return list<array{
-     *   folder: string, name: string, author: string, design_uri: string,
+     *   folder: string, name: string, author: string, design_uri: string, version: string,
      *   screenshot: string|null, screenshots: list<string>, is_active: bool,
      *   is_protected: bool
      * }>
@@ -71,6 +71,7 @@ class ThemeService
                 'name'         => $meta['name'],
                 'author'       => $meta['author'],
                 'design_uri'   => $meta['design_uri'],
+                'version'      => $meta['version'],
                 'screenshot'   => $screenshots[0] ?? null,
                 'screenshots'  => $screenshots,
                 'is_active'    => $folder === $active,
@@ -340,26 +341,70 @@ class ThemeService
     }
 
     /**
-     * Read the "Theme Name" header out of a ZIP archive's primary
-     * stylesheet before anything is extracted, mirroring
-     * lumora_get_theme_meta()'s on-disk logic: find the first
+     * Read the header fields (Theme Name, Version, Requires at least) out of
+     * a ZIP archive's primary stylesheet before anything is extracted,
+     * mirroring lumora_get_theme_meta()'s on-disk logic: find the first
      * {THEME_URL}*.css reference in template.html, then read that
      * stylesheet's own leading CSS comment block.
+     *
+     * @return array{name: string, version: string, requires: string}
      */
-    private static function readThemeNameFromZip(\ZipArchive $zip, string $prefix, string $templateEntry): string
+    private static function readHeaderFromZip(\ZipArchive $zip, string $prefix, string $templateEntry): array
     {
+        $out = ['name' => '', 'version' => '', 'requires' => ''];
+
         $templateContent = $zip->getFromName($templateEntry);
-        if ($templateContent === false) return '';
-        if (!preg_match('/\{THEME_URL\}([A-Za-z0-9_\-.]+\.css)/', $templateContent, $m)) return '';
+        if ($templateContent === false) return $out;
+        if (!preg_match('/\{THEME_URL\}([A-Za-z0-9_\-.]+\.css)/', $templateContent, $m)) return $out;
 
         $cssContent = $zip->getFromName($prefix . $m[1]);
-        if ($cssContent === false) return '';
-        if (!preg_match('#/\*(.*?)\*/#s', $cssContent, $cm)) return '';
+        if ($cssContent === false) return $out;
+        if (!preg_match('#/\*(.*?)\*/#s', $cssContent, $cm)) return $out;
 
-        if (preg_match('/^[ \t*]*Theme Name\s*:\s*(.+)$/mi', $cm[1], $nm)) {
-            return trim($nm[1]);
+        foreach (['name' => 'Theme Name', 'version' => 'Version', 'requires' => 'Requires at least'] as $key => $label) {
+            if (preg_match('/^[ \t*]*' . preg_quote($label, '/') . '\s*:\s*(.+)$/mi', $cm[1], $hm)) {
+                $out[$key] = trim($hm[1]);
+            }
         }
-        return '';
+        return $out;
+    }
+
+    private static function readThemeNameFromZip(\ZipArchive $zip, string $prefix, string $templateEntry): string
+    {
+        return self::readHeaderFromZip($zip, $prefix, $templateEntry)['name'];
+    }
+
+    /**
+     * Header fields of a theme ZIP on disk (root or single wrapping
+     * folder), or null when it is not a readable theme archive.
+     *
+     * @return array{name: string, version: string, requires: string}|null
+     */
+    public static function readMetaFromZipFile(string $zipPath): ?array
+    {
+        if (!is_file($zipPath) || !class_exists('ZipArchive')) return null;
+
+        $zip = new \ZipArchive();
+        if ($zip->open($zipPath, \ZipArchive::RDONLY) !== true) return null;
+
+        $names = [];
+        for ($i = 0, $n = $zip->count(); $i < $n; $i++) {
+            $stat = $zip->statIndex($i);
+            if ($stat !== false) $names[] = (string) $stat['name'];
+        }
+
+        $prefix = self::detectRootPrefix($names);
+        $entry  = $prefix . 'template.html';
+        $meta   = in_array($entry, $names, true) ? self::readHeaderFromZip($zip, $prefix, $entry) : null;
+        $zip->close();
+
+        return $meta;
+    }
+
+    /** True when $folder is a theme that ships with Lumora. */
+    public static function isBundled(string $folder): bool
+    {
+        return in_array($folder, self::PROTECTED_THEMES, true);
     }
 
     /**
