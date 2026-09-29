@@ -195,7 +195,31 @@ append its own widget HTML to the Dashboard), `admin_album_edit_extra_fields` /
 `admin_image_edit_extra_fields` (filters — a plugin can append extra HTML to the Album/Image
 admin edit forms, passed the current album/image row), and `public_album_info_html` /
 `public_image_shortcode` (filters — the public-facing equivalents, on the album page and in
-the image lightbox's info panel respectively, both logged-in-users-only).
+the image lightbox's info panel respectively, both logged-in-users-only), plus the
+`before_plugin_update` / `after_plugin_update` actions fired around a GitHub plugin update
+(`(string $id, string $from, string $to)` and `(…, bool $success)`).
+
+### Bundled plugin updates from GitHub
+
+The four bundled plugins (`PluginService::BUNDLED_PLUGINS`) can be updated on their own from
+**Admin → Plugins**, without a core update. `build-release.sh` attaches
+`plugin-{id}-v{version}.zip` plus `plugin-{id}-v{version}.zip.sha256` to the GitHub release for
+every plugin whose `plugin.json` version changed since the previous release (the ZIP has a
+single `{id}/` root folder); it fails if a plugin's files changed without a version bump, or if
+`plugin.json` and the plugin's `version.php` disagree. `GitHubUpdateProvider::parsePluginAssets()`
+turns those assets into a `plugins` map that rides along in the cached release check, so one
+API call serves core and plugins alike.
+
+`PluginUpdateService` runs `check → download → verify → apply` as separate AJAX stages
+(`admin/ajax_plugin_update.php`) under the `UpdaterService` lock, so it can never overlap a core
+update, and applies the package with `PluginService::updateFromZip()` (the displaced folder is
+the rollback; no maintenance mode). Every gate is blocking: the checksum asset must exist and
+match (unlike core, a missing checksum refuses the update), the download and checksum URLs must
+be release assets of the configured repository, the package's `plugin.json` id and version must
+match what was advertised and be strictly newer than installed, and its `min_lumora` must be met.
+Enabled state and settings are untouched. A plugin-only package **must not need a database
+change** — schema changes ship with a core release. Only the latest release's assets are
+considered, and only bundled plugins qualify; user-installed plugins update via ZIP upload.
 
 ---
 

@@ -117,6 +117,8 @@ $plugins = PluginService::discoverManageablePlugins();
 $csrf_h  = h(lumora_csrf_token());
 $csrf_js = json_encode(lumora_csrf_token());
 
+$plugin_updates = PluginUpdateService::availableUpdates();
+
 $rows        = '';
 $modals_html = '';
 if (empty($plugins)) {
@@ -136,6 +138,14 @@ if (empty($plugins)) {
         $badge = $enabled
             ? '<span class="badge bg-success">Enabled</span>'
             : '<span class="badge bg-secondary">Disabled</span>';
+
+        $upd = $plugin_updates[$p['id']] ?? null;
+        $update_badge = $upd !== null
+            ? ' <span class="badge bg-warning text-dark">Update available (v' . h($upd['latest']) . ')</span>'
+            : '';
+        $github_update_btn = $upd !== null
+            ? '<button type="button" class="btn btn-sm btn-warning" onclick="lumPluginGithubUpdate(' . $id_js . ', ' . h(json_encode($p['name'])) . ')">Update to v' . h($upd['latest']) . '</button>'
+            : '';
 
         $type_badge = $p['type'] === 'importer'
             ? ' <span class="badge bg-info text-dark">Importer</span>'
@@ -188,14 +198,14 @@ if (empty($plugins)) {
     <div class="d-flex align-items-start gap-2">
       <div class="pt-1">{$checkbox_html}</div>
       <div>
-        <h6 class="mb-1">{$name_h} <span class="text-muted small">v{$ver_h}</span> {$badge}{$type_badge}</h6>
+        <h6 class="mb-1">{$name_h} <span class="text-muted small">v{$ver_h}</span> {$badge}{$type_badge}{$update_badge}</h6>
         <p class="text-muted small mb-1 lum-plugin-desc">{$desc_h}</p>
         <p class="text-muted small mb-0">By {$author_h}</p>
         {$incompatible_note}
       </div>
     </div>
     <div class="flex-shrink-0 d-flex align-items-center gap-2">
-      {$admin_link}{$toggle_form}{$update_btn}{$delete_btn}
+      {$admin_link}{$toggle_form}{$github_update_btn}{$update_btn}{$delete_btn}
     </div>
   </div>
 </div>
@@ -232,10 +242,19 @@ HTML;
 }
 
 $toolbar_html = '';
+$update_count = count($plugin_updates);
+$update_count_text = $update_count === 0
+    ? 'All bundled plugins are up to date.'
+    : $update_count . ' plugin update' . ($update_count === 1 ? '' : 's') . ' available.';
 if (!empty($plugins)) {
     $ajax_base_js = json_encode(lumora_base_url() . 'admin/');
     $toolbar_html = <<<HTML
 <div class="lum-adm-card mb-3 py-2">
+  <div class="d-flex flex-wrap align-items-center gap-2 mb-2 lum-plugin-update-bar">
+    <button type="button" id="lum-plugin-check-updates" class="btn btn-sm btn-outline-secondary" onclick="lumPluginCheckUpdates()">Check for Updates</button>
+    <span id="lum-plugin-update-count" class="small text-muted">{$update_count_text}</span>
+  </div>
+  <div id="lum-plugin-update-log" class="small mb-2 d-none"></div>
   <div class="d-flex flex-wrap align-items-center gap-2">
     <input type="checkbox" id="lum-plugin-check-all-header" onchange="lumPluginSelAll(this.checked)" title="Select / deselect all plugins">
     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="lumPluginSelAll(true)">Select All</button>
@@ -319,6 +338,65 @@ function lumPluginHandleToggleResult(verb, err, data) {
   if (data.errors && data.errors.length) msg += ' ' + data.errors.length + ' skipped: ' + data.errors.join(' | ');
   lumPluginShowStatus(msg, (data.errors && data.errors.length) ? 'warning' : 'success');
   if (data.changed > 0) setTimeout(function() { location.reload(); }, 1400);
+}
+
+function lumPluginUpdLog(lines, type) {
+  var el = document.getElementById('lum-plugin-update-log');
+  if (!el) return;
+  el.textContent = lines.join('\\n');
+  el.style.whiteSpace = 'pre-line';
+  el.className = 'small mb-2 text-' + (type || 'muted');
+}
+
+function lumPluginUpdatePost(params, callback) {
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', LUM_PLUGIN_AJAX + 'ajax_plugin_update.php', true);
+  xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+  xhr.timeout = 120000;
+  xhr.onload = function() {
+    try { callback(null, JSON.parse(xhr.responseText)); }
+    catch (e) { callback({ error: 'Bad server response (' + xhr.status + ').' }, null); }
+  };
+  xhr.onerror = xhr.ontimeout = function() { callback({ error: 'Network error.' }, null); };
+  var body = 'csrf_token=' + encodeURIComponent(LUM_PLUGIN_CSRF);
+  Object.keys(params).forEach(function(k) { body += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); });
+  xhr.send(body);
+}
+
+/** Refresh the release check and reload so badges reflect the result. */
+function lumPluginCheckUpdates() {
+  var btn = document.getElementById('lum-plugin-check-updates');
+  btn.disabled = true;
+  document.getElementById('lum-plugin-update-log').classList.remove('d-none');
+  lumPluginUpdLog(['Checking for updates…'], 'muted');
+  lumPluginUpdatePost({ action: 'check' }, function(err, data) {
+    btn.disabled = false;
+    if (err || !data || !data.success) { lumPluginUpdLog(['Check failed: ' + (err ? err.error : (data && data.message) || 'unknown error')], 'danger'); return; }
+    lumPluginUpdLog([data.count === 0 ? 'All bundled plugins are up to date.' : data.count + ' plugin update(s) available.'], 'success');
+    setTimeout(function() { location.reload(); }, 900);
+  });
+}
+
+/** Run check → download → verify → apply for one plugin, in place. */
+function lumPluginGithubUpdate(id, name) {
+  if (!confirm('Update "' + name + '" from GitHub? The plugin folder is replaced; its settings and enabled state are kept.')) return;
+  var log = [];
+  document.getElementById('lum-plugin-update-log').classList.remove('d-none');
+  document.querySelectorAll('[onclick^="lumPluginGithubUpdate"], #lum-plugin-check-updates').forEach(function(b) { b.disabled = true; });
+
+  function step(stage) {
+    lumPluginUpdLog(log.concat(['Running ' + stage + '…']), 'muted');
+    lumPluginUpdatePost({ action: 'run_stage', id: id, stage: stage }, function(err, data) {
+      if (err || !data) { lumPluginUpdLog(log.concat(['✗ ' + (err ? err.error : 'No response')]), 'danger'); return; }
+      log.push((data.success ? '✓ ' : '✗ ') + stage + ': ' + data.message);
+      (data.details || []).forEach(function(d) { log.push('   ' + d); });
+      if (!data.success) { lumPluginUpdLog(log, 'danger'); document.getElementById('lum-plugin-check-updates').disabled = false; return; }
+      if (data.next) { step(data.next); return; }
+      lumPluginUpdLog(log, 'success');
+      setTimeout(function() { location.reload(); }, 1400);
+    });
+  }
+  step('check');
 }
 
 /** Bulk-delete selected disabled plugins. */

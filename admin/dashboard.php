@@ -46,6 +46,15 @@ if ($upd['status'] === 'update_available' && $upd['latest'] !== null) {
         . '</div>';
 }
 
+$plugin_update_count = count(PluginUpdateService::availableUpdates());
+if ($plugin_update_count > 0) {
+    $update_notice .= '<div class="alert alert-info alert-dismissible fade show py-2 mb-4" role="alert">'
+        . '🔔 <strong>' . $plugin_update_count . ' plugin update' . ($plugin_update_count === 1 ? ' is' : 's are') . ' available.</strong>'
+        . ' <a href="' . $base . 'plugins.php" class="btn btn-sm btn-outline-secondary ms-2">View Plugins</a>'
+        . '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>'
+        . '</div>';
+}
+
 // ── Migration notice (cache-only — no HTTP call) ─────────────────────────────
 $migration_notice = '';
 if (SchemaService::hasPendingMigrations()) {

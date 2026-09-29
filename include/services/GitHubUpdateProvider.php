@@ -20,10 +20,14 @@ declare(strict_types=1);
  * limit (60/hour) to the authenticated limit; sent as a Bearer token on
  * every request. Never required for public repos under normal usage.
  *
- * SHA-256 checksum: if the release contains an asset whose name ends with
- * `.sha256` or equals `sha256sums.txt`, its content is fetched and parsed to
- * supply `sha256` in the returned metadata.  When absent, `sha256` is null and
- * `UpdaterService` skips the checksum verification step (logged as a warning).
+ * SHA-256 checksum: if the release contains `LumoraGallery-v{version}.zip.sha256`
+ * (or, failing that, `sha256sums.txt`/`checksums.txt`), its content is fetched
+ * and parsed to supply `sha256` in the returned metadata.  When absent,
+ * `sha256` is null and `UpdaterService` skips the checksum verification step
+ * (logged as a warning).
+ *
+ * Bundled plugin packages (`plugin-{id}-v{version}.zip` + `.sha256`) attached
+ * to the same release are exposed as `plugins` — see parsePluginAssets().
  *
  * @package    LumoraGallery
  * @subpackage Core
@@ -230,7 +234,8 @@ class GitHubUpdateProvider extends AbstractUpdateProvider
      *   minimum_php:    string|null,
      *   minimum_db:     int|null,
      *   sha256:         string|null,
-     *   prerelease:     bool
+     *   prerelease:     bool,
+     *   plugins:        array<string, array{version: string, download_url: string, sha256_url: string|null}>
      * }
      */
     private function mapRelease(array $data): array
@@ -281,22 +286,24 @@ class GitHubUpdateProvider extends AbstractUpdateProvider
             }
         }
 
-        // Search release assets for a SHA-256 checksum file.
-        $sha256 = null;
-        if (!empty($data['assets']) && is_array($data['assets'])) {
-            foreach ($data['assets'] as $asset) {
-                $assetName = strtolower((string) ($asset['name'] ?? ''));
-                if (str_ends_with($assetName, '.sha256')
-                    || $assetName === 'sha256sums.txt'
-                    || $assetName === 'checksums.txt') {
-                    $assetUrl = $asset['browser_download_url'] ?? null;
-                    if ($assetUrl !== null) {
-                        $sha256 = $this->parseChecksumAsset((string) $assetUrl, $version);
-                    }
-                    break;
-                }
+        // Core checksum: the exact companion of the curated ZIP first, then a
+        // combined checksums file. Plugin/theme packages carry their own
+        // .sha256 assets, which must never be mistaken for core's.
+        $sha256    = null;
+        $sumAssets = [
+            'lumoragallery-v' . $version . '.zip.sha256',
+            'sha256sums.txt',
+            'checksums.txt',
+        ];
+        foreach ($sumAssets as $sumName) {
+            $assetUrl = $this->findAssetUrl($data, $sumName);
+            if ($assetUrl !== null) {
+                $sha256 = $this->parseChecksumAsset($assetUrl, 'lumoragallery-v' . $version);
+                break;
             }
         }
+
+        $plugins = self::parsePluginAssets(is_array($data['assets'] ?? null) ? $data['assets'] : []);
 
         return [
             'latest_version' => $version,
@@ -309,6 +316,7 @@ class GitHubUpdateProvider extends AbstractUpdateProvider
             'minimum_db'     => $minDb,
             'sha256'         => $sha256,
             'prerelease'     => $prerelease,
+            'plugins'        => $plugins,
         ];
     }
 
@@ -341,9 +349,11 @@ class GitHubUpdateProvider extends AbstractUpdateProvider
      *   Multi-entry:  sha256sum output — "{hash}  {filename}" one entry per line;
      *                 the line containing the archive filename is matched.
      *
-     * Returns the lowercase hex hash string, or null when it cannot be found.
+     * $nameFragment is the archive filename (or a prefix of it) a multi-entry
+     * line must contain. Returns the lowercase hex hash string, or null when
+     * it cannot be found.
      */
-    private function parseChecksumAsset(string $url, string $version): ?string
+    private function parseChecksumAsset(string $url, string $nameFragment): ?string
     {
         $raw = $this->httpGet($url);
         if ($raw === null) return null;
@@ -356,7 +366,7 @@ class GitHubUpdateProvider extends AbstractUpdateProvider
         }
 
         // Multi-entry file: match the line containing the archive name.
-        $archiveFragment = 'lumoragallery-v' . ltrim($version, 'v');
+        $archiveFragment = $nameFragment;
         foreach (explode("\n", $raw) as $line) {
             $line = trim($line);
             if (str_contains(strtolower($line), strtolower($archiveFragment))
@@ -366,5 +376,59 @@ class GitHubUpdateProvider extends AbstractUpdateProvider
         }
 
         return null;
+    }
+
+    // ── Bundled plugin packages ───────────────────────────────────────────────
+
+    /**
+     * Pair up `plugin-{id}-v{version}.zip` assets with their `.sha256`
+     * companions. When a release carries several versions for one id, the
+     * highest wins. `sha256_url` is null when no companion asset exists.
+     *
+     * @param list<array<string, mixed>> $assets Raw GitHub release assets.
+     * @return array<string, array{version: string, download_url: string, sha256_url: string|null}>
+     */
+    public static function parsePluginAssets(array $assets): array
+    {
+        $urls = [];
+        foreach ($assets as $asset) {
+            if (!is_array($asset)) continue;
+            $name = strtolower((string) ($asset['name'] ?? ''));
+            $url  = (string) ($asset['browser_download_url'] ?? '');
+            if ($name !== '' && $url !== '') $urls[$name] = $url;
+        }
+
+        $plugins = [];
+        foreach ($urls as $name => $url) {
+            if (!preg_match('/^plugin-([a-z0-9_-]+?)-v([0-9]+(?:\.[0-9]+)*)\.zip$/', $name, $m)) continue;
+
+            [, $id, $version] = $m;
+            if (isset($plugins[$id]) && version_compare($plugins[$id]['version'], $version, '>=')) continue;
+
+            $plugins[$id] = [
+                'version'      => $version,
+                'download_url' => $url,
+                'sha256_url'   => $urls[$name . '.sha256'] ?? null,
+            ];
+        }
+
+        ksort($plugins);
+        return $plugins;
+    }
+
+    /**
+     * Fetch a small text asset (a checksum file) and extract the SHA-256 for
+     * $filename, in the same single-hash / sha256sum formats core uses.
+     */
+    public function fetchChecksumFor(string $url, string $filename): ?string
+    {
+        return $this->parseChecksumAsset($url, $filename);
+    }
+
+    /** True when $url is an https download URL under the configured repository's releases. */
+    public function isTrustedAssetUrl(string $url): bool
+    {
+        $prefix = self::ARCHIVE_BASE . '/' . $this->repo() . '/releases/download/';
+        return str_starts_with($url, $prefix);
     }
 }

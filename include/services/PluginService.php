@@ -59,6 +59,14 @@ if (!defined('LUMORA_ENTRY')) exit('Direct access denied.');
 
 class PluginService
 {
+    /** Plugins that ship with Lumora and may be updated from GitHub release packages. */
+    public const BUNDLED_PLUGINS = [
+        'coppermine-importer',
+        'lumora-visitor-stats',
+        'lumora-press-shortcodes',
+        'on-demand-thumbnails',
+    ];
+
     private const MAX_ZIP_ENTRIES           = 2000;
     private const MAX_ZIP_UNCOMPRESSED_SIZE = 50 * 1024 * 1024;
 
@@ -147,6 +155,29 @@ class PluginService
     private static function isToggleable(string $type): bool
     {
         return $type === 'feature' || $type === 'importer';
+    }
+
+    /** True when $id is one of the plugins that ship with Lumora. */
+    public static function isBundled(string $id): bool
+    {
+        return in_array($id, self::BUNDLED_PLUGINS, true);
+    }
+
+    /**
+     * Installed version (from each plugin.json) of every bundled plugin
+     * currently on disk.
+     *
+     * @return array<string, array{name: string, version: string, min_lumora: string}>
+     */
+    public static function installedBundledVersions(): array
+    {
+        $out = [];
+        foreach (self::discoverAll() as $p) {
+            if (self::isBundled($p['id'])) {
+                $out[$p['id']] = ['name' => $p['name'], 'version' => $p['version'], 'min_lumora' => $p['min_lumora']];
+            }
+        }
+        return $out;
     }
 
     /** Return true when $plugin_min_lumora ≤ LUMORA_VERSION. */
@@ -482,6 +513,37 @@ class PluginService
                 ? 'Plugin "' . $id . '" updated.'
                 : 'Plugin "' . $id . '" installed.',
         ];
+    }
+
+    /**
+     * Decoded plugin.json from a plugin ZIP on disk (root or single
+     * wrapping folder), or null when the archive or manifest is unreadable.
+     *
+     * @return array<string, mixed>|null
+     */
+    public static function readManifestFromZipFile(string $zipPath): ?array
+    {
+        if (!is_file($zipPath) || !class_exists('ZipArchive')) return null;
+
+        $zip = new \ZipArchive();
+        if ($zip->open($zipPath, \ZipArchive::RDONLY) !== true) return null;
+
+        $names = [];
+        for ($i = 0, $n = $zip->count(); $i < $n; $i++) {
+            $stat = $zip->statIndex($i);
+            if ($stat !== false) $names[] = (string) $stat['name'];
+        }
+
+        $json = $zip->getFromName(self::detectRootPrefix($names) . 'plugin.json');
+        $zip->close();
+        if ($json === false) return null;
+
+        try {
+            $data = json_decode($json, true, 512, \JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            return null;
+        }
+        return is_array($data) ? $data : null;
     }
 
     /** Read and validate the "id" field out of a ZIP archive's plugin.json before anything is extracted. */

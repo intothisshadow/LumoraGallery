@@ -268,7 +268,7 @@ class UpdaterService
      *
      * @param array<string, mixed> $updates
      */
-    private static function updateLock(array $updates): void
+    public static function updateLock(array $updates): void
     {
         $lock = self::getLockInfo() ?? [];
         $lock = array_merge($lock, $updates);

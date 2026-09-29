@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **The bundled plugins can now be updated from GitHub on their own, without a full Lumora update.** When the latest GitHub release carries a newer package for Coppermine Importer, Visitor Stats, Lumora Press Shortcodes or On-Demand Thumbnails, Admin → Plugins shows an "Update available" badge and an Update button, plus a **Check for Updates** button and an update count; the Dashboard and Admin → Updates mention pending plugin updates too. The update downloads the package, verifies its SHA-256 checksum (a missing or mismatched checksum refuses the update), checks that it is the right plugin, a newer version, and compatible with your Lumora version, then replaces only that plugin's folder with progress shown in place — settings and enabled state are untouched. Recorded in the update history and Admin → Logs. New `before_plugin_update` / `after_plugin_update` hooks fire around it.
+
+### Fixed
+
+- **A release that includes plugin packages could make the core update's checksum lookup pick up the wrong checksum file.** The core update now uses `LumoraGallery-v{version}.zip.sha256` by exact name (falling back to `sha256sums.txt`/`checksums.txt`) instead of the first `.sha256` asset in the release.
+
 ### Changed
 
 - **The bundled theme is now called Lumora Classic (folder `themes/lumora-classic/`), replacing "Default".** A site running the old `default` theme is switched automatically by a new database migration (schema version 17) as long as the new folder is installed. Core updates deliver the new theme folder even when "preserve themes" is on, and the old `themes/default/` folder is never removed by an update — after the switch it's a normal theme you can delete from Admin → Appearance. If the active theme's template is ever missing, the gallery falls back to Lumora Classic, then to a leftover `default` folder.

@@ -52,6 +52,7 @@ class LogService
         'user_disabled' => 'User — Disabled',
         'plugin_enabled'  => 'Plugin — Enabled',
         'plugin_disabled' => 'Plugin — Disabled',
+        'plugin_updated'  => 'Plugin — Updated',
     ];
 
     /** Default retention window, in days, when `admin_log_retention_days` is unset. */

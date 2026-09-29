@@ -119,10 +119,18 @@ $upd_available = $upd['status'] === 'update_available' && $upd['latest'] !== nul
 $updater_running = UpdaterService::isUpdateRunning();
 $updater_lock    = $updater_running ? UpdaterService::getLockInfo() : null;
 $update_history  = UpdaterService::getUpdateHistory();
+$plugin_update_count = count(PluginUpdateService::availableUpdates());
 
 // Stuck-session notice — computed unconditionally since the lock/progress
 // pipeline is shared between the GitHub "Update Now" and "Install from
 // Uploaded ZIP" flows.
+$plugin_update_notice = '';
+if ($plugin_update_count > 0) {
+    $plugin_update_notice = '<div class="alert alert-info py-2 mb-3 small">'
+        . '🔔 ' . $plugin_update_count . ' bundled plugin update' . ($plugin_update_count === 1 ? ' is' : 's are') . ' available. '
+        . '<a href="' . h(lumora_base_url() . 'admin/plugins.php') . '">Open Plugins</a></div>';
+}
+
 $stuck_notice = '';
 if ($updater_running && $updater_lock !== null) {
     $stuck_ver  = h($updater_lock['version'] ?? 'unknown');
@@ -708,9 +716,10 @@ if (!empty($update_history)) {
         $icon   = $entry['success'] ? '✓' : '✗';
         $cls    = $entry['success'] ? 'text-success' : 'text-danger';
         $ver_h  = h($entry['version']);
+        $ver_prefix = ctype_digit(substr($entry['version'], 0, 1)) ? 'v' : '';
         $msg_h  = h($entry['message']);
         $date_h = h($entry['updated_at']);
-        $rows  .= "<tr><td class=\"{$cls}\">{$icon} v{$ver_h}</td><td class=\"small\">{$date_h}</td><td class=\"small text-muted\">{$msg_h}</td></tr>";
+        $rows  .= "<tr><td class=\"{$cls}\">{$icon} {$ver_prefix}{$ver_h}</td><td class=\"small\">{$date_h}</td><td class=\"small text-muted\">{$msg_h}</td></tr>";
     }
     $history_card = <<<HTML
 <!-- ── Update history card ─────────────────────────────────────────────────── -->
@@ -734,6 +743,7 @@ $content = <<<HTML
 
 {$maintenance_stuck_notice}
 {$stuck_notice}
+{$plugin_update_notice}
 
 <!-- ── Release source tabs ─────────────────────────────────────────── -->
 <div class="lum-upd-source-tabs" role="tablist">
