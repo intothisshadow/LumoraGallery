@@ -247,11 +247,8 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
           . '</div>'
         : '';
 
-    // Badge on the Updates nav item — shown when a new version is available OR
-    // when schema migrations are pending. Cache-only reads; no HTTP call.
-    $update_badge = (UpdateService::hasCachedUpdate() || SchemaService::hasPendingMigrations())
-        ? ' <span class="badge bg-danger" style="font-size:.6rem;vertical-align:middle;line-height:1">!</span>'
-        : '';
+    // Sidebar alerts (maintenance mode, pending updates, plugin additions).
+    $sidebar_alerts_html = AdminAlertService::renderHtml(AdminAlertService::collect($user));
 
     // Sidebar nav grouped into sections: Gallery for day-to-day content
     // management, Settings for gallery configuration, Maintenance for
@@ -273,7 +270,7 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
         ]],
         ['label' => 'Maintenance', 'items' => [
             'migrate'      => ['icon' => '📥', 'label' => 'Import',                   'url' => 'migrate.php',      'permission' => 'site_configuration'],
-            'updates'      => ['icon' => '🔔', 'label' => 'Updates' . $update_badge,  'url' => 'update.php',       'permission' => 'view_updates'],
+            'updates'      => ['icon' => '🔔', 'label' => 'Updates',                     'url' => 'update.php',       'permission' => 'view_updates'],
             'logs'         => ['icon' => '📜', 'label' => 'Logs',                     'url' => 'logs.php',         'permission' => 'site_configuration'],
             'tools'        => ['icon' => '🔧', 'label' => 'Tools',                    'url' => 'tools.php',        'permission' => 'maintenance_tools'],
             'plugins'      => ['icon' => '🧩', 'label' => 'Plugins',                  'url' => 'plugins.php',      'permission' => 'site_configuration'],
@@ -450,6 +447,7 @@ function lum_admin_page(string $title, string $content, string $active = ''): ne
   <!-- Sidebar -->
   <aside class="lum-admin-sidebar">
     <div class="lum-admin-gallery-name small text-truncate px-3 py-2 text-white-50">{$gallery_name}</div>
+    {$sidebar_alerts_html}
     <ul class="lum-admin-nav list-unstyled m-0 p-0">
       {$nav_html}
     </ul>

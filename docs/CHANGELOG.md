@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **The admin sidebar now shows alerts when the gallery is offline or something needs updating.** Compact one-line alerts appear above the menu on every admin page: maintenance mode (or an update in progress, or an update that left the gallery offline), a required database update, a new Lumora version, and pending plugin/theme updates. Each links to the right screen and shows the full text on hover, and only roles with the matching permissions see them. Plugins can add their own with the new `admin_sidebar_alerts` filter. This replaces the small red "!" on the Updates menu item.
+
 ### Fixed
 
 - **Admin → Plugins: a plugin's own Delete button did nothing (it only worked via Select + Delete Selected).** The button's click handler was written into the page with unescaped quotes, so the browser cut it off and it never ran. The Update button shown for a pending GitHub update had the same fault. Both now work.

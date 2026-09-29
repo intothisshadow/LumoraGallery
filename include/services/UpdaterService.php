@@ -1305,6 +1305,12 @@ class UpdaterService
         return !self::isUpdateRunning() && ((string) LumoraConfig::get('gallery_offline', '0')) === '1';
     }
 
+    /** True when the updater (not an admin switch) turned maintenance mode on. */
+    public static function maintenanceStartedByUpdater(): bool
+    {
+        return file_exists(self::maintenanceFlagFile());
+    }
+
     /**
      * Administrator-triggered manual recovery for the stuck state
      * isMaintenanceStuck() detects — used by the "Disable Maintenance Mode

@@ -115,6 +115,40 @@ html, body { height: 100%; }
   flex-shrink: 0;
 }
 
+/* Condensed sidebar alerts: one truncated line each, full text in the title
+   tooltip. flex-shrink keeps a short sidebar from squashing them. */
+.lum-admin-sidebar-alert {
+  display: block;
+  flex-shrink: 0;
+  padding: .5rem 1rem;
+  border-left: 4px solid var(--lum-adm-alert-border, #0dcaf0);
+  background: var(--lum-adm-alert-bg, rgba(13, 202, 240, .14));
+  color: var(--lum-adm-alert-text, #9eeaf9);
+  font-size: .8rem;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lum-admin-sidebar-alert:hover,
+.lum-admin-sidebar-alert:focus {
+  color: var(--lum-adm-alert-text, #9eeaf9);
+  text-decoration: underline;
+}
+
+.lum-admin-sidebar-alert--warning {
+  --lum-adm-alert-border: #ffc107;
+  --lum-adm-alert-bg:     rgba(255, 193, 7, .16);
+  --lum-adm-alert-text:   #ffe69c;
+}
+
+.lum-admin-sidebar-alert--error {
+  --lum-adm-alert-border: #dc3545;
+  --lum-adm-alert-bg:     rgba(220, 53, 69, .2);
+  --lum-adm-alert-text:   #f1aeb5;
+}
+
 .lum-admin-nav-heading {
   padding: 0;
 }
@@ -889,6 +923,9 @@ html, body { height: 100%; }
     flex-wrap: wrap;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+  }
+  .lum-admin-sidebar-alert {
+    flex: 1 1 100%;
   }
   .lum-admin-nav {
     display: flex;
