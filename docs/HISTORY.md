@@ -4,6 +4,22 @@ Long-term archive of completed work, migrated from TODO.md on release.
 
 ---
 
+## v1.20.0 — Released 2026-09-29
+
+### Added
+
+- **LG-070 — Independent GitHub updates for the bundled plugins.** Coppermine Importer, Visitor Stats, Lumora Press Shortcodes and On-Demand Thumbnails can be updated from Admin → Plugins without a full Lumora update. `build-release.sh` attaches `plugin-{id}-v{version}.zip` + `.sha256` to the release for every plugin whose `plugin.json` version changed (and refuses to build on a changed-but-unbumped plugin or a `plugin.json`/`version.php` mismatch); `GitHubUpdateProvider` exposes them as a `plugins` map inside the cached release check; `PluginUpdateService` runs check → download → verify → apply as AJAX stages (`admin/ajax_plugin_update.php`) under the updater lock, applying with `PluginService::updateFromZip()`. Blocking gates: mandatory SHA-256, release-asset URLs of the configured repository only, matching id and advertised version, strictly newer, `min_lumora` met. Admin → Plugins shows an Update available badge, an Update button, a count and Check for Updates; the Dashboard and Admin → Updates mention pending updates; updates go to the update history and Admin → Logs; `before_plugin_update` / `after_plugin_update` hooks. Also fixed core checksum lookup to use `LumoraGallery-v{version}.zip.sha256` by exact name instead of the first `.sha256` asset. Live-verified against a throwaway GitHub test repo.
+- **LG-071 — Independent GitHub updates for the bundled theme.** Themes gained `Version:` / `Requires at least:` header fields (parsed by `lumora_get_theme_meta()`, shown on Admin → Appearance); a theme without `Version:` is unversioned and never offered an update. `build-release.sh` emits `theme-{folder}-v{version}.zip` + `.sha256` when the version changed; `GitHubUpdateProvider` gained a `themes` map and a shared asset download; `ThemeUpdateService` mirrors the plugin flow (`admin/ajax_theme_update.php`, `ThemeService::updateFromZip()`), with the same gates and `before_theme_update` / `after_theme_update` hooks. Live-verified against the test repo (bad checksum and too-new `Requires at least` refused; good package applied, theme settings untouched).
+- **LG-072 — On-Demand Thumbnails: skip thumbnail generation during Batch Add.** Two new core extension points — the `admin_batch_add_extra_fields` filter on Batch Add (inputs named `batch_opt[...]` are posted with every chunk) and the `batch_add_generate_thumb` filter in `ThumbnailService::batchAddImage()` (returning exactly `false` skips only the thumbnail); the AJAX response reports `thumbs_skipped`. The plugin (0.3.0) offers Generate all / every other / none, with "every other" using the same natural-sort half `planDeletion()` would remove, gated on the `albums/.htaccess` rule, with a default-mode setting on its settings page. Live-verified on the preview install.
+
+### Changed
+
+- **LG-073 — The bundled theme "default" is now "Lumora Classic" (`themes/lumora-classic/`).** `ThemeService::BUNDLED_THEME` replaces every `'default'` literal; `ThemeRenderer` falls back to the bundled theme, then a leftover `default` folder. Upgrading: `Migration0011_RenameDefaultTheme` (DB version 17) switches the active theme when the new folder is installed; `stageReplace()` delivers the new folder even with themes preserved; `removeObsoleteFiles()` never deletes `themes/default/` (it may hold local edits).
+
+### Removed
+
+- **LG-074 — The Multi-Album Shortcode tool (Lumora Press Shortcodes plugin, now 1.2.0).** The sidebar item, its admin page and `buildMultiAlbumShortcode()` are gone; the per-album/per-image shortcode fields are unchanged. A comma-separated `album_id` can still be typed by hand.
+
 ## v1.19.1 — Released 2026-09-25
 
 ### Added

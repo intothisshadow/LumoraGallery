@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [Unreleased]
+## [1.20.0] — 2026-09-29
 
 ### Removed
 
@@ -15,9 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - **On-Demand Thumbnails: Batch Add can now skip generating some or all thumbnails.** With the plugin enabled, Admin → Batch Add offers **Generate all**, **Generate every other** or **Generate no thumbnails**; skipped ones are created on first view, so you no longer have to add a whole album and then delete most of its thumbnails. The skipping options need the plugin's `albums/.htaccess` rule installed. A default choice can be set on Admin → On-Demand Thumbnails. The Batch Add progress text reports how many thumbnails were left for on-demand generation. Core gains two extension points for this: `admin_batch_add_extra_fields` and `batch_add_generate_thumb`.
-
 - **The bundled plugins can now be updated from GitHub on their own, without a full Lumora update.** When the latest GitHub release carries a newer package for Coppermine Importer, Visitor Stats, Lumora Press Shortcodes or On-Demand Thumbnails, Admin → Plugins shows an "Update available" badge and an Update button, plus a **Check for Updates** button and an update count; the Dashboard and Admin → Updates mention pending plugin updates too. The update downloads the package, verifies its SHA-256 checksum (a missing or mismatched checksum refuses the update), checks that it is the right plugin, a newer version, and compatible with your Lumora version, then replaces only that plugin's folder with progress shown in place — settings and enabled state are untouched. Recorded in the update history and Admin → Logs. New `before_plugin_update` / `after_plugin_update` hooks fire around it.
-
 - **The bundled theme can now be updated from GitHub on its own, too.** Lumora Classic shows its version on Admin → Appearance; when the latest release carries a newer theme package, its card gets an "Update available" badge and an Update button, with a **Check for Updates** button above the grid and a Dashboard / Admin → Updates notice. Same safeguards as plugin updates: mandatory SHA-256 verification, a strictly newer version, and a "Requires at least" Lumora version that must be met. Your theme settings are kept; edit a copy of the theme rather than the bundled one, since an update replaces its files. New `before_theme_update` / `after_theme_update` hooks.
 
 ### Fixed
