@@ -1099,6 +1099,30 @@ class UpdaterService
     }
 
     /**
+     * With themes/ preserved, still deliver the bundled theme's folder when the
+     * destination lacks it (e.g. the default → lumora-classic rename). An existing
+     * copy is never overwritten, and other theme folders are never touched.
+     *
+     * @param array{copied: int, skipped: int, errors: list<string>} $stats
+     */
+    public static function deliverBundledTheme(string $srcRoot, string $destRoot, array &$stats): void
+    {
+        $sep        = DIRECTORY_SEPARATOR;
+        $bundledSrc = rtrim($srcRoot, $sep) . $sep . 'themes' . $sep . ThemeService::BUNDLED_THEME . $sep;
+        $bundledDst = rtrim($destRoot, $sep) . $sep . 'themes' . $sep . ThemeService::BUNDLED_THEME . $sep;
+
+        if (!is_dir($bundledSrc) || is_file($bundledDst . 'template.html')) {
+            return;
+        }
+
+        try {
+            self::copyDirectory($bundledSrc, $bundledDst, [], $stats, false);
+        } catch (\Throwable $e) {
+            $stats['errors'][] = 'Bundled theme copy failed: ' . $e->getMessage();
+        }
+    }
+
+    /**
      * Stage 8 — Replace application files.
      *
      * Copies files from the extracted archive root to LUMORA_ROOT, skipping
@@ -1159,16 +1183,8 @@ class UpdaterService
             $stats['errors'][] = 'Copy operation failed: ' . $e->getMessage();
         }
 
-        // themes/ is preserved by default, but the bundled theme's folder must still
-        // arrive once (e.g. the default → lumora-classic rename); never overwrite an existing copy.
-        $bundledDest = LUMORA_ROOT . 'themes' . DIRECTORY_SEPARATOR . ThemeService::BUNDLED_THEME . DIRECTORY_SEPARATOR;
-        $bundledSrc  = rtrim($srcRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'themes' . DIRECTORY_SEPARATOR . ThemeService::BUNDLED_THEME . DIRECTORY_SEPARATOR;
-        if ($preserveThemes && is_dir($bundledSrc) && !is_file($bundledDest . 'template.html')) {
-            try {
-                self::copyDirectory($bundledSrc, $bundledDest, [], $stats, false);
-            } catch (\Throwable $e) {
-                $stats['errors'][] = 'Bundled theme copy failed: ' . $e->getMessage();
-            }
+        if ($preserveThemes) {
+            self::deliverBundledTheme($srcRoot, LUMORA_ROOT, $stats);
         }
 
         if (!empty($stats['errors'])) {
