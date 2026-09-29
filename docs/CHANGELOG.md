@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Removed
+
+- **The Multi-Album Shortcode tool is gone from the Lumora Press Shortcodes plugin (now 1.2.0).** The sidebar item and its page are removed; the shortcode fields on the album/image edit forms, the public album page and the image lightbox are unchanged. To combine albums, type a comma-separated list yourself, e.g. `[lumora_gallery_album album_id="1,2,3"]`. Existing sites lose the tool when the plugin is updated to 1.2.0.
+
 ### Added
 
 - **The bundled plugins can now be updated from GitHub on their own, without a full Lumora update.** When the latest GitHub release carries a newer package for Coppermine Importer, Visitor Stats, Lumora Press Shortcodes or On-Demand Thumbnails, Admin → Plugins shows an "Update available" badge and an Update button, plus a **Check for Updates** button and an update count; the Dashboard and Admin → Updates mention pending plugin updates too. The update downloads the package, verifies its SHA-256 checksum (a missing or mismatched checksum refuses the update), checks that it is the right plugin, a newer version, and compatible with your Lumora version, then replaces only that plugin's folder with progress shown in place — settings and enabled state are untouched. Recorded in the update history and Admin → Logs. New `before_plugin_update` / `after_plugin_update` hooks fire around it.
