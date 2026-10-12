@@ -15,7 +15,7 @@ declare(strict_types=1);
  */
 
 /** Plugin version. Update only when releasing a new plugin version — must match plugin.json. */
-define('LUMORA_VISITOR_STATS_VERSION', '1.0.0');
+define('LUMORA_VISITOR_STATS_VERSION', '1.0.1');
 
 /** Pageview log entries older than this many days are pruned automatically. */
 define('LUMORA_VISITOR_STATS_RETENTION_DAYS', 90);

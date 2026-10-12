@@ -36,9 +36,9 @@ if (!PluginService::isEnabled('lumora-visitor-stats')) {
 $plugin_admin_base = h(lumora_base_url() . 'plugins/lumora-visitor-stats/admin/stats.php');
 
 // ── Range selector ────────────────────────────────────────────────────────────
-$days = lumora_int($_GET['days'] ?? 30, 30, 1);
+$days = lumora_int($_GET['days'] ?? 7, 7, 1);
 if (!in_array($days, [7, 30, 90], true)) {
-    $days = 30;
+    $days = 7;
 }
 
 $summary = VisitorStatsService::getVisitSummary();
