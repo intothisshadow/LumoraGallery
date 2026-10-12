@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased] — 2026-10-12
+
+### Fixed
+
+- **Rolling back a failed update now restores the old application files, not just the database.** Previously a failed database migration followed by a rollback left the old database under the new release's code. The updater now saves a copy of every file it will replace, restores them on rollback (removing any files the update added), and checks the restored version before reopening the gallery. If any part of the restore fails, the gallery stays in maintenance mode instead of reopening in a mismatched state.
+
+- **The update backup no longer runs out of memory on large galleries.** The database dump is now written in small chunks instead of loading whole tables into memory, so a gallery with a large image table can be backed up (and therefore updated) within normal PHP memory limits.
+- **Rolling back the database no longer reports a false failure.** The restore step finished correctly but always ended with a "no active transaction" error, which would have looked like a failed rollback.
+
+### Added
+
+- **A failed database migration during an update can be retried.** The update page offers **Retry migrations** next to Rollback; the gallery stays in maintenance mode until you choose. The update history records which migration failed.
+- **The pre-update database backup is now verified** (complete, with every table present) before any file is replaced.
+
 ## [1.21.0] — 2026-10-12
 
 ### Added

@@ -285,8 +285,14 @@ preflight → download → verify → backup → maintenance → extract → val
 - Accepts a release from either a GitHub-fetched archive (`GitHubUpdateProvider`) or an
   administrator-uploaded ZIP (`UpdaterService::acquireLockFromUpload()`), feeding both into
   the same pipeline from `verify` onward.
-- An automatic **update backup** (database + `config.php` only) runs before any file
-  replacement; one-click rollback restores it on failure.
+- An automatic **update backup** runs before any file replacement: the database dump (verified
+  complete), `config.php`, and a copy of every application file `replace` will overwrite or delete
+  (`cache/.updates/backup/files/`, indexed by `files-index.json`, which also lists files the
+  update newly adds). One-click rollback restores the database, config and files, then confirms
+  `version.php` matches the pre-update version. If any restore step fails, maintenance mode and the
+  lock stay in place (the Abort button reopens the gallery). A failed `migrate` stage leaves the
+  site in maintenance mode and offers **Retry migrations** (re-runs the `migrate` stage) or Rollback;
+  the failed and already-applied migrations are recorded in the lock file and the update history.
 - After `replace`, any file a previous version installed that the new release no longer ships
   is automatically removed, tracked via `cache/.updates/file-manifest.json` — this never
   touches `albums/`, `covers/`, `config.php`, `cache/`, or (when preserved) `themes/`/`plugins/`.

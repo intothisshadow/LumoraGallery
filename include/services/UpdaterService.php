@@ -26,12 +26,12 @@ declare(strict_types=1);
  *
  * ── Rollback ──────────────────────────────────────────────────────────────────
  *
- * rollback() restores config.php and the database from backup, then calls
- * stageCleanup(false) to disable maintenance mode and release the lock.
- * File rollback (restoring source files from a file backup) is not currently
- * implemented; the database and configuration are the critical artefacts.
- * Administrators should ensure they have a server-level file backup before
- * upgrading as recommended in the admin UI.
+ * Before the replace stage overwrites anything, the files it will touch are
+ * copied to the backup directory. rollback() restores config.php, the database
+ * and those files, confirms the restored version.php matches the pre-update
+ * version, then calls stageCleanup(false) to disable maintenance mode and
+ * release the lock. If any restore step fails, maintenance mode and the lock
+ * stay in place so the site is never reopened in a mismatched state.
  *
  * ── Hosting compatibility ──────────────────────────────────────────────────────
  *
@@ -158,6 +158,18 @@ class UpdaterService
     private static function backupDir(): string
     {
         return self::updatesDir() . 'backup' . DIRECTORY_SEPARATOR;
+    }
+
+    /** Copies of the application files the Replace stage overwrites. */
+    private static function filesBackupDir(): string
+    {
+        return self::backupDir() . 'files' . DIRECTORY_SEPARATOR;
+    }
+
+    /** Index of which files were backed up and which were newly added. */
+    private static function filesIndexPath(): string
+    {
+        return self::backupDir() . 'files-index.json';
     }
 
     /** Append-only update log file. */
@@ -854,6 +866,12 @@ class UpdaterService
             return self::fail(self::STAGE_BACKUP, 'Could not create backup directory.');
         }
 
+        // A file backup left by an earlier update must never be mistaken for this one's.
+        self::removeDirectory(self::filesBackupDir());
+        if (file_exists(self::filesIndexPath())) {
+            unlink(self::filesIndexPath());
+        }
+
         $details = [];
         $errors  = [];
 
@@ -875,6 +893,12 @@ class UpdaterService
         $dbSql    = $backupDir . 'database.sql';
         $dbResult = self::dumpDatabase($dbSql);
         if ($dbResult['success']) {
+            $verify = self::verifyDatabaseDump($dbSql, $dbResult['tables']);
+            if (!$verify['success']) {
+                $dbResult = ['success' => false, 'tables' => 0, 'bytes' => 0, 'error' => $verify['error']];
+            }
+        }
+        if ($dbResult['success']) {
             $details[] = '✓ Database backed up ('
                 . $dbResult['tables'] . ' tables, '
                 . lumora_format_bytes($dbResult['bytes']) . ')';
@@ -891,7 +915,7 @@ class UpdaterService
             );
         }
 
-        self::updateLock(['backup_dir' => $backupDir]);
+        self::updateLock(['backup_dir' => $backupDir, 'previous_version' => LUMORA_VERSION]);
 
         return self::ok(self::STAGE_BACKUP, 'Update backup created.', self::STAGE_MAINTENANCE, $details);
     }
@@ -1177,6 +1201,32 @@ class UpdaterService
 
         $stats = ['copied' => 0, 'skipped' => 0, 'errors' => []];
 
+        // Keep the original backup if Replace is re-run after a partial failure.
+        if (!file_exists(self::filesIndexPath())) {
+            $incoming = self::listFilesRecursive($srcRoot, $preserve);
+            if ($preserveThemes) {
+                $bundled = 'themes' . DIRECTORY_SEPARATOR . ThemeService::BUNDLED_THEME;
+                foreach (self::listFilesRecursive(rtrim($srcRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $bundled, []) as $rel) {
+                    $incoming[] = $bundled . DIRECTORY_SEPARATOR . $rel;
+                }
+            }
+            $obsolete = array_diff(self::readFileManifest(), $incoming);
+
+            $backup = self::backupReplacedFiles($incoming, $obsolete, LUMORA_ROOT, self::backupDir(), $preserve);
+            if (!empty($backup['errors'])) {
+                self::logUpdate('error', 'File backup failed: ' . implode('; ', $backup['errors']));
+                return self::fail(
+                    self::STAGE_REPLACE,
+                    'Could not back up the current files. Nothing was changed.',
+                    $backup['errors']
+                );
+            }
+            if (file_exists(self::fileManifestPath())) {
+                copy(self::fileManifestPath(), self::backupDir() . 'file-manifest.json');
+            }
+            self::logUpdate('info', "Replace: {$backup['backed_up']} file(s) backed up, " . count($backup['added']) . ' new');
+        }
+
         try {
             self::copyDirectory($srcRoot, LUMORA_ROOT, $preserve, $stats);
         } catch (\Throwable $e) {
@@ -1214,6 +1264,7 @@ class UpdaterService
         }
 
         $details = [
+            '✓ Existing files backed up for rollback',
             '✓ ' . $stats['copied'] . ' files updated',
             '✓ ' . $stats['skipped'] . ' preserved paths left untouched',
             $preserveThemes  ? '✓ themes/ preserved'
@@ -1249,8 +1300,22 @@ class UpdaterService
 
         if (!empty($errors)) {
             self::logUpdate('error', 'Migration failed: ' . implode('; ', $errors));
-            return self::fail(self::STAGE_MIGRATE, 'Database migration failed.', $errors);
+            // Keep migrations applied by earlier attempts so a retry doesn't hide them.
+            $earlier = (array) (self::getLockInfo()['migration_failure']['applied'] ?? []);
+            self::updateLock(['migration_failure' => [
+                'failed'  => explode(':', $errors[0], 2)[0],
+                'applied' => array_values(array_unique(array_merge($earlier, $result['applied']))),
+            ]]);
+
+            $details = array_merge(
+                array_map(fn(string $m): string => '✓ Applied: ' . $m, $result['applied']),
+                $errors,
+                ['The gallery stays in maintenance mode. Retry the migration once the cause is fixed, or roll back to restore the previous version.']
+            );
+            return self::fail(self::STAGE_MIGRATE, 'Database migration failed.', $details);
         }
+
+        self::updateLock(['migration_failure' => null]);
 
         $details = $applied === 0
             ? ['No pending migrations — database schema is already up to date.']
@@ -1482,13 +1547,10 @@ class UpdaterService
     /**
      * Attempt to roll back a failed update.
      *
-     * Restores config.php and the database from the backup created in Stage 4,
-     * then calls stageCleanup(false) to disable maintenance mode and release
-     * the lock.
-     *
-     * Note: source-file rollback (restoring replaced PHP files from a file backup)
-     * is not yet implemented.  Administrators should maintain server-level file
-     * backups as an additional safety net.
+     * Restores config.php and the database from the Stage 4 backup and the
+     * application files saved by Stage 8, then calls stageCleanup(false) to
+     * disable maintenance mode and release the lock. When any restore step
+     * fails, maintenance mode and the lock are left in place.
      *
      * @return array{success: bool, message: string, details: list<string>}
      */
@@ -1535,22 +1597,67 @@ class UpdaterService
             self::logUpdate('error', 'No database backup found for rollback');
         }
 
-        if (!empty($errors)) {
-            self::logUpdate('error', 'Rollback encountered errors: ' . implode('; ', $errors));
+        // Restore application files saved before Replace.
+        $hadFileBackup = file_exists(self::filesIndexPath());
+        if ($hadFileBackup) {
+            $r = self::restoreReplacedFiles(LUMORA_ROOT, self::backupDir());
+            if (empty($r['errors'])) {
+                $details[] = '✓ Application files restored (' . $r['restored'] . ' restored, ' . $r['removed'] . ' new file(s) removed)';
+                self::logUpdate('info', "Files restored: {$r['restored']} restored, {$r['removed']} removed");
+            } else {
+                foreach ($r['errors'] as $e) {
+                    $errors[] = $e;
+                }
+                self::logUpdate('error', 'File restore failed: ' . implode('; ', $r['errors']));
+            }
+
+            $manifestBackup = $backupDir . 'file-manifest.json';
+            if (file_exists($manifestBackup)) {
+                copy($manifestBackup, self::fileManifestPath());
+            }
+        } else {
+            $details[] = '✓ No application files had been replaced';
+        }
+
+        // Confirm the restored code is the version the update started from.
+        $previous = (string) ($lock['previous_version'] ?? '');
+        if ($hadFileBackup && $previous !== '' && empty($errors)) {
+            $restored = self::readInstalledVersion(LUMORA_ROOT . 'version.php');
+            if ($restored !== $previous) {
+                $errors[] = 'Restored version.php reports v' . ($restored ?? 'unknown') . ', expected v' . $previous . '.';
+            } else {
+                $details[] = '✓ Version confirmed as v' . $previous;
+            }
         }
 
         $version = (string) ($lock['version'] ?? 'unknown');
-        self::recordUpdateHistory($version, false, 'Update to v' . $version . ' failed; rollback attempted.');
+        $failure = is_array($lock['migration_failure'] ?? null) ? $lock['migration_failure'] : null;
+        $reason  = $failure !== null
+            ? ' Migration ' . (string) ($failure['failed'] ?? 'unknown') . ' failed after '
+                . count((array) ($failure['applied'] ?? [])) . ' applied.'
+            : '';
 
-        // Always run cleanup to disable maintenance mode and release lock.
+        if (!empty($errors)) {
+            self::logUpdate('error', 'Rollback encountered errors: ' . implode('; ', $errors));
+            self::recordUpdateHistory($version, false, 'Update to v' . $version . ' failed; rollback incomplete.' . $reason);
+
+            return [
+                'success' => false,
+                'message' => 'Rollback could not be completed. The gallery remains in maintenance mode. '
+                    . 'Restore from the backup in cache/.updates/backup/ or a Full Backup, then use Abort to reopen the gallery.',
+                'details' => array_merge($details, array_map(fn(string $e): string => '✗ ' . $e, $errors)),
+            ];
+        }
+
+        self::recordUpdateHistory($version, false, 'Update to v' . $version . ' failed; rolled back.' . $reason);
+
+        // Disable maintenance mode and release the lock.
         self::stageCleanup(false);
 
         return [
-            'success' => empty($errors),
-            'message' => empty($errors)
-                ? 'Rollback completed. The previous version has been restored.'
-                : 'Rollback completed with errors. Manual intervention may be required. Check the update log.',
-            'details' => array_merge($details, array_map(fn(string $e): string => '✗ ' . $e, $errors)),
+            'success' => true,
+            'message' => 'Rollback completed. The previous version has been restored.',
+            'details' => $details,
         ];
     }
 
@@ -1834,12 +1941,13 @@ class UpdaterService
      * Dump all Lumora tables (those matching the configured DB prefix) to a SQL file.
      *
      * Uses PDO to generate DROP TABLE IF EXISTS + CREATE TABLE + INSERT statements.
-     * Row data is emitted in batches of 100 to limit memory usage for large tables.
+     * Rows are read and written in chunks so memory stays flat however large a table is.
      *
      * @return array{success: bool, tables: int, bytes: int, error: string}
      */
     public static function dumpDatabase(string $outputPath): array
     {
+        $fh = null;
         try {
             $prefix = LumoraDB::prefix();
             $pdo    = LumoraDB::pdo();
@@ -1856,58 +1964,77 @@ class UpdaterService
                 ];
             }
 
-            $lines   = [];
-            $lines[] = '-- Lumora Gallery database backup';
-            $lines[] = '-- Generated: ' . date('Y-m-d H:i:s') . ' UTC';
-            $lines[] = '-- Version: ' . LUMORA_VERSION;
-            $lines[] = '-- Tables: ' . count($tables);
-            $lines[] = '';
-            $lines[] = 'SET FOREIGN_KEY_CHECKS=0;';
-            $lines[] = '';
-
-            foreach ($tables as $table) {
-                // Escape backticks inside the table name (MySQL identifier quoting).
-                // Table names come from SHOW TABLES (DB-controlled, not user input),
-                // but we escape defensively in case an unusual name ever occurs.
-                $safe_table = str_replace('`', '``', $table);
-
-                // CREATE TABLE statement.
-                $create = $pdo->query("SHOW CREATE TABLE `{$safe_table}`")->fetch(\PDO::FETCH_ASSOC);
-                $lines[] = "DROP TABLE IF EXISTS `{$safe_table}`;";
-                $lines[] = $create['Create Table'] . ';';
-                $lines[] = '';
-
-                // Data rows in chunks of 100.
-                $rows = $pdo->query("SELECT * FROM `{$safe_table}`")->fetchAll(\PDO::FETCH_ASSOC);
-                if (!empty($rows)) {
-                    $cols   = '`' . implode('`, `', array_keys($rows[0])) . '`';
-                    $chunks = array_chunk($rows, 100);
-                    foreach ($chunks as $chunk) {
-                        $values = [];
-                        foreach ($chunk as $row) {
-                            $escaped = array_map(
-                                fn(mixed $v): string => $v === null ? 'NULL' : $pdo->quote((string) $v),
-                                array_values($row)
-                            );
-                            $values[] = '(' . implode(', ', $escaped) . ')';
-                        }
-                        $lines[] = "INSERT INTO `{$safe_table}` ({$cols}) VALUES";
-                        $lines[] = implode(",\n", $values) . ';';
-                    }
-                    $lines[] = '';
-                }
-            }
-
-            $lines[] = 'SET FOREIGN_KEY_CHECKS=1;';
-
-            $sql = implode("\n", $lines);
-
-            if (file_put_contents($outputPath, $sql) === false) {
+            $fh = fopen($outputPath, 'wb');
+            if ($fh === false) {
                 return ['success' => false, 'tables' => 0, 'bytes' => 0, 'error' => 'Could not write backup file.'];
             }
 
-            return ['success' => true, 'tables' => count($tables), 'bytes' => strlen($sql), 'error' => ''];
+            $bytes = 0;
+            $write = static function (string $line) use ($fh, &$bytes): void {
+                if (fwrite($fh, $line . "\n") === false) {
+                    throw new \RuntimeException('Could not write backup file.');
+                }
+                $bytes += strlen($line) + 1;
+            };
+
+            $write('-- Lumora Gallery database backup');
+            $write('-- Generated: ' . date('Y-m-d H:i:s') . ' UTC');
+            $write('-- Version: ' . LUMORA_VERSION);
+            $write('-- Tables: ' . count($tables));
+            $write('');
+            $write('SET FOREIGN_KEY_CHECKS=0;');
+            $write('');
+
+            $chunkSize = 500;
+
+            foreach ($tables as $table) {
+                // Table names come from SHOW TABLES (DB-controlled), escaped defensively.
+                $safe_table = str_replace('`', '``', $table);
+
+                $create = $pdo->query("SHOW CREATE TABLE `{$safe_table}`")->fetch(\PDO::FETCH_ASSOC);
+                $write("DROP TABLE IF EXISTS `{$safe_table}`;");
+                $write($create['Create Table'] . ';');
+                $write('');
+
+                $offset = 0;
+                do {
+                    $rows = $pdo->query("SELECT * FROM `{$safe_table}` LIMIT {$chunkSize} OFFSET {$offset}")
+                        ->fetchAll(\PDO::FETCH_ASSOC);
+                    if (empty($rows)) {
+                        break;
+                    }
+
+                    $cols   = '`' . implode('`, `', array_keys($rows[0])) . '`';
+                    $values = [];
+                    foreach ($rows as $row) {
+                        $escaped = array_map(
+                            fn(mixed $v): string => $v === null ? 'NULL' : $pdo->quote((string) $v),
+                            array_values($row)
+                        );
+                        $values[] = '(' . implode(', ', $escaped) . ')';
+                    }
+                    $write("INSERT INTO `{$safe_table}` ({$cols}) VALUES");
+                    $write(implode(",\n", $values) . ';');
+
+                    $offset += $chunkSize;
+                } while (count($rows) === $chunkSize);
+
+                $write('');
+            }
+
+            $write('SET FOREIGN_KEY_CHECKS=1;');
+
+            if (!fclose($fh)) {
+                $fh = null;
+                return ['success' => false, 'tables' => 0, 'bytes' => 0, 'error' => 'Could not write backup file.'];
+            }
+            $fh = null;
+
+            return ['success' => true, 'tables' => count($tables), 'bytes' => $bytes, 'error' => ''];
         } catch (\Throwable $e) {
+            if (is_resource($fh)) {
+                fclose($fh);
+            }
             return ['success' => false, 'tables' => 0, 'bytes' => 0, 'error' => $e->getMessage()];
         }
     }
@@ -1916,9 +2043,10 @@ class UpdaterService
      * Restore a database from a SQL dump file created by dumpDatabase().
      *
      * Uses a string-literal-aware statement splitter to avoid truncating
-     * INSERT values that contain semicolons.  All statements are executed
-     * inside a single transaction; if any statement fails the transaction
-     * is rolled back.
+     * INSERT values that contain semicolons.  Statements run outside a
+     * transaction: the dump's DROP/CREATE TABLE statements commit implicitly
+     * in MySQL/MariaDB, so a wrapping transaction could not be rolled back
+     * and its commit() would throw.
      *
      * @return array{success: bool, statements: int, error: string}
      */
@@ -1934,18 +2062,11 @@ class UpdaterService
             $stmts = self::splitSql($sql);
             $count = 0;
 
-            $pdo->beginTransaction();
-            try {
-                foreach ($stmts as $stmt) {
-                    $stmt = trim($stmt);
-                    if ($stmt === '' || str_starts_with($stmt, '--')) continue;
-                    $pdo->exec($stmt);
-                    $count++;
-                }
-                $pdo->commit();
-            } catch (\Throwable $e) {
-                $pdo->rollBack();
-                throw $e;
+            foreach ($stmts as $stmt) {
+                $stmt = trim($stmt);
+                if ($stmt === '' || str_starts_with($stmt, '--')) continue;
+                $pdo->exec($stmt);
+                $count++;
             }
 
             return ['success' => true, 'statements' => $count, 'error' => ''];
@@ -2007,6 +2128,192 @@ class UpdaterService
         }
 
         return $statements;
+    }
+
+    /**
+     * Sanity-check a dump written by dumpDatabase(): it must end with the
+     * completion marker and contain a CREATE TABLE for every table dumped.
+     *
+     * @return array{success: bool, error: string}
+     */
+    public static function verifyDatabaseDump(string $sqlPath, int $expectedTables): array
+    {
+        $fh = is_file($sqlPath) ? fopen($sqlPath, 'rb') : false;
+        if ($fh === false || filesize($sqlPath) === 0) {
+            return ['success' => false, 'error' => 'The database backup is missing or empty.'];
+        }
+
+        $tables = 0;
+        $last   = '';
+        while (($line = fgets($fh)) !== false) {
+            if (str_starts_with($line, 'CREATE TABLE ')) {
+                $tables++;
+            }
+            if (trim($line) !== '') {
+                $last = trim($line);
+            }
+        }
+        fclose($fh);
+
+        if ($last !== 'SET FOREIGN_KEY_CHECKS=1;') {
+            return ['success' => false, 'error' => 'The database backup is incomplete.'];
+        }
+        if ($tables !== $expectedTables) {
+            return ['success' => false, 'error' => 'The database backup does not contain every table.'];
+        }
+
+        return ['success' => true, 'error' => ''];
+    }
+
+    /**
+     * Read LUMORA_VERSION out of a version.php file without including it.
+     */
+    public static function readInstalledVersion(string $versionFile): ?string
+    {
+        $php = is_file($versionFile) ? file_get_contents($versionFile) : false;
+        if ($php === false) {
+            return null;
+        }
+
+        return preg_match("/define\\(\\s*'LUMORA_VERSION'\\s*,\\s*'([^']+)'/", $php, $m) === 1 ? $m[1] : null;
+    }
+
+    // ── File backup / restore ─────────────────────────────────────────────────
+
+    /**
+     * Copy every file the Replace stage is about to overwrite or delete into
+     * $backupDir/files/ and write files-index.json recording which incoming
+     * files did not exist yet (so a rollback can delete them again).
+     *
+     * @param list<string> $incoming Relative paths the release will write.
+     * @param list<string> $obsolete Relative paths the release will delete.
+     * @param list<string> $preserve Top-level entries Replace leaves alone.
+     * @return array{backed_up: int, added: list<string>, errors: list<string>}
+     */
+    public static function backupReplacedFiles(array $incoming, array $obsolete, string $destRoot, string $backupDir, array $preserve = []): array
+    {
+        $destRoot  = rtrim($destRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        $filesDir  = rtrim($backupDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'files' . DIRECTORY_SEPARATOR;
+        $result    = ['backed_up' => 0, 'added' => [], 'errors' => []];
+        $newDirs   = [];
+        $toBackup  = [];
+        $bytes     = 0;
+
+        foreach (array_merge($incoming, $obsolete) as $relative) {
+            $top = strstr($relative, DIRECTORY_SEPARATOR, true);
+            $top = $top !== false ? $top : $relative;
+            if (!self::isSafeRelativePath($relative) || in_array($top, self::ALWAYS_PROTECTED, true) || in_array($top, $preserve, true)) {
+                continue;
+            }
+
+            if (is_file($destRoot . $relative)) {
+                $toBackup[$relative] = true;
+                $bytes += (int) filesize($destRoot . $relative);
+            } elseif (in_array($relative, $incoming, true)) {
+                $result['added'][] = $relative;
+                for ($dir = dirname($relative); $dir !== '.' && $dir !== '' && !is_dir($destRoot . $dir); $dir = dirname($dir)) {
+                    $newDirs[$dir] = true;
+                }
+            }
+        }
+
+        if (!is_dir($filesDir) && !mkdir($filesDir, 0750, true)) {
+            $result['errors'][] = 'Could not create the file backup directory.';
+            return $result;
+        }
+
+        $free = @disk_free_space($filesDir);
+        if ($free !== false && $free < $bytes * 1.1 + 10 * 1024 * 1024) {
+            $result['errors'][] = 'Not enough free disk space to back up the current files (' . lumora_format_bytes($bytes) . ' needed).';
+            return $result;
+        }
+
+        foreach (array_keys($toBackup) as $relative) {
+            $target = $filesDir . $relative;
+            if ((!is_dir(dirname($target)) && !mkdir(dirname($target), 0750, true)) || !copy($destRoot . $relative, $target)) {
+                $result['errors'][] = 'Could not back up ' . $relative . '.';
+                return $result;
+            }
+            $result['backed_up']++;
+        }
+
+        $index = json_encode(
+            ['backed_up' => array_keys($toBackup), 'added' => $result['added'], 'new_dirs' => array_keys($newDirs)],
+            JSON_UNESCAPED_SLASHES
+        );
+        if ($index === false || file_put_contents(rtrim($backupDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'files-index.json', $index) === false) {
+            $result['errors'][] = 'Could not write the file backup index.';
+        }
+
+        return $result;
+    }
+
+    /**
+     * Undo backupReplacedFiles(): copy the saved files back and delete the
+     * files the update added.
+     *
+     * @return array{restored: int, removed: int, errors: list<string>}
+     */
+    public static function restoreReplacedFiles(string $destRoot, string $backupDir): array
+    {
+        $destRoot  = rtrim($destRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        $backupDir = rtrim($backupDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        $filesDir  = $backupDir . 'files' . DIRECTORY_SEPARATOR;
+        $result    = ['restored' => 0, 'removed' => 0, 'errors' => []];
+
+        $raw   = is_file($backupDir . 'files-index.json') ? file_get_contents($backupDir . 'files-index.json') : false;
+        $index = $raw !== false ? json_decode($raw, true) : null;
+        if (!is_array($index)) {
+            $result['errors'][] = 'The file backup index is missing or unreadable.';
+            return $result;
+        }
+
+        foreach ((array) ($index['backed_up'] ?? []) as $relative) {
+            if (!is_string($relative) || !self::isSafeRelativePath($relative)) {
+                continue;
+            }
+            $target = $destRoot . $relative;
+            if (is_file($target) && filesize($target) === filesize($filesDir . $relative) && md5_file($target) === md5_file($filesDir . $relative)) {
+                continue;
+            }
+            if ((!is_dir(dirname($target)) && !mkdir(dirname($target), 0755, true)) || !copy($filesDir . $relative, $target)) {
+                $result['errors'][] = 'Could not restore ' . $relative . '.';
+                continue;
+            }
+            $result['restored']++;
+        }
+
+        foreach ((array) ($index['added'] ?? []) as $relative) {
+            if (!is_string($relative) || !self::isSafeRelativePath($relative) || !is_file($destRoot . $relative)) {
+                continue;
+            }
+            if (unlink($destRoot . $relative)) {
+                $result['removed']++;
+            } else {
+                $result['errors'][] = 'Could not remove ' . $relative . '.';
+            }
+        }
+
+        // Deepest first, and only directories the update itself created.
+        $newDirs = array_filter((array) ($index['new_dirs'] ?? []), fn($d): bool => is_string($d) && self::isSafeRelativePath($d));
+        usort($newDirs, fn(string $a, string $b): int => strlen($b) <=> strlen($a));
+        foreach ($newDirs as $dir) {
+            if (is_dir($destRoot . $dir) && array_diff(scandir($destRoot . $dir) ?: [], ['.', '..']) === []) {
+                rmdir($destRoot . $dir);
+            }
+        }
+
+        return $result;
+    }
+
+    /** Reject empty, absolute, or traversing paths read from a backup index. */
+    private static function isSafeRelativePath(string $relative): bool
+    {
+        return $relative !== ''
+            && !str_starts_with($relative, '/')
+            && !str_starts_with($relative, '\\')
+            && !str_contains($relative, "\0")
+            && !in_array('..', preg_split('#[\\\\/]#', $relative) ?: [], true);
     }
 
     // ── File utilities ────────────────────────────────────────────────────────

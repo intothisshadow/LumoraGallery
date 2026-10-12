@@ -552,6 +552,7 @@ $progress_card = <<<HTML
 
   <!-- Controls -->
   <div class="mt-3 d-flex gap-2 align-items-center flex-wrap">
+    <button id="lum-upd-retry-btn"    class="btn btn-warning btn-sm d-none">🔁 Retry migrations</button>
     <button id="lum-upd-rollback-btn" class="btn btn-danger btn-sm d-none">↩ Rollback</button>
     <button id="lum-upd-abort-btn"   class="btn btn-outline-secondary btn-sm d-none">⏹ Abort</button>
     <span   id="lum-upd-status-msg"  class="text-muted small"></span>
@@ -808,9 +809,10 @@ $content = <<<HTML
     <li>Custom themes and plugins are preserved by default during an update. To replace them with the
         versions bundled in a release, tick the relevant checkboxes on the Install Update or
         Install from Uploaded ZIP form.</li>
-    <li>An automatic <strong>update backup</strong> (database + <code>config.php</code> only) is created before
-        any file replacement, stored in <code>cache/.updates/backup/</code>. It's what Rollback restores from
-        if a stage fails. Separately, the <strong>Full Backups</strong> panel above lets you create and restore
+    <li>An automatic <strong>update backup</strong> (database, <code>config.php</code>, and a copy of every
+        application file the update replaces) is created before any file replacement, stored in
+        <code>cache/.updates/backup/</code>. It's what Rollback restores from if a stage fails. If a database
+        migration fails, you can retry it or roll back; the gallery stays in maintenance mode until you do. Separately, the <strong>Full Backups</strong> panel above lets you create and restore
         complete codebase + database ZIP snapshots on demand — use those for a full, restorable copy of the
         installation, not just the update-time safety net.</li>
     <li>If the <code>install/</code> directory is present when an update completes, it is automatically
@@ -963,6 +965,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const \$logEl           = document.getElementById('lum-upd-log');
   const \$statusMsg       = document.getElementById('lum-upd-status-msg');
   const \$rollbackBtn     = document.getElementById('lum-upd-rollback-btn');
+  const \$retryBtn        = document.getElementById('lum-upd-retry-btn');
   const \$abortBtn        = document.getElementById('lum-upd-abort-btn');
   const \$abortStuck      = document.getElementById('lum-upd-abort-stuck');
 
@@ -1085,6 +1088,16 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
+  // Retry a failed migration stage; the update lock and maintenance mode are still in place.
+  if (\$retryBtn) {
+    \$retryBtn.addEventListener('click', async function () {
+      \$retryBtn.classList.add('d-none');
+      if (\$rollbackBtn) \$rollbackBtn.classList.add('d-none');
+      setStatusMsg('Retrying database migrations\u2026', 'warning');
+      await runUpdateStage('migrate', '');
+    });
+  }
+
   // Manual abort (force-reset without restore).
   if (\$abortBtn) {
     \$abortBtn.addEventListener('click', async function () {
@@ -1139,6 +1152,7 @@ document.addEventListener('DOMContentLoaded', function () {
       // Offer rollback for destructive stages; abort-only for earlier ones.
       if (DESTRUCTIVE.has(stage)) {
         showRollbackBtn();
+        if (stage === 'migrate' && \$retryBtn) \$retryBtn.classList.remove('d-none');
       } else {
         showAbortBtn();
       }
@@ -1156,6 +1170,7 @@ document.addEventListener('DOMContentLoaded', function () {
       // Workflow complete.
       setStatusMsg('\ud83c\udf89 ' + esc(data.message), 'success');
       if (\$rollbackBtn) \$rollbackBtn.classList.add('d-none');
+      if (\$retryBtn)    \$retryBtn.classList.add('d-none');
       if (\$abortBtn)    \$abortBtn.classList.add('d-none');
       setTimeout(function () { location.reload(); }, 3000);
     }
