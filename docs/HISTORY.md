@@ -4,6 +4,23 @@ Long-term archive of completed work, migrated from TODO.md on release.
 
 ---
 
+## v1.22.0 — Released 2026-10-12
+
+### Added
+
+- **LG-077 — Updater: recover from a failed migration.** Before `replace`, the updater copies every file it will overwrite to `cache/.updates/backup/files/` and tracks files it adds; `rollback()` restores them (and removes added files), verifies the restored version, and keeps maintenance mode on if a restore fails. The pre-update database dump is verified (every table present) before any file is replaced. A failed `migrate` stage offers **Retry migrations** next to Rollback, and the failed migration is recorded in the update history.
+- **LG-078 — Installer: enforce the minimum database server version.** `DatabaseRequirementService` identifies MySQL/MariaDB from `PDO::ATTR_SERVER_VERSION` (handling the `5.5.5-` MariaDB prefix and distro suffixes) and checks it against the new `LUMORA_MIN_MYSQL` (5.6.0) and `LUMORA_MIN_MARIADB` (10.0.0) constants. The installer refuses an unsupported server after connecting and before creating tables, shows the detected server on success, and only notes a version it can't parse. Admin → Installation → System Information shows the server with a below-minimum warning; the updater refuses a package whose `version.php` declares a minimum the server can't meet.
+
+### Changed
+
+- **Database requirements are based on real testing.** The suite was run against MySQL 5.6, 5.7, 8.0, 8.4, 9 and MariaDB 10.0, 10.3, 10.4, 10.11, 11.4, 11.8, plus a real installer run on each, so the documented minimums are now MySQL 5.6 / MariaDB 10.0, with MySQL 8.4+ / MariaDB 10.11+ and PHP 8.4+ recommended.
+
+### Fixed
+
+- **Fresh installs fataled at the final step since v1.20.0.** `install/index.php` used `ThemeService` (LG-073) without requiring it, so step 2 ended with "Class ThemeService not found" before `config.php` was written. Upgrades were unaffected.
+- **MySQL 5.6 / MariaDB 10.0: "Specified key was too long".** `Migration0001`'s unique `migration` key was `varchar(255)` utf8mb4 (over 767 bytes); now `varchar(191)`.
+- **The update backup no longer runs out of memory on large galleries** (the database dump is written in chunks), and **rolling back the database no longer reports a false "no active transaction" failure.**
+
 ## v1.21.0 — Released 2026-10-12
 
 ### Added

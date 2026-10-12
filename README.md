@@ -38,7 +38,7 @@ No Composer required. Upload and go.
 1. **Upload** the `Lumora/` folder to your web server (e.g. `public_html/gallery/`).
 2. **Make `albums/` writable** by the web server (`chmod 755 albums/` or as needed by your host).
 3. **Visit `/install/`** in your browser and follow the three-step wizard:
-   - Step 1: Requirements check + database credentials
+   - Step 1: Requirements check + database credentials (the database server version is checked too)
    - Step 2: Database setup + admin account creation
    - Step 3: `config.php` written — installation complete
 4. **Delete or protect the `install/` directory** after installation. (The installer attempts this automatically; verify it is gone.)
