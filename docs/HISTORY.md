@@ -4,6 +4,21 @@ Long-term archive of completed work, migrated from TODO.md on release.
 
 ---
 
+## v1.21.0 — Released 2026-10-12
+
+### Added
+
+- **LG-075 — Admin sidebar alerts for maintenance mode and available updates.** `AdminAlertService::collect()` builds a typed, permission-aware list of one-line alerts shown above the admin menu on every page: maintenance mode (or an update in progress, or an update that left the gallery offline), a required database update, a new Lumora version, and pending plugin/theme updates. All reads are cache-only. Plugins can extend the list with the new `admin_sidebar_alerts` filter, which uses the same entry shape as Lumora Press. Replaces the inline-styled "!" badge on the Updates menu item. Live-verified on the preview install.
+
+### Changed
+
+- **LG-076 — Visitor Stats admin page opens on the 7-day range (plugin 1.0.1).** Both `days` defaults in `stats.php` changed from 30 to 7; the 7/30/90 tabs and the fixed summary cards are unchanged.
+
+### Fixed
+
+- **Admin → Plugins: the per-row Delete button and the Update button did nothing.** Their inline click handlers were written with unescaped quotes and were cut off by the browser.
+- **LG-073 follow-up — tests that Replace delivers the bundled theme.** `UpdaterService::deliverBundledTheme()` was extracted from `stageReplace()` so delivery with `themes/` preserved (and never deleting `themes/default/`) is covered by tests.
+
 ## v1.20.0 — Released 2026-09-29
 
 ### Added
