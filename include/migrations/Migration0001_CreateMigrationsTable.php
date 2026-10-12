@@ -32,6 +32,8 @@ class Migration0001_CreateMigrationsTable extends AbstractMigration
      *
      * Uses CREATE TABLE IF NOT EXISTS so that re-running this migration (e.g.
      * after manually deleting its tracking record) is idempotent and safe.
+     * The unique `migration` key is 191 characters so it fits the 767-byte
+     * index limit of older InnoDB row formats under utf8mb4.
      */
     public function up(): void
     {
@@ -39,7 +41,7 @@ class Migration0001_CreateMigrationsTable extends AbstractMigration
         LumoraDB::query(
             "CREATE TABLE IF NOT EXISTS `{$prefix}migrations` (
                 `id`         bigint UNSIGNED NOT NULL AUTO_INCREMENT,
-                `migration`  varchar(255)    NOT NULL,
+                `migration`  varchar(191)    NOT NULL,
                 `applied_at` datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (`id`),
                 UNIQUE KEY  `migration` (`migration`)

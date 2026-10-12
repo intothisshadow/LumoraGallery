@@ -22,10 +22,12 @@ Built from the ground up for fansites with huge collections, it combines a sleek
 
 | Requirement | Minimum |
 |---|---|
-| PHP | 8.2+ |
-| MySQL / MariaDB | 5.7+ / 10.3+ |
+| PHP | 8.2+ (PHP 8.4+ recommended) |
+| MySQL / MariaDB | 5.6+ / 10.0+ (MySQL 8.4+ or MariaDB 10.11+ recommended) |
 | PHP extensions | PDO, PDO_MySQL, Imagick (preferred) or GD |
 | Web server | Apache 2.4+, LiteSpeed/OpenLiteSpeed, or Nginx |
+
+Lumora is tested on MySQL 5.6, 5.7, 8.0, 8.4, and 9, and on MariaDB 10.0, 10.3, 10.4, 10.11, 11.4, and 11.8, and should install and run on all of them. Only database versions that their vendor still maintains are actively supported, though. If you have a problem on a version that has reached end of life, the advice will be to move to a currently supported release. Check the MySQL and MariaDB websites for which versions those are.
 
 No Composer required. Upload and go.
 

@@ -32,8 +32,9 @@ define('LUMORA_INSTALLER', true);
 // Bootstrap gives us path constants and version; stops before loading config.
 require_once dirname(__DIR__) . '/include/bootstrap.php';
 
-// Manually load the DB class (bootstrap stopped early).
+// Manually load what the installer needs (bootstrap stopped early).
 require_once LUMORA_INCLUDE . 'db.php';
+require_once LUMORA_INCLUDE . 'services/ThemeService.php';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

@@ -10,10 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **A fresh install no longer stops with a fatal error at the final step.** Since v1.20.0 the installer's last step failed with "Class ThemeService not found" before writing the configuration file, so a new gallery could not be installed. Upgrading an existing gallery was not affected.
+- **Installing on MySQL 5.6 and MariaDB 10.0 no longer fails** with "Specified key was too long". The migration-tracking table's unique key is now within the 767-byte index limit of those versions. Galleries that already have the table are unchanged.
 - **Rolling back a failed update now restores the old application files, not just the database.** Previously a failed database migration followed by a rollback left the old database under the new release's code. The updater now saves a copy of every file it will replace, restores them on rollback (removing any files the update added), and checks the restored version before reopening the gallery. If any part of the restore fails, the gallery stays in maintenance mode instead of reopening in a mismatched state.
 
 - **The update backup no longer runs out of memory on large galleries.** The database dump is now written in small chunks instead of loading whole tables into memory, so a gallery with a large image table can be backed up (and therefore updated) within normal PHP memory limits.
 - **Rolling back the database no longer reports a false failure.** The restore step finished correctly but always ended with a "no active transaction" error, which would have looked like a failed rollback.
+
+### Changed
+
+- **Database requirements are now based on real testing.** Lumora Gallery installs and passes its checks on MySQL 5.6, 5.7, 8.0, 8.4 and 9, and on MariaDB 10.0, 10.3, 10.4, 10.11, 11.4 and 11.8, so the documented minimums are now MySQL 5.6 and MariaDB 10.0 (previously 5.7 and 10.3), with MySQL 8.4 or MariaDB 10.11 and newer recommended.
 
 ### Added
 
