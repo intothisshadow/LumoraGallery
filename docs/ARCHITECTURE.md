@@ -75,6 +75,7 @@ Lumora/
 │   │   ├── BackupService.php   Full-installation ZIP backups (code + config + DB dump, excluding albums/cache) — create/download/restore/delete, up to 3 retained
 │   │   ├── InstallationService.php  Installation settings detection, migration helpers, health checks, audit logging
 │   │   ├── ServerEnvironmentService.php  Web server detection (LiteSpeed/OpenLiteSpeed/Apache/nginx/Caddy) and HTTP/2, HTTP/3, Brotli, active-LSCache capability flags
+│   │   ├── DatabaseRequirementService.php  MySQL/MariaDB server identification and minimum-version check (installer, System Information, updater preflight); minimums live in `version.php`
 │   │   ├── CacheHeaderService.php  Managed .htaccess cache-control block for static assets (Apache/LiteSpeed-compatible) and opt-in LiteSpeed Cache purge-header integration
 │   │   ├── UserService.php     User CRUD, role constants, permission framework (delegates to GroupService), getRecoveryAccounts() for password-recovery target lookup
 │   │   ├── RateLimitService.php  Shared per-IP failure lockout (login.php + reset-password.php)

@@ -102,6 +102,7 @@ require_once LUMORA_INCLUDE . 'services/RateLimitService.php';
 require_once LUMORA_INCLUDE . 'services/AlbumAssignmentService.php';
 require_once LUMORA_INCLUDE . 'services/InstallPingService.php';
 require_once LUMORA_INCLUDE . 'services/ServerEnvironmentService.php';
+require_once LUMORA_INCLUDE . 'services/DatabaseRequirementService.php';
 require_once LUMORA_INCLUDE . 'services/CacheHeaderService.php';
 require_once LUMORA_INCLUDE . 'services/HookService.php';
 require_once LUMORA_INCLUDE . 'services/PluginService.php';

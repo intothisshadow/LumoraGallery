@@ -35,6 +35,7 @@ require_once dirname(__DIR__) . '/include/bootstrap.php';
 // Manually load what the installer needs (bootstrap stopped early).
 require_once LUMORA_INCLUDE . 'db.php';
 require_once LUMORA_INCLUDE . 'services/ThemeService.php';
+require_once LUMORA_INCLUDE . 'services/DatabaseRequirementService.php';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -436,6 +437,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['step'] ?? '') === '1') {
         exit;
     }
 
+    // Refuse an unsupported server before any table is created.
+    $server_info = DatabaseRequirementService::serverInfo();
+    $server_ok   = DatabaseRequirementService::meetsCurrentMinimum($server_info);
+    if ($server_ok === false) {
+        $_SESSION['ins_errors'] = [DatabaseRequirementService::unsupportedMessage($server_info, LUMORA_MIN_MYSQL, LUMORA_MIN_MARIADB)];
+        $_SESSION['ins_db'] = compact('db_host', 'db_port', 'db_name', 'db_user', 'db_prefix');
+        header('Location: ' . $_SERVER['PHP_SELF']);
+        exit;
+    }
+
     $schema_error = ins_run_schema(__DIR__ . '/schema.sql', $db_prefix);
     if ($schema_error !== null) {
         $_SESSION['ins_errors'] = [$schema_error];
@@ -460,6 +471,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['step'] ?? '') === '1') {
     $b_url       = ins_h($base_url);
     $db_name_h   = ins_h($db_name);
     $db_prefix_h = ins_h($db_prefix);
+    $server_h    = ins_h(DatabaseRequirementService::describe($server_info)
+        . ($server_ok === null ? ' (version could not be verified)' : ' (OK)'));
 
     $body = <<<HTML
 <div class="alert alert-success py-2 mb-4">&#10003; Database connected and tables created successfully.</div>
@@ -471,6 +484,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['step'] ?? '') === '1') {
     <div class="row g-1 small">
       <div class="col-5 text-muted">Database</div>
       <div class="col-7 fw-semibold">{$db_name_h}</div>
+      <div class="col-5 text-muted">Database server</div>
+      <div class="col-7">{$server_h}</div>
       <div class="col-5 text-muted">Table Prefix</div>
       <div class="col-7"><code class="text-primary">{$db_prefix_h}</code></div>
     </div>

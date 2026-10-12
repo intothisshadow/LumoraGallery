@@ -19,6 +19,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **The installer now checks the database server version.** After connecting and before creating any table, it refuses a server older than MySQL 5.6 or MariaDB 10.0 with a plain message naming the detected server and the required versions. A successful connect shows the detected server (for example "MariaDB 10.11.6 (OK)"), and a version string it can't recognise only produces a note, not a refusal.
+- **Admin → Installation → System Information shows the database server** with a warning when it is below the minimum. The warning never affects a running site.
+- **Updates can declare a database minimum.** A release package whose `version.php` sets `LUMORA_MIN_MYSQL` or `LUMORA_MIN_MARIADB` is refused before any file is replaced if the server is older; packages without those lines are not checked.
 - **Database requirements are now based on real testing.** Lumora Gallery installs and passes its checks on MySQL 5.6, 5.7, 8.0, 8.4 and 9, and on MariaDB 10.0, 10.3, 10.4, 10.11, 11.4 and 11.8, so the documented minimums are now MySQL 5.6 and MariaDB 10.0 (previously 5.7 and 10.3), with MySQL 8.4 or MariaDB 10.11 and newer recommended.
 
 ### Added

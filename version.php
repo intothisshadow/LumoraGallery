@@ -21,3 +21,5 @@ define('LUMORA_VERSION',        '1.21.0');
 define('LUMORA_VERSION_STATUS', 'stable');
 define('LUMORA_DB_VERSION',     17);
 define('LUMORA_MIN_PHP',        '8.2.0');
+define('LUMORA_MIN_MYSQL',      '5.6.0');
+define('LUMORA_MIN_MARIADB',    '10.0.0');

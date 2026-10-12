@@ -172,6 +172,20 @@ $v_albums_path  = h($env['albums_path']);
 $v_cache_path   = h($env['cache_path']);
 $v_php_version  = h($env['php_version']);
 $v_web_server   = h($env['web_server']);
+
+$db_server_info = DatabaseRequirementService::serverInfo();
+$db_server_ok   = DatabaseRequirementService::meetsCurrentMinimum($db_server_info);
+$v_db_server    = h(DatabaseRequirementService::describe($db_server_info));
+$db_server_badge = match ($db_server_ok) {
+    true    => '<span class="badge bg-success ms-2">&#10003; supported</span>',
+    false   => '<span class="badge bg-warning text-dark ms-2">&#9888; below minimum</span>',
+    default => '<span class="badge bg-secondary ms-2">version not recognised</span>',
+};
+$v_db_server_warning = $db_server_ok === false
+    ? '<div class="small text-warning-emphasis mt-1">'
+        . h(DatabaseRequirementService::unsupportedMessage($db_server_info, LUMORA_MIN_MYSQL, LUMORA_MIN_MARIADB))
+        . '</div>'
+    : '';
 $v_db_host      = h($stored['db_host']);
 $v_db_name      = h($stored['db_name']);
 $v_db_prefix    = h($stored['db_prefix']);
@@ -366,6 +380,10 @@ $content = <<<HTML
         <tr>
           <th class="text-muted small">Table prefix</th>
           <td class="font-monospace small text-muted">{$v_db_prefix}</td>
+        </tr>
+        <tr>
+          <th class="text-muted small">Database server</th>
+          <td class="small">{$v_db_server}{$db_server_badge}{$v_db_server_warning}</td>
         </tr>
         <tr>
           <th class="text-muted small">PHP version</th>

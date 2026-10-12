@@ -441,6 +441,34 @@ class UpdaterService
     }
 
     /**
+     * Error message when the connected database server is below the minimum a
+     * package declares in its version.php, or null when it passes or the
+     * package declares none (or the server version can't be read).
+     */
+    private static function databaseMinimumError(string $versionPhpContent): ?string
+    {
+        $min = DatabaseRequirementService::extractMinimums($versionPhpContent);
+        if ($min['mysql'] === null && $min['mariadb'] === null) {
+            return null;
+        }
+
+        try {
+            $info = DatabaseRequirementService::serverInfo();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $mysql   = $min['mysql']   ?? '0';
+        $mariadb = $min['mariadb'] ?? '0';
+        if (DatabaseRequirementService::meetsMinimum($info, $mysql, $mariadb) !== false) {
+            return null;
+        }
+
+        return 'This release needs a newer database server. '
+            . DatabaseRequirementService::unsupportedMessage($info, $mysql, $mariadb);
+    }
+
+    /**
      * Shared hosting-environment checks — ZipArchive extension, PHP version
      * (against a caller-supplied minimum, which comes from a different
      * source depending on the caller), free disk space, and filesystem
@@ -607,6 +635,10 @@ class UpdaterService
         }
 
         $infra = self::runInfraChecks($minPhp);
+        $dbError = self::databaseMinimumError($versionContent);
+        if ($dbError !== null) {
+            $infra['errors'][] = $dbError;
+        }
         if (!empty($infra['errors'])) {
             return self::fail(self::STAGE_PREFLIGHT, 'Pre-flight checks failed.', $infra['errors']);
         }
@@ -1088,6 +1120,11 @@ class UpdaterService
         $versionContent = file_get_contents($versionFile);
         if ($versionContent === false) {
             return self::fail(self::STAGE_VALIDATE, 'Could not read version.php from the extracted archive.');
+        }
+
+        $dbError = self::databaseMinimumError($versionContent);
+        if ($dbError !== null) {
+            return self::fail(self::STAGE_VALIDATE, $dbError);
         }
 
         $vStr = "'{$version}'";
