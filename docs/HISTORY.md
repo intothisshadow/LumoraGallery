@@ -4,6 +4,12 @@ Long-term archive of completed work, migrated from TODO.md on release.
 
 ---
 
+## v1.22.1 — Released 2026-10-27
+
+### Fixed
+
+- **LG-079 — Album dropdowns merged same-named subcategories.** Batch Add, Images and Maintenance Tools grouped albums by category name, so "Season 1" under Xena and "Season 1" under Hercules shared one `<optgroup>`. New `GalleryService::groupAlbumsByCategoryPath()` groups by category ID, labels each group with the full ancestor path ("Xena / Season 1"), orders groups by tree position, and lists "Uncategorised" last.
+
 ## v1.22.0 — Released 2026-10-12
 
 ### Added
