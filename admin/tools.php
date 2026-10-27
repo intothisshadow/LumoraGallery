@@ -35,31 +35,27 @@ lumora_require_permission('maintenance_tools');
 $album_id = lumora_int($_GET['album_id'] ?? 0, 0, 0);
 
 $all_albums = LumoraDB::fetchAll(
-    'SELECT a.id, a.title, a.folder, c.name AS cat_name
+    'SELECT a.id, a.title, a.folder, a.category_id
      FROM `{PREFIX}albums` a
-     LEFT JOIN `{PREFIX}categories` c ON c.id = a.category_id
-     ORDER BY c.name ASC, a.title ASC'
+     ORDER BY a.title ASC'
 );
 
 $sel_opts          = '<option value="0"' . ($album_id === 0 ? ' selected' : '') . '>All Albums</option>';
-$cur_cat           = null;
 $scope_album_title = '';
 
-foreach ($all_albums as $a) {
-    if ($a['cat_name'] !== $cur_cat) {
-        if ($cur_cat !== null) $sel_opts .= '</optgroup>';
-        $sel_opts .= '<optgroup label="' . h($a['cat_name'] ?? 'Uncategorised') . '">';
-        $cur_cat = $a['cat_name'];
+foreach (GalleryService::groupAlbumsByCategoryPath($all_albums) as $group) {
+    $sel_opts .= '<optgroup label="' . h($group['label']) . '">';
+    foreach ($group['albums'] as $a) {
+        $is_sel    = ((int) $a['id'] === $album_id);
+        $sel_opts .= '<option value="' . (int) $a['id'] . '"' . ($is_sel ? ' selected' : '') . '>'
+            . h($a['title']) . ' — ' . h($a['folder'])
+            . '</option>';
+        if ($is_sel) {
+            $scope_album_title = $a['title'];
+        }
     }
-    $is_sel    = ((int) $a['id'] === $album_id);
-    $sel_opts .= '<option value="' . (int) $a['id'] . '"' . ($is_sel ? ' selected' : '') . '>'
-        . h($a['title']) . ' — ' . h($a['folder'])
-        . '</option>';
-    if ($is_sel) {
-        $scope_album_title = $a['title'];
-    }
+    $sel_opts .= '</optgroup>';
 }
-if ($cur_cat !== null) $sel_opts .= '</optgroup>';
 
 // ── Image count for the current scope ────────────────────────────────────────
 if ($album_id > 0) {

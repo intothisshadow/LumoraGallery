@@ -232,47 +232,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // ── Album lists ───────────────────────────────────────────────────────────────
 $all_albums = LumoraDB::fetchAll(
-    'SELECT a.id, a.title, a.folder, c.name AS cat_name
+    'SELECT a.id, a.title, a.folder, a.category_id
      FROM `{PREFIX}albums` a
-     LEFT JOIN `{PREFIX}categories` c ON c.id = a.category_id
-     ORDER BY c.name ASC, a.title ASC'
+     ORDER BY a.title ASC'
 );
 
 $sel_opts = '<option value="">— Select an album —</option>';
-$_sc      = null;
-foreach ($all_albums as $_sa) {
-    $cat = $_sa['cat_name'] ?? 'Uncategorised';
-    if ($cat !== $_sc) {
-        if ($_sc !== null) $sel_opts .= '</optgroup>';
-        $sel_opts .= '<optgroup label="' . h($cat) . '">';
-        $_sc = $cat;
+$album_groups = GalleryService::groupAlbumsByCategoryPath($all_albums);
+foreach ($album_groups as $_g) {
+    $sel_opts .= '<optgroup label="' . h($_g['label']) . '">';
+    foreach ($_g['albums'] as $_sa) {
+        $sel      = ((int) $_sa['id'] === $album_id) ? ' selected' : '';
+        $sel_opts .= '<option value="' . (int) $_sa['id'] . '"' . $sel . '>' . h($_sa['title']) . '</option>';
     }
-    $sel      = ((int) $_sa['id'] === $album_id) ? ' selected' : '';
-    $sel_opts .= '<option value="' . (int) $_sa['id'] . '"' . $sel . '>' . h($_sa['title']) . '</option>';
+    $sel_opts .= '</optgroup>';
 }
-if ($_sc !== null) $sel_opts .= '</optgroup>';
-unset($_sa, $_sc);
+unset($_g, $_sa);
 
 // Move-target scoping (TODO §22): $move_target_ids is null for admin/moderator
 // (every album is eligible, unchanged), or a list of assigned album IDs for a
 // contributor who lacks 'manage_albums'.
 $move_opts       = '<option value="">— Select target album —</option>';
-$_mc             = null;
 $has_move_target = false;
-foreach ($all_albums as $_ma) {
-    if ((int) $_ma['id'] === $album_id) continue;
-    if ($move_target_ids !== null && !in_array((int) $_ma['id'], $move_target_ids, true)) continue;
-    $cat = $_ma['cat_name'] ?? 'Uncategorised';
-    if ($cat !== $_mc) {
-        if ($_mc !== null) $move_opts .= '</optgroup>';
-        $move_opts .= '<optgroup label="' . h($cat) . '">';
-        $_mc = $cat;
+foreach ($album_groups as $_g) {
+    $group_opts = '';
+    foreach ($_g['albums'] as $_ma) {
+        if ((int) $_ma['id'] === $album_id) continue;
+        if ($move_target_ids !== null && !in_array((int) $_ma['id'], $move_target_ids, true)) continue;
+        $group_opts .= '<option value="' . (int) $_ma['id'] . '">' . h($_ma['title']) . '</option>';
+        $has_move_target = true;
     }
-    $move_opts .= '<option value="' . (int) $_ma['id'] . '">' . h($_ma['title']) . '</option>';
-    $has_move_target = true;
+    if ($group_opts !== '') {
+        $move_opts .= '<optgroup label="' . h($_g['label']) . '">' . $group_opts . '</optgroup>';
+    }
 }
-if ($_mc !== null) $move_opts .= '</optgroup>';
-unset($_ma, $_mc);
+unset($_g, $_ma, $group_opts);
 
 // ── Load selected album ───────────────────────────────────────────────────────
 $album = null;

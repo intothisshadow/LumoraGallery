@@ -36,11 +36,10 @@ $current_user_id = (int) ($current_user['user_id'] ?? 0);
 // ── Build album list ──────────────────────────────────────────────────────────
 if ($can_manage_all) {
     $all_albums = LumoraDB::fetchAll(
-        'SELECT a.id, a.title, a.folder, c.name AS cat_name,
+        'SELECT a.id, a.title, a.folder, a.category_id,
                 (SELECT COUNT(*) FROM `{PREFIX}images` i WHERE i.album_id = a.id) AS img_count
          FROM `{PREFIX}albums` a
-         LEFT JOIN `{PREFIX}categories` c ON c.id = a.category_id
-         ORDER BY c.name ASC, a.title ASC'
+         ORDER BY a.title ASC'
     );
 } else {
     $assigned_ids = AlbumAssignmentService::getAssignedAlbumIds($current_user_id);
@@ -49,12 +48,11 @@ if ($can_manage_all) {
     } else {
         $ph = implode(',', array_fill(0, count($assigned_ids), '?'));
         $all_albums = LumoraDB::fetchAll(
-            "SELECT a.id, a.title, a.folder, c.name AS cat_name,
+            "SELECT a.id, a.title, a.folder, a.category_id,
                     (SELECT COUNT(*) FROM `{PREFIX}images` i WHERE i.album_id = a.id) AS img_count
              FROM `{PREFIX}albums` a
-             LEFT JOIN `{PREFIX}categories` c ON c.id = a.category_id
              WHERE a.id IN ({$ph})
-             ORDER BY c.name ASC, a.title ASC",
+             ORDER BY a.title ASC",
             $assigned_ids
         );
     }
@@ -81,19 +79,16 @@ $csrf_js = json_encode(lumora_csrf_token());
 
 // ── Album selector ────────────────────────────────────────────────────────────
 $sel_opts = '<option value="">— Select an album —</option>';
-$cur_cat  = null;
-foreach ($all_albums as $a) {
-    if ($a['cat_name'] !== $cur_cat) {
-        if ($cur_cat !== null) $sel_opts .= '</optgroup>';
-        $sel_opts .= '<optgroup label="' . h($a['cat_name'] ?? 'Uncategorised') . '">';
-        $cur_cat = $a['cat_name'];
+foreach (GalleryService::groupAlbumsByCategoryPath($all_albums) as $group) {
+    $sel_opts .= '<optgroup label="' . h($group['label']) . '">';
+    foreach ($group['albums'] as $a) {
+        $sel = ($album_id === (int)$a['id']) ? ' selected' : '';
+        $sel_opts .= '<option value="' . (int)$a['id'] . '"' . $sel . '>'
+            . h($a['title']) . ' (' . number_format((int)$a['img_count']) . ' in DB, folder: ' . h($a['folder']) . ')'
+            . '</option>';
     }
-    $sel = ($album_id === (int)$a['id']) ? ' selected' : '';
-    $sel_opts .= '<option value="' . (int)$a['id'] . '"' . $sel . '>'
-        . h($a['title']) . ' (' . number_format((int)$a['img_count']) . ' in DB, folder: ' . h($a['folder']) . ')'
-        . '</option>';
+    $sel_opts .= '</optgroup>';
 }
-if ($cur_cat !== null) $sel_opts .= '</optgroup>';
 
 // No-assignments empty state for contributors (kept separate from the normal
 // selector so the message is unambiguous rather than an empty dropdown).

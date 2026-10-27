@@ -137,6 +137,54 @@ class GalleryService
     }
 
     /**
+     * Group albums by category for admin <optgroup> dropdowns. Groups are keyed
+     * by category ID (not name, so same-named subcategories such as two
+     * "Season 1" under different parents stay separate), labelled with the full
+     * ancestor path, and ordered by tree position with "Uncategorised" last.
+     * Album order within a group follows the input order.
+     *
+     * @param list<array<string, mixed>> $albums Rows containing at least `category_id`.
+     * @return list<array{label: string, albums: list<array<string, mixed>>}>
+     */
+    public static function groupAlbumsByCategoryPath(array $albums): array
+    {
+        $tree  = self::getAllCategoriesTreeOrdered();
+        $names = [];
+        foreach ($tree as $cat) {
+            $names[(int) $cat['id']] = ['name' => $cat['name'], 'parent_id' => (int) $cat['parent_id']];
+        }
+
+        $paths = [];
+        foreach ($tree as $cat) {
+            $parts = [];
+            $id    = (int) $cat['id'];
+            for ($guard = 0; $id > 0 && isset($names[$id]) && $guard < 20; $guard++) {
+                array_unshift($parts, $names[$id]['name']);
+                $id = $names[$id]['parent_id'];
+            }
+            $paths[(int) $cat['id']] = implode(' / ', $parts);
+        }
+
+        $buckets = [];
+        foreach ($albums as $album) {
+            $cid = (int) ($album['category_id'] ?? 0);
+            if (!isset($paths[$cid])) $cid = 0;
+            $buckets[$cid][] = $album;
+        }
+
+        $groups = [];
+        foreach ($paths as $cid => $label) {
+            if (isset($buckets[$cid])) {
+                $groups[] = ['label' => $label, 'albums' => $buckets[$cid]];
+            }
+        }
+        if (isset($buckets[0])) {
+            $groups[] = ['label' => 'Uncategorised', 'albums' => $buckets[0]];
+        }
+        return $groups;
+    }
+
+    /**
      * Build the breadcrumb trail for a category, from root to $cat_id.
      * Returns array of ['id', 'name'] sorted root-first.
      *

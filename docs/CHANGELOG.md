@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Album dropdowns in Batch Add, Images and Maintenance Tools now group albums under the right category.** Albums in same-named subcategories (for example "Season 1" under both Xena and Hercules) were merged into a single group. Groups are now labelled with the full category path (such as "Xena / Season 1"), follow the category tree order, and list uncategorised albums last.
+
+---
+
 ## [1.22.0] — 2026-10-12
 
 ### Fixed
