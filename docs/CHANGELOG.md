@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.22.2] — 2026-10-27
+
+### Fixed
+
+- **Updating a gallery with a large image table no longer fails at the backup step with "NetworkError when attempting to fetch resource".** The database backup re-scanned the table for every batch of rows, so on a table of hundreds of thousands of images it ran for close to a minute and the web server or proxy dropped the connection. The backup now reads each table in a single pass: a 59 MB database that took 47 seconds now takes under one second, and the backup file is identical.
+
+---
+
 ## [1.22.1] — 2026-10-27
 
 ### Fixed

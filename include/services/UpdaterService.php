@@ -1978,7 +1978,7 @@ class UpdaterService
      * Dump all Lumora tables (those matching the configured DB prefix) to a SQL file.
      *
      * Uses PDO to generate DROP TABLE IF EXISTS + CREATE TABLE + INSERT statements.
-     * Rows are read and written in chunks so memory stays flat however large a table is.
+     * Rows are streamed and written in chunks so memory and time stay flat however large a table is.
      *
      * @return array{success: bool, tables: int, bytes: int, error: string}
      */
@@ -2022,7 +2022,11 @@ class UpdaterService
             $write('SET FOREIGN_KEY_CHECKS=0;');
             $write('');
 
-            $chunkSize = 500;
+            $chunkSize  = 500;
+            // PDO::MYSQL_ATTR_* is deprecated from PHP 8.5; Pdo\Mysql exists from 8.4.
+            $bufferAttr = class_exists(\Pdo\Mysql::class)
+                ? \Pdo\Mysql::ATTR_USE_BUFFERED_QUERY
+                : \PDO::MYSQL_ATTR_USE_BUFFERED_QUERY;
 
             foreach ($tables as $table) {
                 // Table names come from SHOW TABLES (DB-controlled), escaped defensively.
@@ -2033,28 +2037,35 @@ class UpdaterService
                 $write($create['Create Table'] . ';');
                 $write('');
 
-                $offset = 0;
-                do {
-                    $rows = $pdo->query("SELECT * FROM `{$safe_table}` LIMIT {$chunkSize} OFFSET {$offset}")
-                        ->fetchAll(\PDO::FETCH_ASSOC);
-                    if (empty($rows)) {
-                        break;
-                    }
-
-                    $cols   = '`' . implode('`, `', array_keys($rows[0])) . '`';
+                // Unbuffered single scan: LIMIT/OFFSET paging rescans skipped rows on every
+                // page, which times out on large tables. Nothing else may query until it is drained.
+                $pdo->setAttribute($bufferAttr, false);
+                try {
+                    $result = $pdo->query("SELECT * FROM `{$safe_table}`");
+                    $cols   = null;
                     $values = [];
-                    foreach ($rows as $row) {
+                    while (($row = $result->fetch(\PDO::FETCH_ASSOC)) !== false) {
+                        $cols ??= '`' . implode('`, `', array_keys($row)) . '`';
                         $escaped = array_map(
                             fn(mixed $v): string => $v === null ? 'NULL' : $pdo->quote((string) $v),
                             array_values($row)
                         );
                         $values[] = '(' . implode(', ', $escaped) . ')';
-                    }
-                    $write("INSERT INTO `{$safe_table}` ({$cols}) VALUES");
-                    $write(implode(",\n", $values) . ';');
 
-                    $offset += $chunkSize;
-                } while (count($rows) === $chunkSize);
+                        if (count($values) === $chunkSize) {
+                            $write("INSERT INTO `{$safe_table}` ({$cols}) VALUES");
+                            $write(implode(",\n", $values) . ';');
+                            $values = [];
+                        }
+                    }
+                    if ($values !== []) {
+                        $write("INSERT INTO `{$safe_table}` ({$cols}) VALUES");
+                        $write(implode(",\n", $values) . ';');
+                    }
+                } finally {
+                    $result = null;
+                    $pdo->setAttribute($bufferAttr, true);
+                }
 
                 $write('');
             }

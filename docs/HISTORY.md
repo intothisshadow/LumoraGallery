@@ -4,6 +4,12 @@ Long-term archive of completed work, migrated from TODO.md on release.
 
 ---
 
+## v1.22.2 — Released 2026-10-27
+
+### Fixed
+
+- **Update backup timed out on large galleries ("NetworkError when attempting to fetch resource" at the backup stage).** `UpdaterService::dumpDatabase()` paged each table with `LIMIT 500 OFFSET n`, which rescans skipped rows on every page (quadratic); a 367k-row images table took 46.6 s and the web server/proxy dropped the request. It now streams each table in one unbuffered pass (59 MB database: 46.6 s → 0.9 s, byte-identical output) and restores buffered mode afterwards.
+
 ## v1.22.1 — Released 2026-10-27
 
 ### Fixed
