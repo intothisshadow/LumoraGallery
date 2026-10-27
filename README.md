@@ -22,7 +22,7 @@ Built from the ground up for fansites with huge collections, it combines a sleek
 
 | Requirement | Minimum |
 |---|---|
-| PHP | 8.2+ (PHP 8.4+ recommended) |
+| PHP | 8.2+ (PHP 8.5+ recommended) |
 | MySQL / MariaDB | 5.6+ / 10.0+ (MySQL 8.4+ or MariaDB 10.11+ recommended) |
 | PHP extensions | PDO, PDO_MySQL, Imagick (preferred) or GD |
 | Web server | Apache 2.4+, LiteSpeed/OpenLiteSpeed, or Nginx |
